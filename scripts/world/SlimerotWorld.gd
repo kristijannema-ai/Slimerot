@@ -22,7 +22,7 @@ func _ready() -> void:
 	CombatManager.slime_attacked.connect(func(origin, destination): beams.append({"from": origin, "to": destination, "life": 0.16}))
 	build_zone(GameState.current_zone)
 	if "--slimerot-test" in OS.get_cmdline_user_args():
-		var test := preload("res://tests/SlimerotTests.gd").new()
+		var test: Node = load("res://tests/SlimerotTests.gd").new()
 		add_child(test)
 		test.call_deferred("run", self)
 
@@ -107,7 +107,7 @@ func add_interaction(at: Vector2, prompt: String, action: Callable) -> void:
 	interactions.append(component)
 
 func interact() -> void:
-	if is_instance_valid(current_interaction):
+	if not GameState.is_paused() and is_instance_valid(current_interaction):
 		current_interaction.activate(player.global_position)
 
 func _unhandled_input(event: InputEvent) -> void:
