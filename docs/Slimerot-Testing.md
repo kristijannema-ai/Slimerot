@@ -1,27 +1,44 @@
-# Slimerot stage-one validation
+# Slimerot validation — prompts 1 and 2
 
-Engine: official Godot 4.5.1 stable, Windows. Date: 2026-09-11.
+Engine: official Godot 4.5.1 stable on Windows. The project runs headlessly and with the OpenGL compatibility renderer. Tests use isolated per-process files under `.godot/`, preserving player saves.
 
-## Automated and rendered checks performed
+Result: **101 checks passed, 0 failures** in the combined rendered suite; the final headless pass uses the same assertions. No Slimerot script errors or leaked-object warnings remain.
 
-33 integration assertions passed in a headless run and in a real OpenGL rendered run. The tests exercise actual Godot nodes, physics frames, input dispatch, managers, and filesystem operations. Bedroom, first-roll, and Backyard screenshots were inspected; world labels overlapping the HUD were removed and HUD contrast improved afterward.
+## Automated coverage
 
-Covered: fresh wallets and stats; Bedroom spawn beside exit; 180 px/s desktop movement; first roll during movement; exact +1 Rolls and Lifetime Roll; starter ownership and auto-equip; cooldown rejection; continued movement during reveal; wall collision; real context transition; four Backyard Laglings; touch capture; second-finger roll without stealing joystick input; touch release; automatic attacks and direct Coin rewards; current-zone death respawn without losses; 25-Coin Shrine repair and repeat-purchase prevention; Auto Roll purchase/completion; favorite/equipment selling protection; complete schema; temporary writes, generation rotation, round-trip load, corrupted-main recovery, and duplicate-copy rejection.
+The combined suites exercise real Godot nodes and input dispatch plus deterministic boundary tests:
 
-The Windows sandbox cannot access the operating-system certificate store; the official engine prints a certificate-store diagnostic at startup. Slimerot itself has no network calls. Tests use a writable log path and isolated test saves under `.godot/` because this environment also restricted creation of the normal AppData save directory. Save logic itself is tested using actual files, including rename and backup recovery.
+- Original new-save, physics movement/collision, simultaneous joystick + ROLL, first ownership/equip, Bedroom-to-Backyard context travel, automatic combat, direct Coin rewards, and loss-free respawn.
+- All 24 roster rows against the supplied damage/sell table, monotonic base damage by threshold, and exactly three added entries per unlocked zone.
+- Strict positive score sampler endpoints, highest eligible threshold/equality/fallback logic, and interleaved thresholds across zones.
+- First guaranteed base with all zones unlocked; 100 manual completions and 100 automatic completions each grant exactly 100 Rolls and Lifetime Rolls.
+- Exclusive variant intervals and boundaries, exact marginal masses on a deterministic 40,000-point grid, +25% Variant Sense, and seeded independence from ordinary luck.
+- Minor/checkpoint/potion luck multiplication, expiration, MAX/x20-era/x1 caps, cap locking, and combat independence.
+- Quantity/discovery separation, exactly 24 actual Collection UI cards, per-copy favorites/equipment protection, all variant multipliers, strongest-team selection, same-base multi-equip, slot costs/prerequisites, and boss gating.
+- Independent Coin Scavenger / Duplicate Dealer formulas, fixed first-boss bookkeeping, and permanent discovery after all copies are sold.
+- Every reveal timing boundary, Skip Common, first-jackpot no-skip/no-replacement, queued feedback, repeat skipping, and no currency re-award from animation.
+- Schema 2 round trips, schema 1 migration, backup recovery, duplicate-ID rejection, sole-source Rolls invariant and fractional-currency rejection.
+- Pause behavior, reset hold threshold, cancellation, and complete canonical reset.
+
+The test runner prints a single final check/failure count and exits nonzero on assertion failures. Save reset tests only delete the suite's isolated files.
+
+## Render inspection
+
+Inspected fresh Bedroom, Collection, Team, Inventory, and Golden Brainrot Singularity jackpot captures. Collection cards wrap names, retain threshold labels, and display distinct silhouettes for undiscovered bases. HUD Lifetime Rolls was removed. The reveal layer keeps the joystick and ROLL control usable. Jackpot bounce is centered to preserve screen margins.
+
+Audio playback is skipped in headless mode and stopped/released when reveals end or the scene exits. The rendered build uses a generated sound sting; no third-party media is required.
+
+The sandbox emits an engine certificate-store diagnostic at startup and the editor reports unavailable Android build tools. Neither is a Slimerot script/parser failure. Test logs are redirected to the writable workspace. No APK build, physical Android test, or long-session economy timing is claimed.
 
 ## Manual acceptance checklist
 
-These are instructions for a human/device pass, not a claim that physical-device testing was performed.
-
-1. Use a fresh save directory or back up and move your existing `Slimerot-save.json` and recovery files. Launch the game. Confirm Bedroom, 0/0/0 wallets, x1.00 luck, 100 HP, Auto Roll locked, and one slot.
-2. Drag the joystick continuously. Tap ROLL with a second finger. Confirm Tung Tung Tung Sahur, Rolls 1, Lifetime 1, Team DPS 10, and an equipped follower. Movement continues through the reveal.
-3. Repeatedly tap during the 2.4-second cooldown; counts must stay unchanged until another roll completes. Repeat with WASD + Space on desktop.
-4. Move to the green Bedroom exit and use Enter Backyard / E. Confirm a real grass area and visible Level 1 Laglings. Walk into furniture/fences and verify collision.
-5. Approach a Lagling within 180 px, keep moving, and watch automatic attacks. A kill adds five Coins directly. Allow enemies to defeat you; confirm respawn at the Backyard entrance with all currencies/copies preserved.
-6. After five kills, repair the Shrine for 25 Coins. Buy available early Roll nodes; Auto Roll works while moving when unlocked and enabled.
-7. Repair the Sell Terminal for 75 Coins. Favorite your starter group, try selling, and verify protection. Unfavorite and sell duplicates; the equipped copy remains.
-8. Background the app, wait, and resume. Confirm there are no offline rolls or active-play gains. Quit/relaunch after a roll and after a purchase; confirm restored balances, copies, equipment, settings, and cooldown.
-9. On a physical Android phone, check portrait layout, simultaneous touch, system navigation/gesture insets, background/foreground lifecycle, local saves after OS process termination, and APK permissions in airplane mode.
-
-Android build/signing, physical multitouch, long-session economy pacing, and Italian Village progression remain unverified or outside prompt-one scope.
+1. Start with a fresh save. Walk and roll simultaneously using touch or WASD + Space. Confirm the first base is Tung Tung Tung Sahur, immediately equipped, and both currency counts increase by one. Check Lifetime Rolls in Stats.
+2. Continue rolling at the 2.4-second cooldown. Confirm free rolls, normal threshold-labeled toasts, Z1's three possible bases, and no scene change.
+3. Open Inventory and try DPS/rarity/name sorting. Use the paginated copy manager; favorite one copy, equip another, and verify both sale protections. Repair the Sell Terminal before trying sales.
+4. Open Collection: exactly 24 base cards, correct discovery states and current best variant. Sell every unprotected copy of one base and verify its discovery remains.
+5. Repair the Shrine, buy Slot 2 for 350 Coins, own multiple copies, and use Auto Equip Strongest. Verify two strongest copies equip, including duplicate bases. Later slots must remain boss-gated.
+6. With a fixture containing checkpoint effects, use MAX/x20-era/x1 and confirm rolling changes without changing combat DPS. With Variant Sense, verify its separate chance bonus; ordinary Luck must not alter variant chances.
+7. Inspect Shiny outline/sparkles, Glitched jitter/chromatic offset, Golden aura, each reveal tier, and sound/shake settings. A first jackpot cannot be skipped; repeats can. Continue holding movement and rolling during feedback.
+8. Pause, background/resume, and restart. Verify no offline progress; balances, favorites, discovery, equipment, selected cap and statistics restore. A stage-one save should migrate without resetting the starter or currencies.
+9. Hold Reset for less than three seconds and release: nothing changes. On a disposable save, hold for the full duration: all currencies, inventory/discovery, upgrades, caps and location reset.
+10. On Android hardware: verify simultaneous touch, portrait fit, gesture insets, audio, background/OS-kill save recovery and offline use. SDK/export-template installation and signing are required for this pass.

@@ -6,19 +6,20 @@ var checks := 0
 func check(condition: bool, description: String) -> void:
 	checks += 1
 	if condition:
-		print("SLIMEROT PASS: ", description)
+		print("Slimerot PASS: ", description)
 	else:
 		failures += 1
-		push_error("SLIMEROT FAIL: " + description)
+		push_error("Slimerot FAIL: " + description)
 
 func run(world: Node2D) -> void:
-	print("SLIMEROT USER DATA: ", OS.get_user_data_dir())
+	print("Slimerot USER DATA: ", OS.get_user_data_dir())
 	SaveManager.enabled = false
 	GameState.reset()
 	InventoryManager.inventory.clear()
 	InventoryManager.equipped_copy_ids.clear()
 	InventoryManager.next_copy_id = 1
 	RollManager.cooldown_remaining = 0.0
+	RollManager.variant_rng.seed = 1234
 	WorldManager.travel(0)
 	await get_tree().physics_frame
 	await capture("Slimerot-bedroom")
@@ -86,7 +87,7 @@ func run(world: Node2D) -> void:
 	var enemy: SlimerotEnemy = get_tree().get_nodes_in_group("slimerot_enemies")[0]
 	world.player.position = enemy.position + Vector2(0, 140)
 	var initial_coins := GameState.coins
-	for index in 190:
+	for index in 310:
 		await get_tree().physics_frame
 	check(GameState.coins >= initial_coins + 5 and int(GameState.zone_kill_counts.get("1", 0)) >= 1, "automatic combat grants direct Coins and zone kill")
 	var coins := GameState.coins
@@ -133,7 +134,12 @@ func run(world: Node2D) -> void:
 	SaveManager.enabled = false
 	for suffix in ["", ".tmp", ".bak"]:
 		DirAccess.remove_absolute(SaveManager.save_path + suffix)
-	print("SLIMEROT RESULT: %d checks; %d failures" % [checks, failures])
+	var rolling_tests := preload("res://tests/SlimerotRollingTests.gd").new()
+	add_child(rolling_tests)
+	await rolling_tests.run(world, self)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
 	get_tree().quit(0 if failures == 0 else 1)
 
 func capture(label: String) -> void:
