@@ -1,8 +1,8 @@
-# Slimerot validation — prompts 1–5
+# Slimerot validation — prompts 1–6
 
 Engine: official Godot 4.5.1 stable on Windows. The project runs headlessly and with the OpenGL compatibility renderer. Tests use isolated per-process files under `.godot/`, preserving player saves.
 
-Result: **557 checks passed, 0 failures** in the combined rendered suite; the final headless pass uses the same assertions. No Slimerot script errors or leaked-object warnings remain.
+Result: **644 checks passed, 0 failures** in the combined rendered suite; the final headless pass uses the same assertions. No Slimerot script errors or leaked-object warnings remain.
 
 ## Automated coverage
 
@@ -34,9 +34,9 @@ The combined suites exercise real Godot nodes and input dispatch plus determinis
 
 The test runner prints a single final check/failure count and exits nonzero on assertion failures. Save reset tests only delete the suite's isolated files.
 
-Stage 5 adds every fixed HP/reward/damage row and level range, all kill/gate/boss requirements, physical Z1→Z2 interaction from fresh currencies and starter ownership, repeated fixed-reward farm kills/respawns, exact structure/gate costs, no duplicate kill credits, zero-balance return traversal, persistent global pool expansion, and boss-placeholder non-bypass. Every later scene loads independently with 11 correctly configured enemies. Grid paths verify both main routes and closed farming loops. Fixtures verify each gate's exact price, one-Coin-short rejection, current-zone death/respawn, and zero progression loss. Schema 5 round trips current Z8/gates/kills and migrates previous unlocks. Shooter retreat/approach, firing intervals and fixed projectile damage are checked. Wealth and luck do not alter enemy data.
+Stage 5 adds every fixed HP/reward/damage row and level range, all kill/gate/boss requirements, physical Z1→Z2 interaction from fresh currencies and starter ownership, repeated fixed-reward farm kills/respawns, exact structure/gate costs, no duplicate kill credits, zero-balance return traversal, persistent global pool expansion, and boss-entry readiness without automatic victory. Every later scene loads independently with 11 correctly configured enemies. Grid paths verify both main routes and closed farming loops. Fixtures verify each gate's exact price, one-Coin-short rejection, current-zone death/respawn, and zero progression loss. Schema 5 round trips current Z8/gates/kills and migrates previous unlocks. Shooter retreat/approach, firing intervals and fixed projectile damage are checked. Wealth and luck do not alter enemy data.
 
-The Z1 economy fixture uses seven actual rounded starter hits per 45-HP Chaser and 50 repeated kills for 250 Coins: 25 Shrine + 75 Sell Terminal + 150 gate. It advances respawn time directly, so this proves accounting/repeatability rather than a timed beginner playtest. The earlier live combat regression exercises real projectile cadence. Full 12-minute beginner onboarding and 3-hour campaign/Coins-per-minute pacing remain manual validation, especially while bosses await Prompt 6.
+The Z1 economy fixture uses seven actual rounded starter hits per 45-HP Chaser and 50 repeated kills for 250 Coins: 25 Shrine + 75 Sell Terminal + 150 gate. It advances respawn time directly, so this proves accounting/repeatability rather than a timed beginner playtest. The earlier live combat regression exercises real projectile cadence. Full 12-minute beginner onboarding and 3-hour campaign/Coins-per-minute pacing remain manual validation.
 
 ## Render inspection
 
@@ -59,7 +59,7 @@ The sandbox emits an engine certificate-store diagnostic at startup and the edit
 3. Open Inventory and try DPS/rarity/name sorting. Use the paginated copy manager; favorite one copy, equip another, and verify both sale protections. Repair the Sell Terminal before trying sales.
 4. Open Collection: exactly 24 base cards, correct discovery states and current best variant. Sell every unprotected copy of one base and verify its discovery remains.
 5. Repair the Shrine, buy C01 for 100 Coins and Slot 2 for 350 Coins, own multiple copies, and use Auto Equip Strongest. Verify two strongest copies equip, including duplicate bases. Later slots require their listed Bond and boss gates.
-6. Open Skills immediately from a new save. R01 costs 25 Rolls; follow R01/R02/R03 and enable Auto Roll while walking/fighting. Confirm purchases lower Rolls without lowering Lifetime Rolls. Optional branches must never block the mainline.
+6. Repair the Bedroom Shrine and open Skills. R01 costs 25 Rolls; follow R01/R02/R03 and enable Auto Roll while walking/fighting. Confirm purchases lower Rolls without lowering Lifetime Rolls. Optional branches must never block the mainline.
 7. Inspect Shiny outline/sparkles, Glitched jitter/chromatic offset, Golden aura, each reveal tier, and sound/shake settings. A first jackpot cannot be skipped; repeats can. Continue holding movement and rolling during feedback.
 8. Pause, background/resume, and restart. Verify no offline progress; balances, favorites, discovery, equipment, selected cap and statistics restore. A stage-one save should migrate without resetting the starter or currencies.
 9. Hold Reset for less than three seconds and release: nothing changes. On a disposable save, hold for the full duration: all currencies, inventory/discovery, upgrades, caps and location reset.
@@ -71,7 +71,22 @@ The sandbox emits an engine certificate-store diagnostic at startup and the edit
 15. Take damage, then stay clear: HP remains unchanged for four seconds, then regenerates at 5% max HP/sec. Pause freezes regeneration. Die on a disposable save: observe the 1.5s fade and full-HP entrance respawn, with wallets, equipment and inventory preserved.
 16. In a progressed fixture, purchase Bonds, Boss Hunter, Toughness and Fleet Feet. Verify ordinary per-hit damage is rounded after 2.5x at Final Bond, boss damage gets a further 1.5x, raw Team DPS excludes the conditional boss bonus, HP reaches 250 and move speed 216 px/s. Check Scavenger affects only normal kills and Dealer only sales.
 17. Reload a stage-three save with old slot upgrades: team capacity, wallets and historical Coin accounting survive migration. New Coin nodes show exact canonical costs and world prerequisites.
-18. On a disposable fresh save, roll the guaranteed starter, enter Backyard, and farm the outer route. Repair both structures, reach at least 12 kills and save 150 Coins. Approach the far gate: confirm exact requirements, purchase and walk into Italian Village. Backtrack and return with zero Coins; no second payment occurs.
-19. In Italian Village, reach 20 kills and 900 Coins without a boss flag. Its exit must remain locked and preserve Coins. The boss entrance reports that the encounter is unavailable; it never awards a fake victory. Later campaign QA uses explicit test fixtures until Prompt 6 supplies real bosses.
+18. On a disposable fresh save, roll the guaranteed starter, enter Backyard, and farm the outer route. Return to the Bedroom Hub to repair both structures, reach at least 12 kills and save 150 Coins. Approach the far gate: confirm exact requirements, purchase and walk into Italian Village. Backtrack and return with zero Coins; no second payment occurs.
+19. In Italian Village, reach 20 kills and 900 Coins without a boss flag. Its exit must remain locked and preserve Coins. Enter the Espresso Golem arena and defeat it. Only the real victory grants the flag/reward; the exit gate still costs 900 Coins.
 20. Visit each fixture-unlocked zone: traverse both the main path and farming loop, observe its themed props, distinct Chaser/Shooter/Tank silhouettes and fixed levels, dodge Shooter shots, and repeat farm spawns. Check Z3/Z5/Z7 walls at 40/60/90 kills and 4,000/75,000/1,200,000 Coins.
 21. Die in each zone and reload saves from later zones: current-zone entrance, full HP, gate flags, Coins, Rolls, equipment and pool unlocks remain correct. Confirm Z8 requires 100 kills plus its final boss and has no extra paid gate or Z9.
+
+## Stage 6 acceptance and validation
+
+The combined suite adds all five exact structure locations/costs and one-time repair flags; crafting location/recipe gates; bottle inventory; stronger-soda protection without consumption; simultaneous 300s luck/Brew channels; pause/expiry; Boss Hunter ×1.25 Brew stacking; protected five-copy mutation and atomic fee failure; locked/invalid Fast Travel targets and current entrance destinations. Boss tests cover exact HP/contact/rewards, closed arenas, no Fast Travel/gate escape, reset boundaries, restored boss HP, every pattern's timing/damage, the 40% Admin phase, one-time soda/Coin rewards, death reset, portal completion and schema 6 persistence. Arena draw order is explicitly checked after rendered inspection caught and fixed an obscured player.
+
+Rendered Espresso slam, Sand Router fan, Janitor burst, Admin shrinking circle, Potions, Map, Mutation and Completion captures were inspected. Boss combat art and telegraphs use original procedural placeholders. Deterministic encounter tests advance pattern timers and apply defeat damage directly; they do not establish campaign-length pacing or real-device performance.
+
+22. In a fresh Hub, confirm Skills is unavailable until the 25-Coin Shrine repair. Confirm the Sell Terminal is also in the Hub and costs 75. Reopen an existing save and verify already repaired flags remain set.
+23. At each qualified boss entrance, enter and observe closed arena bounds. Move across the gold reset line: no wallet, inventory or HP loss; re-enter for full boss HP. Die in the arena and verify ordinary 1.5s current-zone respawn. Fast Travel stays disabled during fights.
+24. Dodge Espresso's 0.8s slam warning after 3s chase; Router's five-wave 4s fan; Janitor's 6s teleport and two aimed three-shot bursts; Admin's alternating patterns and shrinking warning circles below 40% HP. Keep Auto Roll running while moving and attacking through slimes.
+25. Verify each boss pays its exact first-kill Coins once, with Lucky/Hyper Soda bottles for Z2/Z4. Confirm repeat entry or reload cannot farm the reward and that Coin Scavenger never increases it.
+26. Repair the Z2 Bench for 900. Craft/drink Lucky Soda, unlock Hyper with Z4 and Brew with Z6. Pause, background and restart: only active time counts. A weaker soda must not consume its bottle while Hyper is active; Brew coexists and affects bosses only.
+27. Repair the Z4 Pillar for 15,000. Map lists Hub and all zones, disabling locked destinations. Select an unlocked zone and confirm its entrance arrival without changing unlocks or wallet.
+28. Repair the Z6 Lab for 250,000. With seven identical Normal copies, equip one and favorite one; mutate the other five for the exact fee. Confirm one Shiny appears and protected copies remain. Insufficient funds or copies must consume nothing.
+29. Defeat Singularity Admin, enter the completion portal, and restart. The victory, 6,000,000-Coin first payout, portal and completion state persist. Continuing exploration does not grant another payout or start prestige.
