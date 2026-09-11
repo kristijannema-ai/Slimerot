@@ -44,6 +44,8 @@ class SkillNodeData extends Resource:
 	@export var effect_type: String
 	@export var effect_value: float
 	@export var required_boss_zone: int = 0
+	@export var required_zone: int = 1
+	@export var required_structure: String = ""
 
 class ZoneData extends Resource:
 	@export var id: int
