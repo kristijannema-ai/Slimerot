@@ -30,6 +30,7 @@ func snapshot() -> Dictionary:
 		"lifetime_rolls": GameState.lifetime_rolls, "active_play_seconds": GameState.active_play_seconds,
 		"highest_zone_unlocked": GameState.highest_zone_unlocked, "current_zone": GameState.current_zone,
 		"zone_kill_counts": GameState.zone_kill_counts.duplicate(true),
+		"unlocked_gate_flags": GameState.unlocked_gate_flags.duplicate(),
 		"boss_defeated_flags": GameState.boss_defeated_flags.duplicate(true),
 		"structure_unlocked_flags": GameState.structure_unlocked_flags.duplicate(true),
 		"purchased_skill_node_ids": GameState.purchased_skill_node_ids.duplicate(),
@@ -118,15 +119,15 @@ func validate(data: Variant) -> bool:
 			return false
 	if data.active_potion_multiplier < 1.0 or data.highest_luck < 1.0:
 		return false
-	if data.rolls_balance > data.lifetime_rolls or data.current_zone > 1 or data.highest_zone_unlocked < 1 or data.highest_zone_unlocked > SlimerotBalance.MAX_ZONE:
+	if data.rolls_balance > data.lifetime_rolls or data.current_zone > data.highest_zone_unlocked or data.highest_zone_unlocked < 1 or data.highest_zone_unlocked > SlimerotBalance.MAX_ZONE:
 		return false
-	for key in ["zone_kill_counts", "boss_defeated_flags", "structure_unlocked_flags", "inventory", "settings", "discoveries", "roll_skill_spend"]:
+	for key in ["zone_kill_counts", "boss_defeated_flags", "structure_unlocked_flags", "unlocked_gate_flags", "inventory", "settings", "discoveries", "roll_skill_spend"]:
 		if not data.get(key) is Dictionary:
 			return false
 	for count in data.zone_kill_counts.values():
-		if (not count is float and not count is int) or float(count) < 0:
+		if (not count is float and not count is int) or not is_finite(float(count)) or float(count) < 0 or float(count) != floor(float(count)):
 			return false
-	for key in ["boss_defeated_flags", "structure_unlocked_flags"]:
+	for key in ["boss_defeated_flags", "structure_unlocked_flags", "unlocked_gate_flags"]:
 		for flag in data[key].values():
 			if not flag is bool:
 				return false
@@ -207,6 +208,7 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.highest_zone_unlocked = int(data.highest_zone_unlocked)
 	GameState.current_zone = int(data.current_zone)
 	GameState.zone_kill_counts = data.zone_kill_counts.duplicate(true)
+	GameState.unlocked_gate_flags = data.unlocked_gate_flags.duplicate()
 	GameState.boss_defeated_flags = data.boss_defeated_flags.duplicate(true)
 	GameState.structure_unlocked_flags = data.structure_unlocked_flags.duplicate(true)
 	GameState.purchased_skill_node_ids.assign(data.purchased_skill_node_ids)
@@ -231,9 +233,16 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.changed.emit()
 
 func migrate(value: Variant) -> Variant:
-	if not value is Dictionary or value.get("schema_version") not in [1, 2, 3]:
+	if not value is Dictionary or value.get("schema_version") not in [1, 2, 3, 4]:
 		return value
 	var data: Dictionary = value.duplicate(true)
+	data.unlocked_gate_flags = {}
+	var highest: Variant = data.get("highest_zone_unlocked",1)
+	if highest is int or highest is float:
+		for zone in range(1,clampi(int(highest),1,8)): data.unlocked_gate_flags[str(zone)] = true
+	if data.schema_version == 4:
+		data.schema_version = SlimerotBalance.SCHEMA_VERSION
+		return data
 	if not data.get("inventory") is Dictionary or not data.get("purchased_skill_node_ids") is Array:
 		return data
 	if data.schema_version == 3: return migrate_coin_tree(data)
