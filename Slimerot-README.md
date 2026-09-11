@@ -1,49 +1,62 @@
 # Slimerot
 
-Godot 4.x / GDScript. An offline, portrait Android game about exploring, rolling slimes, and automatic team combat. This repository implements **prompt 1: foundation and the canonical new-save loop**. Validated with Godot 4.5.1.
+Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1 and 2 are implemented: the playable Bedroom/Backyard foundation, complete rolling math, 24 canonical base slimes, four variants, and inventory/collection/team backends.
 
-## Play
+## Play and controls
 
-Import `project.godot` into Godot 4.5.1 and press F6 on `scenes/Slimerot.tscn`, or F5 to run the project. No external plugins, assets, service accounts, or network connection are needed.
+Import `project.godot` and press F5. Touch: drag the 90 px joystick and tap ROLL with another finger. Desktop: WASD/arrows move, Space rolls, E interacts, Escape closes menus. Rolling remains in the world during movement, combat, and non-pausing menus. Settings pauses active gameplay.
 
-- Mobile: drag the lower-left joystick; tap ROLL with another finger. Context actions appear above the controls.
-- Desktop: WASD / arrow keys move, Space rolls, E interacts, Escape closes a menu. The joystick can also be dragged with the mouse.
-- Start beside the Bedroom exit with 0 Coins, 0 Rolls, 0 Lifetime Rolls, 100 HP, x1 luck, one equipment slot, and a 2.4-second roll cooldown.
-- First roll guarantees Tung Tung Tung Sahur, adds exactly one Rolls and one Lifetime Roll, and equips its copy. The reveal never takes over the world or pauses movement.
-- Enter Backyard and approach Level 1 Laglings. The equipped slime attacks within 180 px every second. Kills grant five Coins directly; death returns to the current entrance without losing anything.
-- Repair the Skill Tree Shrine for 25 Coins to access early Roll upgrades. Repair the Sell Terminal for 75 Coins to sell duplicates. Equipped/favorited copies are protected.
+New saves have zero currencies, 100 HP, 180 px/s movement, x1 luck, a 2.4-second cooldown, and one slot. The first base result is always Tung Tung Tung Sahur and auto-equips. Like every roll, its variant is drawn separately. Normal Tung Tung now has the canonical 7 damage and 5 base sell value.
 
-## Stage boundary and provisional values
+Enter Backyard, approach Laglings within 180 px for automatic slime attacks, and earn five base Coins per kill. The Shrine costs 25 Coins; the Sell Terminal costs 75 Coins. These working stage-one systems are preserved. Death loses no currencies or copies.
 
-The repository was empty at implementation time. No previous Godot code or balance tables were available. The supplied excerpt defines the full game's shape but names only the starter slime and does not provide the other 23 slime rows, boss attacks, variant math, or full skill tables.
+## Exact rolling
 
-Only Bedroom, Backyard, Tung Tung Tung Sahur, and Laglings are populated. Other rolls currently return starter duplicates. Italian Village is a clearly marked later-stage entrance; it cannot charge the player or load an unfinished zone. This stage does not claim to meet the full 3-hour progression or the 2–4 distinct slimes target. The required typed contracts exist for later content.
+A completed manual or automatic roll grants exactly +1 spendable **Rolls** and +1 **Lifetime Rolls**. Pressing ROLL is free. Only Roll-tree purchases spend Rolls; there are no other minting paths. Schema validation enforces lifetime = balance + costs of purchased Roll nodes.
 
-All balance numbers live in `scripts/data/SlimerotBalance.gd`. **Provisional** values: starter damage 10 / sell value 2; Lagling HP 30, damage 8, speed 55, respawn 5 seconds; Quick Hands I costs 10 Rolls / cooldown x0.9, Luck I costs 15 Rolls / luck x1.25, Auto Roll costs 25 Rolls. Exact requested starting stats, five-Coin rewards, structure costs, and future Backyard gate requirement are preserved. These provisional numbers are not a claim about the missing canonical tables.
+The global pool contains all slimes with zone_unlock <= highest_zone_unlocked, regardless of current location. Effective Luck is the product of minor luck effects, x20 per Breakthrough, and the active potion multiplier. The score is L/U with U in (0,1], selecting the highest eligible threshold reached, otherwise Tung Tung.
 
-No XP, manual weapons, online systems, monetization, prestige, bosses, mutations, potions, or later zones are implemented. Their required save/data fields are reserved without exposing unfinished purchase actions. Three variant IDs are reserved; rolls produce only normal copies until variant rules are supplied. All art is original code/SVG placeholder art; audio is intentionally silent.
+`SlimerotRoster.gd` contains all 24 canonical IDs, names, zones, and thresholds. Damage = round(6 × N^0.32); base sell = max(1, round(4 × N^0.45)). Tests compare all values against the supplied table. Cards say **Rarity threshold: 1 in N**, not isolated probability.
 
-## Architecture and saves
+A separate RNG stream draws one mutually exclusive variant: Golden 1/10,000, Glitched 1/1,000, Shiny 1/100, otherwise Normal. Variant Sense multiplies each rare-variant chance by exactly 1.25. Ordinary luck, potion luck, and Luck Cap never enter this variant draw. Damage multipliers are 1/1.5/2.5/4; sale multipliers are 1/2/5/10.
 
-Eight autoloads separate state, content, derived stats, inventory, world progression, combat, rolling, and saving. `SlimerotData.gd` declares Resource contracts for SlimeData, EnemyData, BossData, SkillNodeData, ZoneData, and StructureData. The world reuses player, enemy, joystick, and proximity-interaction components.
+After a purchased checkpoint effect, Roll Settings exposes MAX / x20-era / x1. MAX is the initial and first-Breakthrough default. Caps are absolute rolling-luck ceilings of none / 20 / 1; combat and uncapped luck statistics are unchanged.
 
-`SkillTreeManager.derived_stats()` is the only stat calculation entry point. It derives base stats plus purchased effects, clamps equipment to 1–5, and supports exact x20 checkpoint effects without adding those later nodes. Save restore derives stats from purchased IDs rather than trusting cached stats. Inventory tracks stable copy IDs grouped by slime + variant with quantity and favorite protection.
+## Inventory, team, collection, and menus
 
-The local save is `user://Slimerot-save.json`, schema 1. Saves include every field requested by prompt 1 plus current zone, next copy ID, and remaining roll cooldown. Autosave runs every ten active seconds, and immediately after purchases, first/rare rolls, team/favorite changes, selling, zone changes, pause/focus loss, and exit. Future boss/mutation systems can emit the same `GameState.critical_change` event when implemented.
+Ownership uses unlimited quantities per slime + variant, stable copy IDs, per-copy favorites, and a group favorite toggle. Discovery is stored separately and survives all sales. Collection always has exactly 24 base cards; variants do not add entries. Best variant owned reflects current ownership.
 
-Writes flush a temporary file before rotating the previous generation to `.bak` and replacing the main file. Load validates data before applying it; missing/corrupt main files recover from a valid temporary file or backup. Unrecoverable and future-version saves are preserved with saving disabled and an on-screen warning. Active play, potions, roll cooldown, and combat stop while the application is suspended. There is no offline progress.
+Inventory sorts by DPS, rarity, or name. Its copy manager is paginated for performance without limiting ownership. Equipped/favorited copies cannot be sold. Sell Duplicates retains protected copies and at least one copy per pair; an individual unprotected copy can be sold after unequipping. Auto Equip Strongest selects highest actual variant-adjusted DPS, including multiple copies of one slime.
 
-## Validation
+The five-slot Team view shows locked slots. Coin-tree slots use canonical costs of 350 / 3,500 / 25,000 / 250,000 and sequential prerequisites. Slots 3/4/5 also require Z2/Z4/Z6 boss flags. WorldManager uses stable `zone_2`, `zone_4`, `zone_6` defeat keys; no boss encounters are introduced here.
+
+Normal-enemy rewards use Coin Scavenger. Duplicate sales use Duplicate Dealer independently. Boss reward bookkeeping is one-time and ignores Coin Scavenger. Final Coin amounts are rounded to the nearest integer after multipliers.
+
+The HUD shows Coins, Rolls, effective Luck, equipment portraits and DPS. Lifetime Rolls appears only in Stats. Menus include Inventory, Team, Collection, Roll/Coin skill tabs, Roll Settings, Stats, and pausing Settings with save status and a cancellable three-second reset hold.
+
+Reveals last 0.35s (0.20s with Skip Common), 0.65s, 1.10s, 1.70s, or 2.80s for a first jackpot / 1.00s for repeats. First base discoveries at threshold >=1,000,000 cannot be skipped or displaced by another roll; later results queue behind them. Committing inventory/currency is separate from feedback. Original procedural portraits support Shiny sparkles, Glitched chromatic jitter, and Golden aura. Rare reveals add pulse/particles, optional subtle shake, and a generated sound sting.
+
+## Saves and extension points
+
+Eight autoloads remain the architecture: GameState, SlimeDatabase, SkillTreeManager, InventoryManager, WorldManager, CombatManager, RollManager, SaveManager. Typed content contracts are in `SlimerotData.gd`; shared balance is in `SlimerotBalance.gd`.
+
+Schema 2 saves under `user://Slimerot-save.json` add discovery history, favorite copy IDs, statistics, and active potion multiplier. Schema 1 migrates automatically, preserving ownership, equipment, currencies, settings, and upgrades. Recoverable historical Coin spending is reconstructed from structures and purchased nodes; past luck/DPS records absent from schema 1 cannot be fully reconstructed. Invalid/future saves remain protected rather than silently overwritten.
+
+Ten-second autosave, immediate progression/lifecycle saves, flushed temporary files, and backup recovery remain intact. Pause stops active play, roll cooldowns, combat, and potion duration. There is no offline progress.
+
+## Stage boundary
+
+All 24 roll entries and eight-zone eligibility work now. Physical zones remain Bedroom and Backyard; later zone construction and boss encounters belong to later prompts. The database does not require those scenes to exist.
+
+Existing provisional early Roll prices/effects remain Quick Hands I 10 Rolls / cooldown x0.9, Luck I 15 Rolls / luck x1.25, Auto Roll 25 Rolls. Early Lagling HP/damage/speed/respawn remain provisional. The supplied prompt does not price Breakthrough, Variant Sense, Skip Common, potions, or auto-sell unlocks, so no new invented purchases or potion sources were added. Their specified stat/reveal hooks are implemented and tested through fixtures. Auto-sell, Super Roll, Fast Travel, mutations, XP, manual weapons, online systems, monetization and prestige are not introduced.
+
+## Run validation
 
 ```sh
 godot --headless --path . --editor --import --quit
 godot --headless --path . -- --slimerot-test
 ```
 
-The integration suite uses per-process test files under `.godot/`, never the player's save. It checks the new-save contract, actual physics movement/collision, rolling during movement, cooldown rejection, ownership/equipment, context transition, injected two-finger touch input, actual automatic combat, death, purchases, protected selling, JSON round trips, and corrupt-save recovery. A rendered run can capture screens with `-- --slimerot-test --slimerot-capture` (omit `--headless`).
+Tests use per-process saves under `.godot/`, never player saves. For rendered captures omit `--headless` and append `--slimerot-capture` after `--slimerot-test`. See `docs/Slimerot-Testing.md` for results and the manual checklist.
 
-See `docs/Slimerot-Testing.md` for validation results and the manual device checklist.
-
-## Android
-
-The viewport is 720×1280, portrait, using Godot's compatibility renderer. `export_presets.cfg` includes **Slimerot Android**, ARM64, package `com.slimerot.game`, with Internet and network-state permissions disabled. Install matching Godot export templates and configure the Android SDK, JDK, and signing credentials in your own Godot editor before exporting. No keystores or credentials belong in this repository. An APK and physical-device test are not part of this validation environment.
+The 720×1280 portrait Android ARM64 preset disables Internet/network permissions. Export requires locally installed matching Godot templates, Android SDK/JDK and signing configuration. No credentials are committed. Physical Android and APK validation remain outstanding.
