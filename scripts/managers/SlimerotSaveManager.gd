@@ -31,6 +31,8 @@ func snapshot() -> Dictionary:
 		"highest_zone_unlocked": GameState.highest_zone_unlocked, "current_zone": GameState.current_zone,
 		"zone_kill_counts": GameState.zone_kill_counts.duplicate(true),
 		"unlocked_gate_flags": GameState.unlocked_gate_flags.duplicate(),
+		"potion_inventory": GameState.potion_inventory.duplicate(), "boss_brew_seconds": GameState.boss_brew_seconds,
+		"completion_portal_unlocked": GameState.completion_portal_unlocked, "campaign_completed": GameState.campaign_completed,
 		"boss_defeated_flags": GameState.boss_defeated_flags.duplicate(true),
 		"structure_unlocked_flags": GameState.structure_unlocked_flags.duplicate(true),
 		"purchased_skill_node_ids": GameState.purchased_skill_node_ids.duplicate(),
@@ -109,6 +111,11 @@ func load_game() -> bool:
 func validate(data: Variant) -> bool:
 	if not data is Dictionary or data.get("schema_version") != SlimerotBalance.SCHEMA_VERSION:
 		return false
+	if not data.get("potion_inventory") is Dictionary or not data.get("completion_portal_unlocked") is bool or not data.get("campaign_completed") is bool: return false
+	if (not data.get("boss_brew_seconds") is float and not data.get("boss_brew_seconds") is int) or not is_finite(float(data.boss_brew_seconds)) or data.boss_brew_seconds < 0 or data.boss_brew_seconds > 300: return false
+	for id in data.potion_inventory:
+		var count: Variant = data.potion_inventory[id]
+		if not SlimerotEncounters.POTIONS.has(id) or (not count is float and not count is int) or not is_finite(float(count)) or count < 0 or count != floor(float(count)): return false
 	for key in ["coins", "rolls_balance", "lifetime_rolls", "active_play_seconds", "highest_zone_unlocked", "current_zone", "next_copy_id", "active_potion_remaining_seconds", "roll_cooldown_remaining", "active_potion_multiplier", "coins_earned", "coins_spent", "rarest_threshold_reached", "highest_luck", "best_team_dps"]:
 		if not data.get(key) is float and not data.get(key) is int:
 			return false
@@ -209,6 +216,10 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.current_zone = int(data.current_zone)
 	GameState.zone_kill_counts = data.zone_kill_counts.duplicate(true)
 	GameState.unlocked_gate_flags = data.unlocked_gate_flags.duplicate()
+	GameState.potion_inventory = data.potion_inventory.duplicate()
+	GameState.boss_brew_seconds = float(data.boss_brew_seconds)
+	GameState.completion_portal_unlocked = data.completion_portal_unlocked
+	GameState.campaign_completed = data.campaign_completed
 	GameState.boss_defeated_flags = data.boss_defeated_flags.duplicate(true)
 	GameState.structure_unlocked_flags = data.structure_unlocked_flags.duplicate(true)
 	GameState.purchased_skill_node_ids.assign(data.purchased_skill_node_ids)
@@ -233,9 +244,16 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.changed.emit()
 
 func migrate(value: Variant) -> Variant:
-	if not value is Dictionary or value.get("schema_version") not in [1, 2, 3, 4]:
+	if not value is Dictionary or value.get("schema_version") not in [1, 2, 3, 4, 5]:
 		return value
 	var data: Dictionary = value.duplicate(true)
+	data.potion_inventory = {}
+	data.boss_brew_seconds = 0.0
+	data.completion_portal_unlocked = data.get("boss_defeated_flags",{}).get("zone_8",false)
+	data.campaign_completed = false
+	if data.schema_version == 5:
+		data.schema_version = SlimerotBalance.SCHEMA_VERSION
+		return data
 	data.unlocked_gate_flags = {}
 	var highest: Variant = data.get("highest_zone_unlocked",1)
 	if highest is int or highest is float:
