@@ -64,29 +64,10 @@ class StructureData extends Resource:
 	@export var function_type: String
 
 static func lagling() -> EnemyData:
-	var data := EnemyData.new()
-	data.id = "lagling"
-	data.zone = 1
-	data.level = 1
-	data.archetype = "chaser"
-	data.max_hp = SlimerotBalance.LAGLING_HP
-	data.attack_damage = SlimerotBalance.LAGLING_DAMAGE
-	data.attack_interval = SlimerotBalance.LAGLING_ATTACK_INTERVAL
-	data.coin_reward = SlimerotBalance.LAGLING_COINS
-	data.move_speed = SlimerotBalance.LAGLING_SPEED
-	return data
+	return SlimerotCampaign.enemy(1, "chaser")
 
 static func zone(zone_id: int) -> ZoneData:
-	var data := ZoneData.new()
-	data.id = zone_id
-	data.name = "Bedroom Hub" if zone_id == 0 else "Backyard"
-	data.enemy_level_range = Vector2i.ZERO if zone_id == 0 else Vector2i(1, 1)
-	data.kill_requirement = 0 if zone_id == 0 else SlimerotBalance.BACKYARD_GATE_KILLS
-	data.gate_coin_cost = 0 if zone_id == 0 else SlimerotBalance.BACKYARD_GATE_COINS
-	for row in SlimerotRoster.ROWS:
-		if row[2] == zone_id:
-			data.slime_unlock_ids.append(row[0])
-	return data
+	return SlimerotCampaign.zone(zone_id)
 
 static func structures() -> Array[StructureData]:
 	var result: Array[StructureData] = []
