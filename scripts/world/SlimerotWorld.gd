@@ -5,7 +5,6 @@ var hud: SlimerotHUD
 var zone_root: Node2D
 var interactions: Array[SlimerotInteraction] = []
 var current_interaction: SlimerotInteraction
-var beams: Array[Dictionary] = []
 
 func _ready() -> void:
 	configure_input()
@@ -19,7 +18,6 @@ func _ready() -> void:
 	hud.interact_requested.connect(interact)
 	WorldManager.zone_changed.connect(build_zone)
 	WorldManager.respawn_requested.connect(respawn_player)
-	CombatManager.slime_attacked.connect(func(origin, destination): beams.append({"from": origin, "to": destination, "life": 0.16}))
 	build_zone(GameState.current_zone)
 	if "--slimerot-test" in OS.get_cmdline_user_args():
 		var test: Node = load("res://tests/SlimerotTests.gd").new()
@@ -43,7 +41,6 @@ func build_zone(zone_id: int) -> void:
 		zone_root.queue_free()
 	interactions.clear()
 	current_interaction = null
-	beams.clear()
 	CombatManager.attack_timers.clear()
 	zone_root = Node2D.new()
 	zone_root.name = "SlimerotBedroom" if zone_id == 0 else "SlimerotBackyard"
@@ -107,6 +104,7 @@ func add_interaction(at: Vector2, prompt: String, action: Callable) -> void:
 	interactions.append(component)
 
 func interact() -> void:
+	if GameState.player_dead: return
 	if not GameState.is_paused() and is_instance_valid(current_interaction):
 		current_interaction.activate(player.global_position)
 
@@ -133,9 +131,6 @@ func _process(delta: float) -> void:
 		elif current_interaction.position.x == 780 and GameState.structure_unlocked_flags.get("sell_terminal", false):
 			prompt = "Open Sell Terminal"
 	hud.set_interaction(prompt)
-	for beam in beams:
-		beam.life -= delta
-	beams = beams.filter(func(beam): return beam.life > 0.0)
 	queue_redraw()
 
 func rounded(rect: Rect2, color: Color, radius: int = 12) -> void:
@@ -190,5 +185,3 @@ func _draw() -> void:
 		draw_rect(rect, Color("263b3d"))
 	if is_instance_valid(current_interaction):
 		draw_arc(current_interaction.position, 70, 0, TAU, 40, Color(0.8, 0.95, 0.6, 0.65), 2, true)
-	for beam in beams:
-		draw_line(beam.from + Vector2(38, 0), beam.to, Color("d5f794"), 5, true)

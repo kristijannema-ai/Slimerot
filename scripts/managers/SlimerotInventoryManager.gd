@@ -160,12 +160,13 @@ func auto_sell_roll(copy_id: String) -> int:
 	GameState.award_coins(value, false)
 	return value
 
-func damage_for_pair(pair: Dictionary) -> float:
-	return SlimeDatabase.get_slime(pair.slime_id).base_damage * SlimerotBalance.VARIANT_DATA[pair.variant].damage * SkillTreeManager.derived_stats().damage_multiplier
+func damage_for_pair(pair: Dictionary, boss: bool = false) -> float:
+	var stats := SkillTreeManager.derived_stats()
+	return roundf(SlimeDatabase.get_slime(pair.slime_id).base_damage * SlimerotBalance.VARIANT_DATA[pair.variant].damage * stats.damage_multiplier * (1.0 + stats.boss_damage_bonus if boss else 1.0))
 
-func damage_for_copy(copy_id: String) -> float:
+func damage_for_copy(copy_id: String, boss: bool = false) -> float:
 	var pair := pair_for_copy(copy_id)
-	return 0.0 if pair.is_empty() else damage_for_pair(pair)
+	return 0.0 if pair.is_empty() else damage_for_pair(pair, boss)
 
 func team_dps() -> float:
 	var damage := 0.0

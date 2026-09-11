@@ -99,9 +99,9 @@ func team() -> void:
 	hud.menu_button("Auto Equip Strongest", func(): InventoryManager.auto_equip_strongest(); hud.open_menu("Team"))
 	for copy_id in InventoryManager.equipped_copy_ids:
 		var pair := InventoryManager.pair_for_copy(copy_id)
-		hud.menu_label(SlimeDatabase.get_slime(pair.slime_id).display_name + " · " + pair.variant.capitalize(), 20)
+		hud.menu_label(SlimeDatabase.get_slime(pair.slime_id).display_name + " · " + pair.variant.capitalize() + "\n%d damage / hit · every 1.00s" % int(InventoryManager.damage_for_copy(copy_id)), 20)
 		hud.menu_button("Unequip", func(): InventoryManager.unequip(copy_id); hud.open_menu("Team"))
-	hud.menu_label("Slot 2: 350 Coins\nSlot 3: 3,500 Coins + Z2 boss\nSlot 4: 25,000 Coins + Z4 boss\nSlot 5: 250,000 Coins + Z6 boss", 19)
+	hud.menu_label("Slot 2: C01 + 350 Coins\nSlot 3: C05 + Z2 boss + 3,500 Coins\nSlot 4: C08 + Z4 boss + 25,000 Coins\nSlot 5: C13 + Z6 boss + 250,000 Coins", 19)
 
 func selling() -> void:
 	hud.menu_label("Keeps every equipped/favorited copy and at least one copy of each slime + variant. Discovery history is permanent.")
@@ -143,6 +143,8 @@ func skills() -> void:
 		if data.prerequisite_ids.is_empty(): detail.text += "\nStart"
 		if data.required_boss_zone > 0:
 			detail.text += "\n└ Requires Z%d boss" % data.required_boss_zone
+		if data.required_zone > 1: detail.text += "\n└ Requires Z%d unlocked" % data.required_zone
+		if not data.required_structure.is_empty(): detail.text += "\n└ Requires repaired Sell Terminal"
 		column.add_child(detail)
 		var buy := Button.new()
 		var blocker := SkillTreeManager.purchase_blocker(id)

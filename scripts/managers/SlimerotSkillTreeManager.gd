@@ -17,26 +17,27 @@ func _ready() -> void:
 		data.description = row[6]
 		data.optional = data.id.begins_with("RO")
 		nodes[data.id] = data
-	for index in SlimerotBalance.TEAM_SLOTS.size():
-		var row: Array = SlimerotBalance.TEAM_SLOTS[index]
+	for row in SlimerotCoinTree.ROWS:
 		var data := SlimerotData.SkillNodeData.new()
 		data.id = row[0]
-		data.display_name = "Equipped Slot %d" % (index + 2)
+		data.display_name = row[1]
+		data.prerequisite_ids.assign(row[2])
 		data.tree_type = "Coin"
 		data.currency_type = "Coins"
-		data.cost = row[1]
-		data.required_boss_zone = row[2]
-		data.effect_type = "slot_add"
-		data.effect_value = 1
-		if index > 0:
-			data.prerequisite_ids.append(SlimerotBalance.TEAM_SLOTS[index - 1][0])
+		data.cost = row[3]
+		data.effect_type = row[4]
+		data.effect_value = row[5]
+		data.required_zone = row[6]
+		data.required_boss_zone = row[7]
+		data.required_structure = row[8]
+		data.description = SlimerotCoinTree.description(data.effect_type, data.effect_value)
 		nodes[data.id] = data
 
 func derived_stats(node_ids: Variant = null) -> Dictionary:
 	var stats := {"luck": 1.0, "roll_cooldown": SlimerotBalance.ROLL_COOLDOWN,
 		"max_hp": SlimerotBalance.PLAYER_HP, "move_speed": SlimerotBalance.MOVE_SPEED,
 		"attack_interval": SlimerotBalance.ATTACK_INTERVAL, "attack_range": SlimerotBalance.ATTACK_RANGE,
-		"damage_multiplier": 1.0, "equipped_slots": 1, "auto_roll": false,
+		"damage_multiplier": 1.0, "team_damage_bonus": 0.0, "boss_damage_bonus": 0.0, "move_speed_bonus": 0.0, "equipped_slots": 1, "auto_roll": false,
 		"breakthrough_count": 0, "variant_sense": false, "skip_common": false,
 		"auto_sell": false, "filter_1": false, "filter_2": false, "super_roll": false,
 		"coin_scavenger": 0.0, "duplicate_dealer": 0.0}
@@ -51,6 +52,10 @@ func derived_stats(node_ids: Variant = null) -> Dictionary:
 		if data == null:
 			continue
 		match data.effect_type:
+			"team_damage_add": stats.team_damage_bonus += data.effect_value
+			"boss_damage_add": stats.boss_damage_bonus += data.effect_value
+			"move_speed_add": stats.move_speed_bonus += data.effect_value
+			"slot_set": stats.equipped_slots = maxi(stats.equipped_slots, int(data.effect_value))
 			"luck_multiplier": minor_luck *= data.effect_value
 			"checkpoint_luck":
 				stats.breakthrough_count += 1
@@ -70,6 +75,8 @@ func derived_stats(node_ids: Variant = null) -> Dictionary:
 			"slot_add": stats.equipped_slots += int(data.effect_value)
 			"auto_roll": stats.auto_roll = true
 	stats.luck = minor_luck * pow(20.0, stats.breakthrough_count)
+	stats.damage_multiplier *= 1.0 + stats.team_damage_bonus
+	stats.move_speed *= 1.0 + stats.move_speed_bonus
 	stats.equipped_slots = clampi(stats.equipped_slots, 1, SlimerotBalance.MAX_SLOTS)
 	stats.roll_cooldown = maxf(0.1, stats.roll_cooldown)
 	return stats
@@ -84,6 +91,7 @@ func purchase(id: String) -> bool:
 	if id == "R08": GameState.settings.luck_cap = 0.0
 	RollManager.cooldown_remaining = minf(RollManager.cooldown_remaining, derived_stats().roll_cooldown)
 	GameState.highest_luck = maxf(GameState.highest_luck, RollManager.effective_luck())
+	GameState.best_team_dps = maxf(GameState.best_team_dps, InventoryManager.team_dps())
 	GameState.changed.emit()
 	GameState.critical_change.emit("skill_purchase")
 	purchased.emit(id, previous_luck, RollManager.effective_luck())
@@ -98,6 +106,8 @@ func purchase_blocker(id: String) -> String:
 		return "Repair the Skill Tree Shrine"
 	if data.required_boss_zone > 0 and not WorldManager.is_boss_zone_defeated(data.required_boss_zone):
 		return "Defeat the Z%d boss" % data.required_boss_zone
+	if GameState.highest_zone_unlocked < data.required_zone: return "Unlock Z%d" % data.required_zone
+	if not data.required_structure.is_empty() and not GameState.structure_unlocked_flags.get(data.required_structure, false): return "Repair Sell Terminal"
 	for prerequisite in data.prerequisite_ids:
 		if prerequisite not in GameState.purchased_skill_node_ids:
 			return "Requires " + prerequisite

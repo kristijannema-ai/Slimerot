@@ -29,6 +29,7 @@ var portraits: HBoxContainer
 var menu_dirty := false
 var menu_refresh_seconds := 0.0
 var menu_scroll: ScrollContainer
+var death_fade: ColorRect
 
 func _ready() -> void:
 	layer = 10
@@ -37,6 +38,12 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	root.theme = create_theme()
+	death_fade = ColorRect.new()
+	death_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	death_fade.color = Color(0,0,0,0)
+	death_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	death_fade.z_index = 100
+	root.add_child(death_fade)
 	panel(Rect2(20, 20, 680, 214))
 	text("Slimerot", Rect2(42, 31, 380, 51), 40, Color("b6ed78"))
 	text("OFFLINE  /  FIRST STEPS", Rect2(42, 83, 440, 24), 16, Color("95b4b3"))
@@ -191,6 +198,7 @@ func refresh() -> void:
 	auto_button.text = "Auto Roll · Locked" if not stats.auto_roll else ("Auto Roll · ON" if GameState.settings.auto_roll_state else "Auto Roll · OFF")
 
 func _process(delta: float) -> void:
+	death_fade.color.a = clampf(1.0 - CombatManager.death_remaining / SlimerotBalance.DEATH_FADE_SECONDS, 0, 1) if GameState.player_dead else 0.0
 	if breakthrough_seconds > 0.0 and not GameState.is_paused():
 		breakthrough_seconds = maxf(0.0, breakthrough_seconds - delta)
 		if breakthrough_seconds == 0.0: breakthrough_banner.hide()

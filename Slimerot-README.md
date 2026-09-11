@@ -1,6 +1,6 @@
 # Slimerot
 
-Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1–3 are implemented: the playable Bedroom/Backyard foundation, complete rolling math, 24 canonical base slimes, four variants, inventory/collection/team backends, and the complete Roll skill tree.
+Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1–4 are implemented: the playable Bedroom/Backyard foundation, complete rolling math, 24 canonical base slimes, four variants, team/inventory/collection, both complete skill trees, automatic projectile combat, and the Coin economy.
 
 ## Play and controls
 
@@ -38,9 +38,19 @@ Ownership uses unlimited quantities per slime + variant, stable copy IDs, per-co
 
 Inventory sorts by DPS, rarity, or name. Its copy manager is paginated for performance without limiting ownership. Equipped/favorited copies cannot be sold. Sell Duplicates retains protected copies and at least one copy per pair; an individual unprotected copy can be sold after unequipping. Auto Equip Strongest selects highest actual variant-adjusted DPS, including multiple copies of one slime.
 
-The five-slot Team view shows locked slots. Coin-tree slots use canonical costs of 350 / 3,500 / 25,000 / 250,000 and sequential prerequisites. Slots 3/4/5 also require Z2/Z4/Z6 boss flags. WorldManager uses stable `zone_2`, `zone_4`, `zone_6` defeat keys; no boss encounters are introduced here.
+The five-slot Team view shows locked slots and each copy's rounded damage per hit. Coin-tree slots cost 350 / 3,500 / 25,000 / 250,000, requiring C01 / C05 / C08 / C13 respectively. Slots 3/4/5 also require Z2/Z4/Z6 boss flags. The exact table does not require earlier slot nodes, so each upgrade sets the maximum slot count directly. WorldManager uses stable `zone_2`, `zone_4`, `zone_6` defeat keys; no boss encounters are introduced here.
 
 Normal-enemy rewards use Coin Scavenger. Duplicate sales use Duplicate Dealer independently. Boss reward bookkeeping is one-time and ignores Coin Scavenger. Final Coin amounts are rounded to the nearest integer after multipliers.
+
+## Coin progression and combat
+
+`SlimerotCoinTree.gd` centralizes C01–C19 and CO1–CO2 with exact costs, node/world/boss/structure prerequisites and descriptions. Coin upgrades retain the existing Shrine unlock. Slime Bonds add to +150% at Final Bond (2.5x); Boss Hunter separately adds to +50% (1.5x against bosses). Coin Scavenger totals +100% for normal kills, Duplicate Dealer +75% for sales, Toughness gives 250 max HP, and Fleet Feet gives 216 px/s. Purchases update Coins Spent and Team DPS immediately; all Coin income updates Coins Earned. Roll balances and Lifetime Rolls are untouched by Coin purchases.
+
+Slimes orbit in slot order without terrain collision or HP. Each searches from its own position for the nearest hostile within 180 px and fires independently every 1.00s. Slime projectiles fly a straight 500 px/s segment locked at firing. On arrival they apply the committed hit to the original target even if it moved, disappearing if that target died first. Damage is rounded once after base × variant × additive team multiplier × boss multiplier. Raw Team DPS sums those rounded ordinary hits; Boss Hunter is conditional, so it does not inflate the HUD's raw DPS.
+
+Enemy contact uses per-enemy timers and separation/collision avoidance. `fire_enemy_projectile` exposes straight, dodgeable shots with swept player/terrain collision; boss targets use the `slimerot_bosses` group in addition to `slimerot_enemies`. These are hooks for later enemy/boss content, not invented encounters. No player manual attack exists.
+
+After four damage-free active seconds, HP regenerates at 5% of max HP per second. Any positive damage restarts the delay. At zero HP, a 1.5-second fade blocks movement, rolling and interactions; respawn restores full HP at the current entrance without removing progression. Pause freezes combat, projectiles, regeneration and the fade. Zone changes clear in-flight shots and attack timers.
 
 The HUD shows Coins, Rolls, effective Luck, equipment portraits and DPS. Lifetime Rolls appears only in Stats. Menus include Inventory, Team, Collection, Roll/Coin skill tabs, Roll Settings, Stats, and pausing Settings with save status and a cancellable three-second reset hold.
 
@@ -50,7 +60,7 @@ Reveals last 0.35s (0.20s with Skip Common), 0.65s, 1.10s, 1.70s, or 2.80s for a
 
 Eight autoloads remain the architecture: GameState, SlimeDatabase, SkillTreeManager, InventoryManager, WorldManager, CombatManager, RollManager, SaveManager. Typed content contracts are in `SlimerotData.gd`; shared balance is in `SlimerotBalance.gd`.
 
-Schema 3 saves under `user://Slimerot-save.json` preserve discovery history, favorite copy IDs, statistics, potion state, and a `roll_skill_spend` ledger. Schema 1/2 migrate automatically: provisional Quick Hands I, Luck I and Auto Roll become R01/R02/R03 while recording their historical 10/15/25 costs. Missing ancestors for previously unlocked standalone upgrades are granted with zero recorded spend. Neither wallet nor Lifetime Rolls changes, and existing Auto Roll stays unlocked. New purchases always pay canonical prices. Old auto-sale settings initialize OFF at threshold 100. Recoverable historical Coin spending is reconstructed for schema 1; absent historical luck/DPS records cannot be fully reconstructed. Invalid/future saves remain protected rather than silently overwritten.
+Schema 4 saves under `user://Slimerot-save.json` preserve discovery history, favorite copy IDs, statistics, potion state, and a `roll_skill_spend` ledger. Schema 1–3 migrate automatically: provisional Quick Hands I, Luck I and Auto Roll become R01/R02/R03 while recording their historical 10/15/25 costs. Missing ancestors for previously unlocked standalone upgrades are granted with zero recorded spend. Neither wallet nor Lifetime Rolls changes, and existing Auto Roll stays unlocked. Legacy team_slot_2/3/4/5 become C02/C06/C10/C15, granting required Bond ancestors without charging Coins or changing historical Coins Earned/Spent. Existing equipment capacity is preserved. New purchases always pay canonical prices. Pre-stage-3 auto-sale settings initialize OFF at threshold 100; schema 3 settings persist. Recoverable historical Coin spending is reconstructed for schema 1; absent historical luck/DPS records cannot be fully reconstructed. Invalid/future saves remain protected rather than silently overwritten.
 
 Ten-second autosave, immediate progression/lifecycle saves, flushed temporary files, and backup recovery remain intact. Super completions and automatic sales also save immediately. Pause stops active play, roll cooldowns, combat, and potion duration. There is no offline progress.
 

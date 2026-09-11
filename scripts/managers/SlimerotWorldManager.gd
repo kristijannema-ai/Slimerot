@@ -12,6 +12,7 @@ func travel(zone_id: int) -> bool:
 	if zone_id < 0 or zone_id > 1 or zone_id > GameState.highest_zone_unlocked:
 		return false
 	GameState.current_zone = zone_id
+	CombatManager.reset_combat()
 	GameState.player_hp = SkillTreeManager.derived_stats().max_hp
 	zone_changed.emit(zone_id)
 	GameState.changed.emit()

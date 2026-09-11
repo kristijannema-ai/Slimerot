@@ -13,7 +13,7 @@ func _ready() -> void:
 	hp = data.max_hp
 	home = position
 	collision_layer = 4
-	collision_mask = 1
+	collision_mask = 5
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
 	circle.radius = 20
@@ -22,7 +22,7 @@ func _ready() -> void:
 	add_to_group("slimerot_enemies")
 
 func _physics_process(delta: float) -> void:
-	if GameState.is_paused():
+	if GameState.is_paused() or GameState.player_dead:
 		return
 	if dead:
 		respawn_remaining -= delta
@@ -38,8 +38,14 @@ func _physics_process(delta: float) -> void:
 	attack_remaining = maxf(0.0, attack_remaining - delta)
 	var distance := position.distance_to(player.position)
 	velocity = position.direction_to(player.position) * data.move_speed if distance < 350 and distance > 38 else Vector2.ZERO
+	for other in get_tree().get_nodes_in_group("slimerot_enemies"):
+		if other == self or other.dead: continue
+		var separation: Vector2 = global_position-other.global_position
+		if separation.length() < 50 and separation.length() > 0.01:
+			velocity += separation.normalized() * data.move_speed * (1.0-separation.length()/50.0)
+	velocity = velocity.limit_length(data.move_speed)
 	move_and_slide()
-	if distance < 45 and attack_remaining == 0.0:
+	if position.distance_to(player.position) < 45 and attack_remaining == 0.0:
 		attack_remaining = data.attack_interval
 		CombatManager.damage_player(data.attack_damage)
 	queue_redraw()
