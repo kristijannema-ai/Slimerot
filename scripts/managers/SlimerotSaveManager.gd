@@ -227,14 +227,16 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.best_team_dps = float(data.best_team_dps)
 	RollManager.cooldown_remaining = minf(float(data.roll_cooldown_remaining), SkillTreeManager.derived_stats().roll_cooldown)
 	GameState.player_hp = SkillTreeManager.derived_stats().max_hp
+	CombatManager.reset_combat()
 	GameState.changed.emit()
 
 func migrate(value: Variant) -> Variant:
-	if not value is Dictionary or value.get("schema_version") not in [1, 2]:
+	if not value is Dictionary or value.get("schema_version") not in [1, 2, 3]:
 		return value
 	var data: Dictionary = value.duplicate(true)
 	if not data.get("inventory") is Dictionary or not data.get("purchased_skill_node_ids") is Array:
 		return data
+	if data.schema_version == 3: return migrate_coin_tree(data)
 	if data.schema_version == 2:
 		return migrate_roll_tree(data)
 	data.schema_version = 2
@@ -250,6 +252,7 @@ func migrate(value: Variant) -> Variant:
 		if data.get("structure_unlocked_flags", {}).get(structure.unlock_flag, false):
 			data.coins_spent += structure.coin_cost
 	for id in data.purchased_skill_node_ids:
+		if SlimerotCoinTree.LEGACY_COSTS.has(id): data.coins_spent += SlimerotCoinTree.LEGACY_COSTS[id]
 		if SkillTreeManager.nodes.has(id) and SkillTreeManager.nodes[id].currency_type == "Coins":
 			data.coins_spent += SkillTreeManager.nodes[id].cost
 	data.coins_earned += data.coins_spent
@@ -266,6 +269,7 @@ func migrate(value: Variant) -> Variant:
 
 func migrate_roll_tree(data: Dictionary) -> Dictionary:
 	if not data.get("purchased_skill_node_ids") is Array or not data.get("settings") is Dictionary: return data
+	data = migrate_coin_tree(data)
 	var purchased_ids: Array[String] = []
 	var paid_costs: Dictionary = {}
 	for old_id in data.purchased_skill_node_ids:
@@ -287,6 +291,24 @@ func migrate_roll_tree(data: Dictionary) -> Dictionary:
 	data.schema_version = SlimerotBalance.SCHEMA_VERSION
 	if not data.settings.get("auto_sell_settings", {}) is Dictionary: return data
 	data.settings.auto_sell_settings = {"enabled": false, "threshold": SlimerotRollTree.DEFAULT_SELL_THRESHOLD}
+	return data
+
+func migrate_coin_tree(data: Dictionary) -> Dictionary:
+	var ids: Array = []
+	for old_id in data.purchased_skill_node_ids:
+		var id: Variant = SlimerotCoinTree.LEGACY_SLOTS.get(old_id, old_id)
+		if id not in ids: ids.append(id)
+		if SlimerotCoinTree.LEGACY_SLOTS.has(old_id):
+			# Preserve legacy team capacity without charging for newly added ancestors.
+			var pending: Array = [id]
+			while not pending.is_empty():
+				var current: String = pending.pop_back()
+				for prerequisite in SkillTreeManager.nodes[current].prerequisite_ids:
+					if prerequisite not in ids:
+						ids.append(prerequisite)
+						pending.append(prerequisite)
+	data.purchased_skill_node_ids = ids
+	data.schema_version = SlimerotBalance.SCHEMA_VERSION
 	return data
 
 func reset_save() -> bool:
