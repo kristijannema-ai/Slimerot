@@ -1,7 +1,7 @@
 class_name SlimerotBalance
 extends RefCounted
 
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 2
 const MAX_SLOTS := 5
 const PLAYER_HP := 100.0
 const MOVE_SPEED := 180.0
@@ -10,10 +10,21 @@ const ATTACK_INTERVAL := 1.0
 const ATTACK_RANGE := 180.0
 const AUTOSAVE_SECONDS := 10.0
 const FIRST_SLIME := "tung_tung_tung_sahur"
-const VARIANTS := ["normal", "shiny", "rainbow"]
-# Slimerot stage-one tuning: damage and upgrade prices await the full balance tables.
-const STARTER_DAMAGE := 10.0
-const STARTER_SELL := 2
+const VARIANTS := ["normal", "shiny", "glitched", "golden"]
+const VARIANT_DATA := {
+	"normal": {"chance": 0.9889, "damage": 1.0, "sell": 1.0, "color": Color("b6ed78")},
+	"shiny": {"chance": 0.01, "damage": 1.5, "sell": 2.0, "color": Color("bcfaff")},
+	"glitched": {"chance": 0.001, "damage": 2.5, "sell": 5.0, "color": Color("e894ff")},
+	"golden": {"chance": 0.0001, "damage": 4.0, "sell": 10.0, "color": Color("ffdc77")},
+}
+const VARIANT_SENSE_MULTIPLIER := 1.25
+const LUCK_CAPS := {"MAX": 0.0, "x20-era": 20.0, "x1": 1.0}
+const TEAM_SLOTS := [["team_slot_2", 350, 0], ["team_slot_3", 3500, 2], ["team_slot_4", 25000, 4], ["team_slot_5", 250000, 6]]
+const MAX_ZONE := 8
+const RESET_HOLD_SECONDS := 3.0
+# Slimerot's early enemy/skill tuning remains provisional; roster stats are canonical.
+const STARTER_DAMAGE := 7.0
+const STARTER_SELL := 5
 const EARLY_ROLL_NODES := [["quick_hands_1", 10, "cooldown_multiplier", 0.9], ["luck_1", 15, "luck_multiplier", 1.25], ["auto_roll", 25, "auto_roll", 1.0]]
 const EARLY_STRUCTURES := [["skill_tree_shrine", 25, "skill_tree"], ["sell_terminal", 75, "sell_duplicates"]]
 const BACKYARD_GATE_KILLS := 12
