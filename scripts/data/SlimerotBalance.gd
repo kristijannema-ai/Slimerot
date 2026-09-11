@@ -1,7 +1,7 @@
 class_name SlimerotBalance
 extends RefCounted
 
-const SCHEMA_VERSION := 5
+const SCHEMA_VERSION := 6
 const MAX_SLOTS := 5
 const PLAYER_HP := 100.0
 const MOVE_SPEED := 180.0
@@ -29,7 +29,6 @@ const RESET_HOLD_SECONDS := 3.0
 # Slimerot fixed campaign enemy data lives in SlimerotCampaign.
 const STARTER_DAMAGE := 7.0
 const STARTER_SELL := 5
-const EARLY_STRUCTURES := [["skill_tree_shrine", 25, "skill_tree"], ["sell_terminal", 75, "sell_duplicates"]]
 const BACKYARD_GATE_KILLS := 12
 const BACKYARD_GATE_COINS := 150
 const INTERACT_RANGE := 110.0
