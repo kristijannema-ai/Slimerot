@@ -116,6 +116,50 @@ func sell_duplicates() -> int:
 	notify_change("sell_duplicates")
 	return earned
 
+func auto_sell_thresholds(node_ids: Variant = null, discovered: Variant = null) -> Array[int]:
+	var stats := SkillTreeManager.derived_stats(node_ids)
+	var available: Array[int] = [SlimerotRollTree.DEFAULT_SELL_THRESHOLD]
+	if stats.filter_1: available.assign(SlimerotRollTree.FILTER_I_THRESHOLDS)
+	var history: Dictionary = discoveries if discovered == null else discovered
+	if stats.filter_2:
+		for id in history:
+			var slime := SlimeDatabase.get_slime(id)
+			if slime != null and slime.rarity_threshold not in available:
+				available.append(slime.rarity_threshold)
+	available.sort()
+	return available
+
+func set_auto_sell(enabled: bool) -> bool:
+	if not SkillTreeManager.derived_stats().auto_sell: return false
+	GameState.settings.auto_sell_settings.enabled = enabled
+	GameState.changed.emit()
+	GameState.critical_change.emit("settings")
+	return true
+
+func set_auto_sell_threshold(threshold: int) -> bool:
+	if threshold not in auto_sell_thresholds(): return false
+	if not SkillTreeManager.derived_stats().auto_sell: return false
+	GameState.settings.auto_sell_settings.threshold = threshold
+	GameState.changed.emit()
+	GameState.critical_change.emit("settings")
+	return true
+
+func auto_sell_roll(copy_id: String) -> int:
+	# Only the newly committed copy is considered. No retroactive inventory sweep.
+	if not SkillTreeManager.derived_stats().auto_sell or not GameState.settings.auto_sell_settings.enabled:
+		return 0
+	var pair := pair_for_copy(copy_id)
+	if pair.is_empty() or pair.variant != "normal" or pair.quantity <= 1 or is_protected(copy_id):
+		return 0
+	var threshold := int(GameState.settings.auto_sell_settings.threshold)
+	if threshold not in auto_sell_thresholds(): threshold = SlimerotRollTree.DEFAULT_SELL_THRESHOLD
+	if SlimeDatabase.get_slime(pair.slime_id).rarity_threshold > threshold: return 0
+	var value := sell_value(pair.slime_id + ":normal")
+	pair.copy_ids.erase(copy_id)
+	pair.quantity = pair.copy_ids.size()
+	GameState.award_coins(value, false)
+	return value
+
 func damage_for_pair(pair: Dictionary) -> float:
 	return SlimeDatabase.get_slime(pair.slime_id).base_damage * SlimerotBalance.VARIANT_DATA[pair.variant].damage * SkillTreeManager.derived_stats().damage_multiplier
 
