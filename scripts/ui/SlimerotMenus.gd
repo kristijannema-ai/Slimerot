@@ -4,6 +4,7 @@ extends RefCounted
 var hud: SlimerotHUD
 var sort_order := "DPS"
 var skill_tab := "Roll"
+var optional_branch := false
 var copy_page := 0
 var holding := false
 var hold_seconds := 0.0
@@ -112,22 +113,50 @@ func selling() -> void:
 func skills() -> void:
 	for tab in ["Roll", "Coin"]:
 		hud.menu_button(tab + " Tree · %d %s" % [GameState.rolls_balance if tab == "Roll" else GameState.coins, "Rolls" if tab == "Roll" else "Coins"], func(): skill_tab = tab; hud.open_menu("Skills"), tab == skill_tab)
+	if skill_tab == "Roll":
+		hud.menu_label("Luck ×%.2f · Cooldown %.2fs\nBreakthroughs %d / 3 · every one multiplies TOTAL luck ×20" % [RollManager.effective_luck(), SkillTreeManager.derived_stats().roll_cooldown, SkillTreeManager.derived_stats().breakthrough_count], 19)
+		hud.menu_button("Show mainline" if optional_branch else "Show optional branches", func(): optional_branch = not optional_branch; hud.open_menu("Skills"))
+		hud.menu_label("Optional branches never gate a Breakthrough." if optional_branch else "Mainline · R01 → R08 → R13 → R18", 18)
 	for id in SkillTreeManager.nodes:
 		var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]
 		if data.tree_type != skill_tab: continue
-		var unlocked: bool = GameState.structure_unlocked_flags.get("skill_tree_shrine", false)
+		if skill_tab == "Roll" and data.optional != optional_branch: continue
+		var box := PanelContainer.new()
+		var is_breakthrough := data.effect_type == "checkpoint_luck"
+		box.add_theme_stylebox_override("panel", hud.style(Color("294d45") if is_breakthrough else Color("203841")))
+		hud.menu_body.add_child(box)
+		var column := VBoxContainer.new()
+		column.add_theme_constant_override("separation", 8)
+		box.add_child(column)
+		var heading := Label.new()
+		heading.text = id + " · " + data.display_name
+		heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		heading.add_theme_font_size_override("font_size", 23)
+		heading.add_theme_color_override("font_color", Color("d5ff8f") if is_breakthrough else Color("e5eddf"))
+		column.add_child(heading)
+		var detail := Label.new()
+		detail.text = data.description
+		detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		detail.add_theme_font_size_override("font_size", 18)
 		for prerequisite in data.prerequisite_ids:
-			hud.menu_label("│\n└ Requires: " + prerequisite.replace("_", " ").capitalize() + (" ✓" if prerequisite in GameState.purchased_skill_node_ids else " · Locked"), 18)
-			unlocked = unlocked and prerequisite in GameState.purchased_skill_node_ids
+			detail.text += "\n└ Requires " + prerequisite + (" ✓" if prerequisite in GameState.purchased_skill_node_ids else " · Locked")
+		if data.prerequisite_ids.is_empty(): detail.text += "\nStart"
 		if data.required_boss_zone > 0:
-			hud.menu_label("└ Requires Z%d boss" % data.required_boss_zone, 18)
-			unlocked = unlocked and WorldManager.is_boss_zone_defeated(data.required_boss_zone)
-		var owned: bool = id in GameState.purchased_skill_node_ids
-		var balance: int = GameState.rolls_balance if data.currency_type == "Rolls" else GameState.coins
-		hud.menu_button(id.replace("_", " ").capitalize() + (" · Owned" if owned else " · %d %s" % [data.cost, data.currency_type]), func(): SkillTreeManager.purchase(id); hud.open_menu("Skills"), owned or not unlocked or balance < data.cost)
+			detail.text += "\n└ Requires Z%d boss" % data.required_boss_zone
+		column.add_child(detail)
+		var buy := Button.new()
+		var blocker := SkillTreeManager.purchase_blocker(id)
+		buy.text = ("Owned" if id in GameState.purchased_skill_node_ids else "Buy · %d %s" % [data.cost, data.currency_type])
+		buy.custom_minimum_size.y = 58
+		buy.disabled = not blocker.is_empty()
+		buy.tooltip_text = blocker
+		buy.pressed.connect(func(): SkillTreeManager.purchase(id); hud.open_menu("Skills"))
+		column.add_child(buy)
+		if not blocker.is_empty() and blocker != "Owned":
+			detail.text += "\n" + blocker
 
 func roll_settings() -> void:
-	hud.menu_label("Rolling is free. Each completed roll grants +1 Rolls.\nEffective Luck ×%.2f · Rolling Luck ×%.2f" % [RollManager.effective_luck(), RollManager.rolling_luck()])
+	hud.menu_label("Rolling is free. Each completed roll grants +1 Rolls.\nEffective Luck ×%.2f · Next roll ×%.2f" % [RollManager.effective_luck(), RollManager.rolling_luck(RollManager.next_roll_multiplier())])
 	hud.menu_button("Auto Roll · " + ("ON" if GameState.settings.auto_roll_state else "OFF"), hud.toggle_auto, not SkillTreeManager.derived_stats().auto_roll)
 	if SkillTreeManager.derived_stats().breakthrough_count > 0:
 		hud.menu_label("Luck Cap · affects rolling only", 20)
@@ -135,7 +164,25 @@ func roll_settings() -> void:
 			hud.menu_button(cap + (" ✓" if GameState.settings.luck_cap == SlimerotBalance.LUCK_CAPS[cap] else ""), func(): RollManager.set_luck_cap(SlimerotBalance.LUCK_CAPS[cap]); hud.open_menu("Roll Settings"))
 	else:
 		hud.menu_label("Luck Cap unlocks with Breakthrough I. Default: MAX.", 18)
-	hud.menu_label("Normal Luck never changes variant chances.\nNormal: otherwise · Shiny: 1/100\nGlitched: 1/1,000 · Golden: 1/10,000", 19)
+	var stats := SkillTreeManager.derived_stats()
+	if stats.super_roll:
+		hud.menu_label("Super Roll: next in %d rolls. Every 100th Lifetime Roll uses ×5 after the selected cap." % RollManager.rolls_until_super(), 19)
+	if stats.auto_sell:
+		hud.menu_button("Auto-sell Normal duplicates · " + ("ON" if GameState.settings.auto_sell_settings.enabled else "OFF"), func(): InventoryManager.set_auto_sell(not GameState.settings.auto_sell_settings.enabled); hud.open_menu("Roll Settings"))
+		hud.menu_label("Only new Normal duplicates at or below the selected threshold. Keeps one copy per pair; favorites and equipped copies are always protected.", 18)
+		var picker := OptionButton.new()
+		picker.custom_minimum_size.y = 56
+		var thresholds := InventoryManager.auto_sell_thresholds()
+		for index in thresholds.size():
+			var threshold: int = thresholds[index]
+			picker.add_item("Auto-sell ≤ 1 in " + SlimeDatabase.format_number(threshold), threshold)
+			if threshold == int(GameState.settings.auto_sell_settings.threshold): picker.select(index)
+		picker.item_selected.connect(func(index): InventoryManager.set_auto_sell_threshold(picker.get_item_id(index)))
+		hud.menu_body.add_child(picker)
+		hud.menu_label("Filter II: discovered thresholds available." if stats.filter_2 else ("Filter I: 20 / 100 / 1,000." if stats.filter_1 else "Default: 100. Unlock Filter I or II for more choices."), 18)
+	else:
+		hud.menu_label("Auto-sell unlocks with RO2 after Breakthrough I.", 18)
+	hud.menu_label("Normal Luck never changes variant chances.\nNormal: otherwise · Shiny: 1/%d\nGlitched: 1/%s · Golden: 1/%s" % [80 if stats.variant_sense else 100, "800" if stats.variant_sense else "1,000", "8,000" if stats.variant_sense else "10,000"], 19)
 	hud.menu_button("Skip current reveal", func(): RollManager.skip_reveal(), RollManager.active_reveal.is_empty() or (RollManager.active_reveal.get("threshold", 0) >= 1000000 and RollManager.active_reveal.get("first_discovery", false)))
 
 func stats() -> void:

@@ -23,6 +23,7 @@ func node_data(id: String, effect: String, value: float) -> void:
 	data.currency_type = "Rolls"
 	SkillTreeManager.nodes[id] = data
 	GameState.purchased_skill_node_ids.append(id)
+	GameState.roll_skill_spend[id] = 0
 
 func run(world: Node, owner_suite: Node) -> void:
 	suite = owner_suite
@@ -86,6 +87,7 @@ func run(world: Node, owner_suite: Node) -> void:
 		independent = independent and sequence[index] == RollManager.select_variant(float(RollManager.variant_rng.randi()) / 4294967296.0)
 	check(independent, "ordinary Luck never enters variant selection or changes its seeded sequence")
 	GameState.purchased_skill_node_ids.clear()
+	GameState.roll_skill_spend.clear()
 	node_data("slimerot_test_minor", "luck_multiplier", 1.25)
 	node_data("slimerot_test_b1", "checkpoint_luck", 20)
 	node_data("slimerot_test_b2", "checkpoint_luck", 20)
@@ -98,9 +100,13 @@ func run(world: Node, owner_suite: Node) -> void:
 	GameState.potion_remaining_seconds = 0
 	check(RollManager.effective_luck() == 500, "expired potion has no luck effect")
 	GameState.purchased_skill_node_ids.clear()
+	GameState.roll_skill_spend.clear()
 	check(not RollManager.set_luck_cap(1), "Luck Cap locked before Breakthrough I")
 	GameState.structure_unlocked_flags.skill_tree_shrine = true
-	check(SkillTreeManager.purchase("auto_roll"), "Roll-tree purchase consumes currency without minting Rolls")
+	for extra in 40:
+		RollManager.cooldown_remaining = 0.0
+		RollManager.request_roll()
+	check((SkillTreeManager.purchase("R01") and SkillTreeManager.purchase("R02") and SkillTreeManager.purchase("R03")), "Roll-tree purchase consumes currency without minting Rolls")
 	check(GameState.lifetime_rolls == GameState.rolls_balance + SkillTreeManager.rolls_spent(GameState.purchased_skill_node_ids), "Lifetime Rolls equals balance plus Roll-tree spending")
 	GameState.settings.auto_roll_state = true
 	var before_auto := GameState.lifetime_rolls
@@ -165,7 +171,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	check(RollManager.skip_reveal(), "repeat jackpot can be skipped")
 	# Remove test-only skill definitions before persistence; preserve real purchase invariant.
 	for id in GameState.purchased_skill_node_ids.duplicate():
-		if id.begins_with("slimerot_test_"): GameState.purchased_skill_node_ids.erase(id)
+		if id.begins_with("slimerot_test_"): GameState.purchased_skill_node_ids.erase(id); GameState.roll_skill_spend.erase(id)
 	for id in SkillTreeManager.nodes.keys():
 		if id.begins_with("slimerot_test_"): SkillTreeManager.nodes.erase(id)
 	var snapshot := SaveManager.snapshot()
