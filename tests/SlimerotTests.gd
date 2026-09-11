@@ -56,7 +56,7 @@ func run(world: Node2D) -> void:
 	world.interact()
 	await get_tree().process_frame
 	check(GameState.current_zone == 1 and world.zone_root.name == "SlimerotBackyard", "context interaction enters real Backyard")
-	check(world.get_tree().get_nodes_in_group("slimerot_enemies").size() == 4, "Backyard Laglings instantiated")
+	check(world.get_tree().get_nodes_in_group("slimerot_enemies").size() == 11, "Backyard archetypes instantiated")
 	await capture("Slimerot-backyard")
 	# Touch index 0 stays held while index 1 presses the real ROLL button.
 	var touch := InputEventScreenTouch.new()
@@ -85,9 +85,11 @@ func run(world: Node2D) -> void:
 	check(world.hud.joystick.direction == Vector2.ZERO, "touch release stops joystick")
 	# Keep enemies in range without player input; the manager must perform the kill.
 	var enemy: SlimerotEnemy = get_tree().get_nodes_in_group("slimerot_enemies")[0]
+	for other in get_tree().get_nodes_in_group("slimerot_enemies"):
+		if other != enemy: other.set_physics_process(false)
 	world.player.position = enemy.position + Vector2(0, 140)
 	var initial_coins := GameState.coins
-	for index in 310:
+	for index in 450:
 		await get_tree().physics_frame
 	check(GameState.coins >= initial_coins + 5 and int(GameState.zone_kill_counts.get("1", 0)) >= 1, "automatic combat grants direct Coins and zone kill")
 	var coins := GameState.coins
@@ -145,6 +147,9 @@ func run(world: Node2D) -> void:
 	var combat_tests := preload("res://tests/SlimerotCombatTests.gd").new()
 	add_child(combat_tests)
 	await combat_tests.run(world, self)
+	var campaign_tests := preload("res://tests/SlimerotCampaignTests.gd").new()
+	add_child(campaign_tests)
+	await campaign_tests.run(world, self)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
