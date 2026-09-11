@@ -28,6 +28,10 @@ var coins_spent := 0
 var rarest_threshold_reached := 0
 var highest_luck := 1.0
 var best_team_dps := 0.0
+var potion_inventory: Dictionary = {}
+var boss_brew_seconds := 0.0
+var completion_portal_unlocked := false
+var campaign_completed := false
 
 func is_paused() -> bool:
 	return suspended or menu_paused
@@ -36,11 +40,15 @@ func _process(delta: float) -> void:
 	if is_paused():
 		return
 	active_play_seconds += delta
+	var had_brew := boss_brew_seconds > 0
+	boss_brew_seconds = maxf(0,boss_brew_seconds-delta)
+	if had_brew and boss_brew_seconds == 0: changed.emit()
 	if potion_remaining_seconds > 0.0:
 		potion_remaining_seconds = maxf(0.0, potion_remaining_seconds - delta)
 		if potion_remaining_seconds == 0.0:
 			active_potion_type = ""
 			active_potion_multiplier = 1.0
+			changed.emit()
 	highest_luck = maxf(highest_luck, RollManager.effective_luck())
 
 func reset() -> void:
@@ -50,6 +58,10 @@ func reset() -> void:
 	rarest_threshold_reached = 0
 	highest_luck = 1.0
 	best_team_dps = 0.0
+	potion_inventory.clear()
+	boss_brew_seconds = 0.0
+	completion_portal_unlocked = false
+	campaign_completed = false
 	active_potion_multiplier = 1.0
 	rolls_balance = 0
 	lifetime_rolls = 0
