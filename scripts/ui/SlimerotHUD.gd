@@ -76,6 +76,7 @@ func _ready() -> void:
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	interact_button = button("", Rect2(80, 920, 560, 72), func(): interact_requested.emit())
+	interact_button.add_theme_font_size_override("font_size",18)
 	interact_button.hide()
 	joystick = SlimerotJoystick.new()
 	joystick.position = Vector2(30, 1004)
@@ -181,14 +182,17 @@ func refresh() -> void:
 		portrait.variant = pair.variant
 		portraits.add_child(portrait)
 		portrait.custom_minimum_size = Vector2(30, 42)
-	location_label.text = "Bedroom Hub" if GameState.current_zone == 0 else "Backyard · Lv. 1 · %d kills" % int(GameState.zone_kill_counts.get("1", 0))
+	var zone := SlimerotCampaign.zone(GameState.current_zone)
+	location_label.add_theme_font_size_override("font_size",22)
+	location_label.text = zone.name if zone.id == 0 else "%s · Lv. %d–%d · %d kills" % [zone.name,zone.enemy_level_range.x,zone.enemy_level_range.y,int(GameState.zone_kill_counts.get(str(zone.id),0))]
 	if GameState.lifetime_rolls == 0:
 		tutorial.text = "Drag the joystick to move, then tap ROLL.\nYour first slime is waiting for you."
 	elif GameState.current_zone == 0:
 		tutorial.text = "Your slime is equipped. Walk to the green exit\nand tap Enter Backyard.  [E on desktop]"
 	else:
-		tutorial.text = "Stay within 180 px of a Lagling to attack automatically.\nKeep moving and rolling. Repair the Shrine for 25 Coins."
-		if GameState.structure_unlocked_flags.get("skill_tree_shrine", false):
+		tutorial.text = SlimerotCampaign.wall_hint(zone.id)
+		if zone.id == 1 and not GameState.structure_unlocked_flags.get("skill_tree_shrine",false): tutorial.text = "Keep moving and rolling.\nRepair the Skill Tree Shrine for 25 Coins."
+		if zone.id == 1 and GameState.structure_unlocked_flags.get("skill_tree_shrine", false) and not GameState.structure_unlocked_flags.get("sell_terminal",false):
 			tutorial.text = "Keep moving and rolling. Buy permanent upgrades in Skills.\nRepair the Sell Terminal for 75 Coins."
 	skills_button.disabled = false
 	skills_button.text = "Skills"
