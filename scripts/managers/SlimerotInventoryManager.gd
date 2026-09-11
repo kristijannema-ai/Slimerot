@@ -162,7 +162,28 @@ func auto_sell_roll(copy_id: String) -> int:
 
 func damage_for_pair(pair: Dictionary, boss: bool = false) -> float:
 	var stats := SkillTreeManager.derived_stats()
-	return roundf(SlimeDatabase.get_slime(pair.slime_id).base_damage * SlimerotBalance.VARIANT_DATA[pair.variant].damage * stats.damage_multiplier * (1.0 + stats.boss_damage_bonus if boss else 1.0))
+	var brew := SlimerotEncounters.BREW_MULTIPLIER if boss and GameState.boss_brew_seconds > 0 else 1.0
+	return roundf(SlimeDatabase.get_slime(pair.slime_id).base_damage * SlimerotBalance.VARIANT_DATA[pair.variant].damage * stats.damage_multiplier * (1.0 + stats.boss_damage_bonus if boss else 1.0) * brew)
+
+func mutation_candidates(slime_id: String) -> Array[String]:
+	var result: Array[String] = []
+	for copy_id in inventory.get(slime_id+":normal",{}).get("copy_ids",[]):
+		if not is_protected(copy_id): result.append(copy_id)
+	return result
+
+func mutate(slime_id: String) -> bool:
+	if not GameState.structure_unlocked_flags.get("mutation_lab",false) or GameState.current_zone != 6 or WorldManager.boss_active or GameState.is_paused() or GameState.player_dead: return false
+	var slime := SlimeDatabase.get_slime(slime_id)
+	if slime == null: return false
+	var candidates := mutation_candidates(slime_id)
+	if candidates.size() < SlimerotEncounters.MUTATION_COPIES: return false
+	if not GameState.spend("Coins",slime.base_sell*SlimerotEncounters.MUTATION_FEE_MULTIPLIER,false): return false
+	var pair: Dictionary = inventory[slime_id+":normal"]
+	for copy_id in candidates.slice(0,SlimerotEncounters.MUTATION_COPIES): pair.copy_ids.erase(copy_id)
+	pair.quantity = pair.copy_ids.size()
+	add_copy(slime_id,"shiny",false)
+	notify_change("mutation")
+	return true
 
 func damage_for_copy(copy_id: String, boss: bool = false) -> float:
 	var pair := pair_for_copy(copy_id)

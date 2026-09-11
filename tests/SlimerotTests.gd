@@ -99,6 +99,7 @@ func run(world: Node2D) -> void:
 	for frame in 92: await get_tree().physics_frame
 	check(GameState.player_hp == 100 and world.player.position.distance_to(SlimerotBalance.ENTRANCES[1]) < 1, "death respawns at current entrance")
 	check(GameState.coins == coins and GameState.rolls_balance == rolls and InventoryManager.equipped_copy_ids.size() == 1, "death has no currency or slime loss")
+	WorldManager.travel(0)
 	GameState.coins = 25
 	check(WorldManager.repair("skill_tree_shrine") and GameState.coins == 0, "Shrine costs exactly 25 Coins")
 	check(not WorldManager.repair("skill_tree_shrine"), "no repeat structure purchase")
@@ -150,6 +151,9 @@ func run(world: Node2D) -> void:
 	var campaign_tests := preload("res://tests/SlimerotCampaignTests.gd").new()
 	add_child(campaign_tests)
 	await campaign_tests.run(world, self)
+	var encounter_tests := preload("res://tests/SlimerotEncounterTests.gd").new()
+	add_child(encounter_tests)
+	await encounter_tests.run(world,self)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])

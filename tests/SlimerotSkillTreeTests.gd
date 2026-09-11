@@ -15,6 +15,7 @@ func fresh(funding: int = 50000) -> void:
 	GameState.reset()
 	GameState.suspended = false
 	GameState.menu_paused = false
+	GameState.structure_unlocked_flags.skill_tree_shrine = true
 	CombatManager.invulnerable_remaining = 0
 	GameState.rolls_balance = funding
 	GameState.lifetime_rolls = funding

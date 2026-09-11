@@ -71,12 +71,12 @@ static func zone(zone_id: int) -> ZoneData:
 
 static func structures() -> Array[StructureData]:
 	var result: Array[StructureData] = []
-	for row in SlimerotBalance.EARLY_STRUCTURES:
+	for row in SlimerotEncounters.STRUCTURES:
 		var data := StructureData.new()
 		data.id = row[0]
-		data.zone = 1
-		data.coin_cost = row[1]
+		data.zone = row[1]
+		data.coin_cost = row[2]
 		data.unlock_flag = data.id
-		data.function_type = row[2]
+		data.function_type = row[3]
 		result.append(data)
 	return result
