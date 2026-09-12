@@ -7,9 +7,13 @@ var dead := false
 var attack_remaining := 0.0
 var home := Vector2.ZERO
 var respawn_remaining := 0.0
+var sprite: Texture2D
+var animation_time := 0.0
+var hit_flash := 0.0
 
 func _ready() -> void:
 	if data == null: data = SlimerotData.lagling()
+	sprite = SlimerotAssets.enemy(data.zone, data.archetype)
 	hp = data.max_hp
 	home = position
 	collision_layer = 4
@@ -24,6 +28,8 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if GameState.is_paused() or GameState.player_dead or WorldManager.boss_active:
 		return
+	animation_time += delta
+	hit_flash = maxf(0.0, hit_flash - delta)
 	if dead:
 		respawn_remaining -= delta
 		if respawn_remaining <= 0.0:
@@ -70,12 +76,16 @@ func _physics_process(delta: float) -> void:
 		elif data.archetype != "shooter" and position.distance_to(player.position) < 45:
 			attack_remaining = data.attack_interval
 			CombatManager.damage_player(data.attack_damage)
-	queue_redraw()
+	if get_viewport_rect().grow(100).has_point(get_global_transform_with_canvas().origin): queue_redraw()
 
 func take_damage(amount: float) -> void:
 	if dead:
 		return
 	hp = maxf(0.0, hp - amount)
+	if amount > 0.0:
+		hit_flash = 0.10
+		var sound := get_node_or_null("/root/SlimerotSound")
+		if sound != null: sound.play_cue("enemy_death" if hp == 0.0 else "hit")
 	if hp == 0.0:
 		dead = true
 		collision_layer = 0
@@ -87,12 +97,17 @@ func take_damage(amount: float) -> void:
 func _draw() -> void:
 	draw_circle(Vector2(0, 12), 26, Color(0, 0, 0, 0.2))
 	var tint := Color(SlimerotCampaign.PALETTES[data.zone-1][3])
-	draw_circle(Vector2.ZERO, 28 if data.archetype == "tank" else 23, tint)
-	if data.archetype == "tank": draw_arc(Vector2.ZERO,29,0,TAU,24,tint.darkened(0.4),5)
-	if data.archetype == "shooter": draw_colored_polygon(PackedVector2Array([Vector2(-16,-16),Vector2(0,-37),Vector2(16,-16)]),tint.lightened(0.3))
-	draw_circle(Vector2(-8, -3), 4, Color("442e44"))
-	draw_circle(Vector2(8, -3), 4, Color("442e44"))
-	draw_line(Vector2(-9, 9), Vector2(9, 9), Color("442e44"), 3)
+	if sprite != null:
+		var width := 74.0 if data.archetype == "tank" else 65.0
+		var bob := sin(animation_time * 4.0 + home.x) * 1.8
+		draw_texture_rect(sprite, Rect2(-width * 0.5, -width * 0.5 + bob - 3, width, width), false, Color(1.5, 1.35, 1.35) if hit_flash > 0.0 else Color.WHITE)
+	else:
+		draw_circle(Vector2.ZERO, 28 if data.archetype == "tank" else 23, tint)
+		if data.archetype == "tank": draw_arc(Vector2.ZERO,29,0,TAU,24,tint.darkened(0.4),5)
+		if data.archetype == "shooter": draw_colored_polygon(PackedVector2Array([Vector2(-16,-16),Vector2(0,-37),Vector2(16,-16)]),tint.lightened(0.3))
+		draw_circle(Vector2(-8, -3), 4, Color("442e44"))
+		draw_circle(Vector2(8, -3), 4, Color("442e44"))
+		draw_line(Vector2(-9, 9), Vector2(9, 9), Color("442e44"), 3)
 	draw_rect(Rect2(-26, -37, 52, 5), Color("273f39"))
 	draw_rect(Rect2(-26, -37, 52 * hp / data.max_hp, 5), Color("e8abbd"))
 	var title := "Lagling" if data.id == "lagling" else data.archetype.capitalize()
