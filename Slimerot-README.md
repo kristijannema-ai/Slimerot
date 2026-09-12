@@ -1,10 +1,10 @@
 # Slimerot
 
-Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1–6 are implemented: the Hub and eight physical campaign zones, complete rolling math, 24 canonical base slimes, four variants, team/inventory/collection, both complete skill trees, automatic projectile combat, and the Coin economy.
+Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1–7 are implemented: the Hub and eight physical campaign zones, complete rolling math, 24 canonical base slimes, four variants, team/inventory/collection, both complete skill trees, automatic projectile combat, and the Coin economy.
 
 ## Play and controls
 
-Import `project.godot` and press F5. Touch: drag the 90 px joystick and tap ROLL with another finger. Desktop: WASD/arrows move, Space rolls, E interacts, Escape closes menus. Rolling remains in the world during movement, combat, and non-pausing menus. Settings pauses active gameplay.
+Import `project.godot` and press F5. Touch: drag the 90 px joystick and tap ROLL with another finger. Desktop: WASD/arrows move, Space rolls, E interacts, Escape / Android Back returns from copy management to Inventory, closes an open menu, or opens Pause from gameplay. Rolling remains in the world during movement, combat, and non-pausing menus. Settings pauses active gameplay.
 
 New saves have zero currencies, 100 HP, 180 px/s movement, x1 luck, a 2.4-second cooldown, and one slot. The first base result is always Tung Tung Tung Sahur and auto-equips. Like every roll, its variant is drawn separately. Normal Tung Tung now has the canonical 7 damage and 5 base sell value.
 
@@ -54,11 +54,11 @@ After four damage-free active seconds, HP regenerates at 5% of max HP per second
 
 The HUD shows Coins, Rolls, effective Luck, equipment portraits and DPS. Lifetime Rolls appears only in Stats. Menus include Inventory, Team, Collection, Roll/Coin skill tabs, Roll Settings, Stats, and pausing Settings with save status and a cancellable three-second reset hold.
 
-Reveals last 0.35s (0.20s with Skip Common), 0.65s, 1.10s, 1.70s, or 2.80s for a first jackpot / 1.00s for repeats. First base discoveries at threshold >=1,000,000 cannot be skipped or displaced by another roll; later results queue behind them. Committing inventory/currency is separate from feedback. Original procedural portraits support Shiny sparkles, Glitched chromatic jitter, and Golden aura. Rare reveals add pulse/particles, optional subtle shake, and a generated sound sting.
+Reveals last 0.35s (0.20s with Skip Common), 0.65s, 1.10s, 1.70s, or 2.80s for a first jackpot / 1.00s for repeats. First base discoveries at threshold >=1,000,000 cannot be skipped or displaced by another roll. Every active tier completes its specified duration unless explicitly skipped; later feedback queues behind it. Pending repeats coalesce, and the queue is bounded to 32 entries without discarding first discoveries. Committing inventory/currency is separate from feedback. The 24 original transparent slime sprites support Shiny sparkles, Glitched chromatic jitter, and Golden aura, with safe procedural fallback if art is absent. Rare reveals add pulse/particles, optional subtle shake, and replaceable sound stings.
 
 ## Saves and extension points
 
-Eight autoloads remain the architecture: GameState, SlimeDatabase, SkillTreeManager, InventoryManager, WorldManager, CombatManager, RollManager, SaveManager. Typed content contracts are in `SlimerotData.gd`; shared balance is in `SlimerotBalance.gd`.
+Eight gameplay autoloads remain the architecture: GameState, SlimeDatabase, SkillTreeManager, InventoryManager, WorldManager, CombatManager, RollManager, SaveManager. The presentation-only `SlimerotSound` autoload supplies bounded audio playback. Typed content contracts are in `SlimerotData.gd`; shared balance is in `SlimerotBalance.gd`, and reveal/mobile tuning is in `SlimerotPresentation.gd`.
 
 Schema 6 saves under `user://Slimerot-save.json` preserve discovery history, favorite copy IDs, statistics, potion state, and a `roll_skill_spend` ledger. Schema 1–5 migrate automatically: provisional Quick Hands I, Luck I and Auto Roll become R01/R02/R03 while recording their historical 10/15/25 costs. Missing ancestors for previously unlocked standalone upgrades are granted with zero recorded spend. Neither wallet nor Lifetime Rolls changes, and existing Auto Roll stays unlocked. Legacy team_slot_2/3/4/5 become C02/C06/C10/C15, granting required Bond ancestors without charging Coins or changing historical Coins Earned/Spent. Existing equipment capacity is preserved. New purchases always pay canonical prices. Pre-stage-3 auto-sale settings initialize OFF at threshold 100; schema 3 settings persist. Recoverable historical Coin spending is reconstructed for schema 1; absent historical luck/DPS records cannot be fully reconstructed. Invalid/future saves remain protected rather than silently overwritten.
 
@@ -98,3 +98,11 @@ godot --headless --path . -- --slimerot-test
 Tests use per-process saves under `.godot/`, never player saves. For rendered captures omit `--headless` and append `--slimerot-capture` after `--slimerot-test`. See `docs/Slimerot-Testing.md` for results and the manual checklist.
 
 The 720×1280 portrait Android ARM64 preset disables Internet/network permissions. Export requires locally installed matching Godot templates, Android SDK/JDK and signing configuration. No credentials are committed. Physical Android and APK validation remain outstanding.
+
+## Prompt 7 mobile presentation
+
+The HUD adapts to portrait aspect ratios and mobile safe areas: HP and location at top left; Coins, Rolls and Luck at top center; Pause and unlocked Fast Travel at top right; a 90 px joystick at bottom left; ROLL, Auto and the unlocked Super counter at bottom right; equipped portraits and Team DPS at bottom center. Only nearby world interactions show the compact INTERACT control.
+
+Menus use touch-sized controls, scroll gestures that do not accidentally purchase or favorite items, live Stats/save/audio readouts, five visibly chained Team slots, and drawn prerequisite paths in both skill trees. Inventory actions retain scroll position. The three Breakthrough purchases each show their exact ×20 luck change in a 1.8-second celebration. Pause freezes gameplay while audio sliders remain previewable.
+
+See [Prompt 7 implementation and validation](docs/Slimerot-Prompt-7.md), [asset replacement guide](docs/Slimerot-Assets.md), and [testing notes](docs/Slimerot-Testing.md). Art and music remain original, replaceable placeholders. Prompt 8 features are not implemented.

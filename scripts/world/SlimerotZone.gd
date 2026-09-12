@@ -4,10 +4,13 @@ extends Node2D
 @export var zone_id := 0
 var obstacles: Array[Rect2] = []
 var navigation := AStarGrid2D.new()
+var ground_texture: Texture2D
 var farm_loop := PackedVector2Array([Vector2(500,1150),Vector2(330,1100),Vector2(330,750),Vector2(330,400),Vector2(700,400),Vector2(700,750),Vector2(700,1100),Vector2(500,1150)])
 
 func _ready() -> void:
 	if zone_id == 0: return
+	ground_texture = SlimerotAssets.zone(zone_id)
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	obstacles = [Rect2(0,0,1000,32),Rect2(0,0,32,1500),Rect2(968,0,32,1500),Rect2(0,1468,1000,32),
 		Rect2(140,520,110,110),Rect2(770,660,110,110),Rect2(120,280,130,160),Rect2(780,380,100,120),Rect2(120,790,120,120)]
 	if zone_id > 1:
@@ -59,6 +62,8 @@ func _draw() -> void:
 	if zone_id == 0: return
 	var colors: Array = SlimerotCampaign.PALETTES[zone_id-1]
 	draw_rect(Rect2(Vector2.ZERO,SlimerotCampaign.SIZE),Color(colors[0]))
+	if ground_texture != null:
+		draw_texture_rect(ground_texture, Rect2(Vector2.ZERO, SlimerotCampaign.SIZE), true)
 	for y in range(50,1500,50):
 		for x in range(50,1000,50):
 			var color := Color(colors[1],0.18)

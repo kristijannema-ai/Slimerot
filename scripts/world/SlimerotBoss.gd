@@ -18,9 +18,12 @@ var aoe_clock := 0.0
 var warnings: Array[Dictionary] = []
 var aim := Vector2.DOWN
 var attack_label := ""
+var sprite: Texture2D
+var hit_flash := 0.0
 
 func _ready() -> void:
 	data = SlimerotEncounters.BOSSES[zone_id]
+	sprite = SlimerotAssets.boss(zone_id)
 	hp = data.hp
 	phase = "teleport_wait" if zone_id == 6 else "chase"
 	collision_layer = 4
@@ -35,6 +38,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if dead or GameState.is_paused() or GameState.player_dead: return
+	hit_flash = maxf(0.0, hit_flash - delta)
 	step(delta)
 	queue_redraw()
 
@@ -119,6 +123,9 @@ func fire_spread(count: int, spacing: float) -> void:
 func take_damage(amount: float) -> void:
 	if dead: return
 	hp = maxf(0,hp-maxf(0,amount))
+	if amount > 0.0:
+		hit_flash = 0.10
+		SlimerotSound.play_cue("hit")
 	if zone_id == 8 and hp <= float(data.hp)*0.4: enraged = true
 	if hp == 0:
 		dead = true
@@ -128,9 +135,13 @@ func take_damage(amount: float) -> void:
 func _draw() -> void:
 	var color := Color("b6987c") if zone_id == 2 else Color("dfbd7d") if zone_id == 4 else Color("b4c586") if zone_id == 6 else Color("bc7be4")
 	draw_circle(Vector2(0,15),55,Color(0,0,0,0.3))
-	draw_rect(Rect2(-43,-45,86,86),color)
-	draw_circle(Vector2(-17,-9),7,Color("251e31"))
-	draw_circle(Vector2(17,-9),7,Color("251e31"))
+	if sprite != null:
+		var bob := sin(cycle_time * 3.5) * 3.0
+		draw_texture_rect(sprite, Rect2(-72, -84 + bob, 144, 144), false, Color(1.5, 1.3, 1.3) if hit_flash > 0 else Color.WHITE)
+	else:
+		draw_rect(Rect2(-43,-45,86,86),color)
+		draw_circle(Vector2(-17,-9),7,Color("251e31"))
+		draw_circle(Vector2(17,-9),7,Color("251e31"))
 	draw_arc(Vector2.ZERO,57,0,TAU,32,color.lightened(0.4),4)
 	if phase == "slam_warning":
 		draw_circle(Vector2.ZERO,SlimerotEncounters.SLAM_RADIUS,Color(1,0.25,0.2,0.18))

@@ -120,23 +120,27 @@ func request_roll() -> bool:
 	return true
 
 func reveal_duration(threshold: int, first_discovery: bool) -> float:
-	if threshold < 100:
-		return 0.20 if SkillTreeManager.derived_stats().skip_common else 0.35
-	if threshold < 10000: return 0.65
-	if threshold < 100000: return 1.10
-	if threshold < 1000000: return 1.70
-	return 2.80 if first_discovery else 1.0
+	return SlimerotPresentation.reveal_duration(threshold, first_discovery, SkillTreeManager.derived_stats().skip_common)
 
 func queue_reveal(result: Dictionary) -> void:
 	if active_reveal.is_empty():
 		start_reveal(result)
-	elif active_reveal.threshold >= 1000000 and active_reveal.first_discovery:
-		reveal_queue.append(result.duplicate())
 	else:
-		# Replace skippable visual feedback; committed ownership and currency persist.
-		active_reveal.clear()
-		reveal_finished.emit()
-		start_reveal(result)
+		# Feedback never shortens a tier's duration when a faster roll completes.
+		# Explicit skipping advances this queue; rolling/combat continue independently.
+		# At late-game luck, coalesce pending repeats to bound mobile memory/latency.
+		if not result.first_discovery:
+			for index in reveal_queue.size():
+				var pending := reveal_queue[index]
+				if not pending.first_discovery and pending.slime_id == result.slime_id and pending.variant == result.variant:
+					reveal_queue[index] = result.duplicate()
+					return
+		if reveal_queue.size() >= SlimerotPresentation.MAX_PENDING_REVEALS:
+			for index in reveal_queue.size():
+				if not reveal_queue[index].first_discovery:
+					reveal_queue.remove_at(index)
+					break
+		reveal_queue.append(result.duplicate())
 
 func start_reveal(result: Dictionary) -> void:
 	active_reveal = result.duplicate()
