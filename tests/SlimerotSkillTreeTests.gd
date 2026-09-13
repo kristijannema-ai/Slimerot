@@ -76,7 +76,7 @@ func run(world: Node, owner_suite: Node) -> void:
 		if row[0] != "RO7": check(SkillTreeManager.purchase(row[0]), row[0] + " optional purchase after its independent prerequisite")
 	check(RollManager.reveal_duration(75,false) == 0.2 and RollManager.reveal_duration(100,false) == 0.65, "RO1 skips only thresholds below 100")
 	check(SkillTreeManager.derived_stats().variant_sense and SlimerotBalance.VARIANT_DATA.shiny.chance * SlimerotBalance.VARIANT_SENSE_MULTIPLIER == 1.0/80.0 and SlimerotBalance.VARIANT_DATA.glitched.chance * SlimerotBalance.VARIANT_SENSE_MULTIPLIER == 1.0/800.0 and SlimerotBalance.VARIANT_DATA.golden.chance * SlimerotBalance.VARIANT_SENSE_MULTIPLIER == 1.0/8000.0, "RO6 exact denominators 80 / 800 / 8000")
-	GameState.active_potion_multiplier = 2
+	GameState.active_potion_type = "lucky_soda"
 	GameState.potion_remaining_seconds = 60
 	check(is_equal_approx(RollManager.effective_luck(5),284625), "minor ×20^3 ×potion ×single-roll multiplier without destructive state")
 	var dps := InventoryManager.team_dps()

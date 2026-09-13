@@ -157,6 +157,9 @@ func run(world: Node2D) -> void:
 	var ux_tests := preload("res://tests/SlimerotUXTests.gd").new()
 	add_child(ux_tests)
 	await ux_tests.run(world, self)
+	var persistence_tests := preload("res://tests/SlimerotPersistenceTests.gd").new()
+	add_child(persistence_tests)
+	await persistence_tests.run(world, self)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])

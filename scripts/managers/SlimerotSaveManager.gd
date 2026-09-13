@@ -6,17 +6,25 @@ var elapsed := 0.0
 var enabled := true
 var last_error := ""
 var last_saved_at := "Not saved yet"
+var generation := 0
+var recovery_status := ""
+var application_paused := false
+var focus_lost := false
+var writing := false
 
 func _ready() -> void:
-	if "--slimerot-test" in OS.get_cmdline_user_args():
+	if OS.is_debug_build() and "--slimerot-test" in OS.get_cmdline_user_args():
 		# Test saves are isolated from player data and work in restricted CI sandboxes.
 		save_path = "res://.godot/Slimerot-test-%d.json" % OS.get_process_id()
+	if OS.is_debug_build() and "--slimerot-restart-probe" in OS.get_cmdline_user_args():
+		save_path = "res://.godot/Slimerot-restart.json"
 	load_game()
 	GameState.critical_change.connect(func(_reason): save_game())
 	get_tree().auto_accept_quit = false
+	get_tree().quit_on_go_back = false
 
 func _process(delta: float) -> void:
-	if GameState.is_paused():
+	if not enabled or GameState.is_paused():
 		return
 	elapsed += delta
 	if elapsed >= SlimerotBalance.AUTOSAVE_SECONDS:
@@ -28,6 +36,7 @@ func snapshot() -> Dictionary:
 		"schema_version": SlimerotBalance.SCHEMA_VERSION,
 		"coins": GameState.coins, "rolls_balance": GameState.rolls_balance,
 		"lifetime_rolls": GameState.lifetime_rolls, "active_play_seconds": GameState.active_play_seconds,
+		"first_roll_completed": GameState.lifetime_rolls > 0,
 		"highest_zone_unlocked": GameState.highest_zone_unlocked, "current_zone": GameState.current_zone,
 		"zone_kill_counts": GameState.zone_kill_counts.duplicate(true),
 		"unlocked_gate_flags": GameState.unlocked_gate_flags.duplicate(),
@@ -40,41 +49,52 @@ func snapshot() -> Dictionary:
 		"equipped_slot_count": SkillTreeManager.derived_stats().equipped_slots,
 		"equipped_copy_ids": InventoryManager.equipped_copy_ids.duplicate(),
 		"inventory": InventoryManager.inventory.duplicate(true), "next_copy_id": InventoryManager.next_copy_id,
-		"active_potion_type": GameState.active_potion_type,
+		"active_potion_type": GameState.active_potion_type if GameState.potion_remaining_seconds > 0 else "",
 		"active_potion_remaining_seconds": GameState.potion_remaining_seconds,
 		"settings": GameState.settings.duplicate(true),
 		"roll_cooldown_remaining": RollManager.cooldown_remaining,
 		"discoveries": InventoryManager.discoveries.duplicate(true),
-		"active_potion_multiplier": GameState.active_potion_multiplier,
 		"coins_earned": GameState.coins_earned, "coins_spent": GameState.coins_spent,
 		"rarest_threshold_reached": GameState.rarest_threshold_reached,
 		"highest_luck": GameState.highest_luck, "best_team_dps": GameState.best_team_dps,
 	}
 
 func save_game() -> bool:
-	if not enabled:
+	return write_snapshot(snapshot()) if enabled else false
+
+func write_snapshot(data: Dictionary) -> bool:
+	if not enabled or writing:
 		return false
+	if not validate(data): return fail("Slimerot save state is invalid. Previous progress was preserved.")
+	writing = true
+	var result := commit_snapshot(data)
+	writing = false
+	return result
+
+func commit_snapshot(data: Dictionary) -> bool:
 	var temporary := save_path + ".tmp"
 	var backup := save_path + ".bak"
-	var file := FileAccess.open(temporary, FileAccess.WRITE)
-	if file == null:
-		return fail("Slimerot could not open the temporary save.")
-	file.store_string(JSON.stringify(snapshot(), "\t"))
-	file.flush()
-	var error := file.get_error()
-	file.close()
-	if error != OK:
+	# Refuse to overwrite a newer schema, even if it appeared after startup.
+	var reset_marker := read_candidate(save_path + ".reset")
+	for suffix in SlimerotSaveFormat.SUFFIXES:
+		var existing := SlimerotSaveFormat.read(save_path + suffix)
+		if is_future(existing) and not superseded_by_reset(existing, reset_marker):
+			enabled = false
+			return fail("This Slimerot save requires a newer version. Saving is disabled to protect it.")
+		if not existing.is_empty(): generation = maxi(generation, int(existing.generation))
+	var next_generation := generation + 1
+	if not SlimerotSaveFormat.write(temporary, SlimerotSaveFormat.encode(data, next_generation)):
 		return fail("Slimerot could not finish writing the save.")
-	# Keep a previous valid generation through the Windows replacement sequence.
-	if FileAccess.file_exists(save_path):
-		if FileAccess.file_exists(backup) and DirAccess.remove_absolute(backup) != OK:
-			return fail("Slimerot could not rotate the save backup.")
+	if read_candidate(temporary).is_empty(): return fail("Slimerot could not verify the temporary save.")
+	# Only a validated main may replace the known-good backup. At every boundary
+	# a complete main, temporary or backup remains available to recovery.
+	if not read_candidate(save_path).is_empty():
 		if DirAccess.rename_absolute(save_path, backup) != OK:
 			return fail("Slimerot could not preserve the previous save.")
 	if DirAccess.rename_absolute(temporary, save_path) != OK:
-		if FileAccess.file_exists(backup):
-			DirAccess.copy_absolute(backup, save_path)
 		return fail("Slimerot could not replace the main save.")
+	generation = next_generation
+	elapsed = 0.0
 	last_error = ""
 	last_saved_at = Time.get_time_string_from_system()
 	return true
@@ -86,51 +106,96 @@ func fail(message: String) -> bool:
 	return false
 
 func load_game() -> bool:
-	for path in [save_path, save_path + ".tmp", save_path + ".bak"]:
+	var best: Dictionary = {}
+	var found := false
+	var reset_marker := read_candidate(save_path + ".reset")
+	for suffix in SlimerotSaveFormat.SUFFIXES:
+		var path: String = save_path + suffix
 		if not FileAccess.file_exists(path):
 			continue
-		var parser := JSON.new()
-		if parser.parse(FileAccess.get_file_as_string(path)) != OK:
-			continue
-		var parsed: Variant = parser.data
-		if parsed is Dictionary and (parsed.get("schema_version") is float or parsed.get("schema_version") is int) and parsed.schema_version > SlimerotBalance.SCHEMA_VERSION:
+		found = true
+		var candidate := SlimerotSaveFormat.read(path)
+		if is_future(candidate) and not superseded_by_reset(candidate, reset_marker):
 			enabled = false
 			return fail("This Slimerot save requires a newer version. Saving is disabled to protect it.")
-		parsed = migrate(parsed)
-		if validate(parsed):
-			apply_snapshot(parsed)
-			if path != save_path:
-				# Restore the valid candidate without ever rotating corrupt data over the backup.
-				DirAccess.copy_absolute(path, save_path)
-			return true
-	if FileAccess.file_exists(save_path) or FileAccess.file_exists(save_path + ".bak"):
+		candidate = read_candidate(path)
+		if not candidate.is_empty() and (best.is_empty() or candidate.generation > best.generation):
+			best = candidate
+			best.path = path
+	if not best.is_empty():
+		generation = int(best.generation)
+		apply_snapshot(best.state)
+		elapsed = 0.0
+		last_error = ""
+		last_saved_at = "Loaded local save"
+		recovery_status = ""
+		if best.path != save_path:
+			recovery_status = "Recovered local save"
+			# Copy to a separate staging file so the recovery source survives a crash.
+			var recovery := save_path + ".recover"
+			if best.path != recovery and DirAccess.copy_absolute(best.path, recovery) != OK:
+				fail("Slimerot loaded recovered progress but could not restore the main file.")
+			elif read_candidate(recovery).is_empty() or DirAccess.rename_absolute(recovery, save_path) != OK:
+				fail("Slimerot loaded recovered progress but could not restore the main file.")
+		return true
+	if found:
 		enabled = false
 		fail("Slimerot could not recover this save. Files were preserved; saving is disabled.")
 	return false
 
+func is_future(candidate: Dictionary) -> bool:
+	return not candidate.is_empty() and SlimerotSaveFormat.integer(candidate.state.get("schema_version")) and candidate.state.schema_version > SlimerotBalance.SCHEMA_VERSION
+
+func superseded_by_reset(candidate: Dictionary, marker: Dictionary) -> bool:
+	# Only the durable marker from an explicitly confirmed reset supersedes a newer
+	# schema. Ordinary lower-version saves must never authorize such a downgrade.
+	return not marker.is_empty() and not marker.state.first_roll_completed and marker.generation > candidate.generation
+
+func read_candidate(path: String) -> Dictionary:
+	var candidate := SlimerotSaveFormat.read(path)
+	if candidate.is_empty(): return {}
+	var state: Variant = migrate(candidate.state)
+	if not validate(state): return {}
+	candidate.state = state
+	return candidate
+
 func validate(data: Variant) -> bool:
 	if not data is Dictionary or data.get("schema_version") != SlimerotBalance.SCHEMA_VERSION:
 		return false
+	if not data.get("first_roll_completed") is bool: return false
 	if not data.get("potion_inventory") is Dictionary or not data.get("completion_portal_unlocked") is bool or not data.get("campaign_completed") is bool: return false
 	if (not data.get("boss_brew_seconds") is float and not data.get("boss_brew_seconds") is int) or not is_finite(float(data.boss_brew_seconds)) or data.boss_brew_seconds < 0 or data.boss_brew_seconds > 300: return false
 	for id in data.potion_inventory:
 		var count: Variant = data.potion_inventory[id]
 		if not SlimerotEncounters.POTIONS.has(id) or (not count is float and not count is int) or not is_finite(float(count)) or count < 0 or count != floor(float(count)): return false
-	for key in ["coins", "rolls_balance", "lifetime_rolls", "active_play_seconds", "highest_zone_unlocked", "current_zone", "next_copy_id", "active_potion_remaining_seconds", "roll_cooldown_remaining", "active_potion_multiplier", "coins_earned", "coins_spent", "rarest_threshold_reached", "highest_luck", "best_team_dps"]:
+	for key in ["coins", "rolls_balance", "lifetime_rolls", "active_play_seconds", "highest_zone_unlocked", "current_zone", "next_copy_id", "active_potion_remaining_seconds", "roll_cooldown_remaining", "coins_earned", "coins_spent", "rarest_threshold_reached", "highest_luck", "best_team_dps"]:
 		if not data.get(key) is float and not data.get(key) is int:
 			return false
 		if not is_finite(float(data[key])) or data[key] < 0:
 			return false
 	for key in ["coins", "rolls_balance", "lifetime_rolls", "highest_zone_unlocked", "current_zone", "next_copy_id", "coins_earned", "coins_spent", "rarest_threshold_reached"]:
-		if float(data[key]) != floor(float(data[key])):
+		if not SlimerotSaveFormat.integer(data[key]):
 			return false
-	if data.active_potion_multiplier < 1.0 or data.highest_luck < 1.0:
+	if data.highest_luck < 1.0 or data.next_copy_id < 1 or data.first_roll_completed != (data.lifetime_rolls > 0):
 		return false
+	if not data.get("active_potion_type") is String: return false
+	if data.active_potion_remaining_seconds > SlimerotEncounters.POTION_SECONDS: return false
+	if data.active_potion_remaining_seconds == 0:
+		if data.active_potion_type != "": return false
+	elif data.active_potion_type not in ["lucky_soda", "hyper_soda"]: return false
 	if data.rolls_balance > data.lifetime_rolls or data.current_zone > data.highest_zone_unlocked or data.highest_zone_unlocked < 1 or data.highest_zone_unlocked > SlimerotBalance.MAX_ZONE:
 		return false
 	for key in ["zone_kill_counts", "boss_defeated_flags", "structure_unlocked_flags", "unlocked_gate_flags", "inventory", "settings", "discoveries", "roll_skill_spend"]:
 		if not data.get(key) is Dictionary:
 			return false
+	for zone in data.zone_kill_counts:
+		if zone not in ["1", "2", "3", "4", "5", "6", "7", "8"]: return false
+	for zone in data.unlocked_gate_flags:
+		if zone not in ["1", "2", "3", "4", "5", "6", "7", "8"]: return false
+	for flag in data.boss_defeated_flags:
+		if flag not in ["zone_2", "zone_4", "zone_6", "zone_8"]: return false
+	for flag in data.structure_unlocked_flags:
+		if not WorldManager.structures.has(flag): return false
 	for count in data.zone_kill_counts.values():
 		if (not count is float and not count is int) or not is_finite(float(count)) or float(count) < 0 or float(count) != floor(float(count)):
 			return false
@@ -148,14 +213,14 @@ func validate(data: Variant) -> bool:
 		for prerequisite in SkillTreeManager.nodes[id].prerequisite_ids:
 			if prerequisite not in data.purchased_skill_node_ids: return false
 	for id in data.roll_skill_spend:
-		if id not in data.purchased_skill_node_ids or SkillTreeManager.nodes[id].currency_type != "Rolls": return false
+		if not id is String or not SkillTreeManager.nodes.has(id) or id not in data.purchased_skill_node_ids or SkillTreeManager.nodes[id].currency_type != "Rolls": return false
 		var paid: Variant = data.roll_skill_spend[id]
 		if (not paid is int and not paid is float) or not is_finite(float(paid)) or paid < 0 or paid != floor(float(paid)) or paid > SkillTreeManager.nodes[id].cost: return false
 	for id in data.purchased_skill_node_ids:
 		if SkillTreeManager.nodes[id].currency_type == "Rolls" and not data.roll_skill_spend.has(id): return false
 	if int(data.lifetime_rolls) != int(data.rolls_balance) + SkillTreeManager.rolls_spent(data.purchased_skill_node_ids, data.roll_skill_spend):
 		return false
-	var seen: Array = []
+	var seen: Dictionary = {}
 	for key in data.inventory:
 		var pair: Variant = data.inventory[key]
 		if not pair is Dictionary or not pair.get("slime_id") is String or not pair.get("variant") is String:
@@ -166,16 +231,18 @@ func validate(data: Variant) -> bool:
 			return false
 		if not pair.get("favorite_copy_ids") is Array:
 			return false
+		var favorites: Dictionary = {}
 		for favorite_id in pair.favorite_copy_ids:
-			if favorite_id not in pair.copy_ids:
+			if not favorite_id is String or favorite_id not in pair.copy_ids or favorites.has(favorite_id):
 				return false
+			favorites[favorite_id] = true
 		for copy_id in pair.copy_ids:
 			if not copy_id is String or not copy_id.begins_with("slimerot_copy_") or copy_id in seen:
 				return false
 			var serial: String = copy_id.trim_prefix("slimerot_copy_")
 			if not serial.is_valid_int() or int(serial) < 1 or int(serial) >= int(data.next_copy_id):
 				return false
-			seen.append(copy_id)
+			seen[copy_id] = true
 	for id in data.discoveries:
 		if not SlimeDatabase.slimes.has(id) or not data.discoveries[id] is Array:
 			return false
@@ -187,17 +254,21 @@ func validate(data: Variant) -> bool:
 			return false
 	var equipped: Array = []
 	for copy_id in data.equipped_copy_ids:
-		if copy_id not in seen or copy_id in equipped:
+		if not copy_id is String or copy_id not in seen or copy_id in equipped:
 			return false
 		equipped.append(copy_id)
 	# Slot count is derived from the saved purchases, never trusted as an independent stat.
 	if equipped.size() > SkillTreeManager.derived_stats(data.purchased_skill_node_ids).equipped_slots or (data.lifetime_rolls == 0 and not seen.is_empty()):
 		return false
+	if not SlimerotSaveFormat.integer(data.get("equipped_slot_count")) or data.equipped_slot_count != SkillTreeManager.derived_stats(data.purchased_skill_node_ids).equipped_slots: return false
 	for key in SlimerotBalance.SETTINGS:
 		if not data.settings.has(key):
 			continue
-		if typeof(data.settings[key]) != typeof(SlimerotBalance.SETTINGS[key]):
-			return false
+		if SlimerotBalance.SETTINGS[key] is float:
+			if (not data.settings[key] is float and not data.settings[key] is int) or not is_finite(float(data.settings[key])): return false
+		elif typeof(data.settings[key]) != typeof(SlimerotBalance.SETTINGS[key]): return false
+	for key in ["master_audio", "music_audio", "sfx_audio"]:
+		if data.settings.get(key, 1.0) < 0 or data.settings.get(key, 1.0) > 1: return false
 	if data.settings.get("luck_cap", 0.0) not in SlimerotBalance.LUCK_CAPS.values():
 		return false
 	var filters: Variant = data.settings.get("auto_sell_settings", {})
@@ -208,6 +279,8 @@ func validate(data: Variant) -> bool:
 	return true
 
 func apply_snapshot(data: Dictionary) -> void:
+	# Rebuild from authoritative fields; never multiply the previous runtime stats.
+	RollManager.reset()
 	GameState.coins = int(data.coins)
 	GameState.rolls_balance = int(data.rolls_balance)
 	GameState.lifetime_rolls = int(data.lifetime_rolls)
@@ -232,7 +305,6 @@ func apply_snapshot(data: Dictionary) -> void:
 	InventoryManager.equipped_copy_ids.assign(data.equipped_copy_ids)
 	InventoryManager.next_copy_id = int(data.next_copy_id)
 	InventoryManager.discoveries = data.discoveries.duplicate(true)
-	GameState.active_potion_multiplier = float(data.active_potion_multiplier)
 	GameState.coins_earned = int(data.coins_earned)
 	GameState.coins_spent = int(data.coins_spent)
 	GameState.rarest_threshold_reached = int(data.rarest_threshold_reached)
@@ -241,9 +313,42 @@ func apply_snapshot(data: Dictionary) -> void:
 	RollManager.cooldown_remaining = minf(float(data.roll_cooldown_remaining), SkillTreeManager.derived_stats().roll_cooldown)
 	GameState.player_hp = SkillTreeManager.derived_stats().max_hp
 	CombatManager.reset_combat()
+	WorldManager.boss_active = false
+	WorldManager.arriving_from_next = false
+	WorldManager.zone_changed.emit(GameState.current_zone)
 	GameState.changed.emit()
 
 func migrate(value: Variant) -> Variant:
+	if not value is Dictionary or not SlimerotSaveFormat.integer(value.get("schema_version")): return value
+	var version := int(value.schema_version)
+	if version not in [1, 2, 3, 4, 5, 6, 7]: return value
+	value = value.duplicate(true)
+	value.schema_version = version
+	# Guard every legacy container before any migration dereferences it.
+	for key in ["inventory", "settings", "boss_defeated_flags", "structure_unlocked_flags"]:
+		if not value.get(key) is Dictionary: return {}
+	for key in ["discoveries", "roll_skill_spend", "zone_kill_counts", "unlocked_gate_flags", "potion_inventory"]:
+		if value.has(key) and not value[key] is Dictionary: return {}
+	if not value.get("purchased_skill_node_ids") is Array: return {}
+	for id in value.purchased_skill_node_ids:
+		if not id is String: return {}
+	for key in ["coins", "rolls_balance", "lifetime_rolls", "highest_zone_unlocked"]:
+		if not SlimerotSaveFormat.integer(value.get(key)): return {}
+	for pair in value.inventory.values():
+		if not pair is Dictionary or not pair.get("slime_id") is String or not pair.get("variant") is String or not pair.get("copy_ids") is Array: return {}
+	var data: Dictionary = migrate_legacy(value).duplicate(true)
+	data.schema_version = SlimerotBalance.SCHEMA_VERSION
+	data.first_roll_completed = data.lifetime_rolls > 0
+	data.equipped_slot_count = SkillTreeManager.derived_stats(data.purchased_skill_node_ids).equipped_slots
+	# Historical saves may contain stale expired potion labels. The recipe is authority.
+	if data.get("active_potion_remaining_seconds") == 0: data.active_potion_type = ""
+	data.erase("active_potion_multiplier")
+	var settings: Dictionary = SlimerotBalance.SETTINGS.duplicate(true)
+	settings.merge(data.settings, true)
+	data.settings = settings
+	return data
+
+func migrate_legacy(value: Variant) -> Variant:
 	if not value is Dictionary or value.get("schema_version") not in [1, 2, 3, 4, 5]:
 		return value
 	var data: Dictionary = value.duplicate(true)
@@ -340,22 +445,53 @@ func migrate_coin_tree(data: Dictionary) -> Dictionary:
 
 func reset_save() -> bool:
 	# Called only by the hold-to-confirm settings control; never by a roll or a load failure.
-	for suffix in ["", ".tmp", ".bak"]:
-		if FileAccess.file_exists(save_path + suffix) and DirAccess.remove_absolute(save_path + suffix) != OK:
-			return fail("Slimerot could not reset the local save.")
+	# Commit a durable reset marker first. Recovery then cannot resurrect old progress
+	# if the process dies between replacing the main and clearing its older backup.
+	var previous := snapshot()
+	var was_enabled := enabled
+	enabled = false
 	InventoryManager.reset()
 	RollManager.reset()
 	GameState.reset()
+	var fresh := snapshot()
+	for suffix in SlimerotSaveFormat.SUFFIXES:
+		var candidate := SlimerotSaveFormat.read(save_path + suffix)
+		if not candidate.is_empty(): generation = maxi(generation, int(candidate.generation))
+	generation += 1
+	var marker := save_path + ".reset"
+	if not SlimerotSaveFormat.write(marker, SlimerotSaveFormat.encode(fresh, generation)) or read_candidate(marker).is_empty():
+		apply_snapshot(previous)
+		enabled = was_enabled
+		return fail("Slimerot could not commit the reset. Previous progress was preserved.")
+	# The marker is now the authoritative new save even if later housekeeping fails.
+	for suffix in ["", ".tmp", ".bak", ".recover"]:
+		if FileAccess.file_exists(save_path + suffix):
+			if DirAccess.remove_absolute(save_path + suffix) != OK:
+				enabled = false
+				WorldManager.travel(0)
+				return fail("Slimerot reset was committed, but old save files could not be cleared. Restart to recover the reset.")
 	enabled = true
+	var saved := save_game()
+	if saved:
+		DirAccess.copy_absolute(save_path, save_path + ".bak")
+		DirAccess.remove_absolute(marker)
+	enabled = false
 	WorldManager.travel(0)
-	return save_game()
+	enabled = saved
+	recovery_status = ""
+	return saved
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_APPLICATION_FOCUS_OUT:
-		save_game()
-		GameState.suspended = true
-	elif what == NOTIFICATION_APPLICATION_RESUMED or what == NOTIFICATION_APPLICATION_FOCUS_IN:
-		GameState.suspended = false
+	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN]:
+		if what == NOTIFICATION_APPLICATION_PAUSED: application_paused = true
+		if what == NOTIFICATION_APPLICATION_RESUMED: application_paused = false
+		if what == NOTIFICATION_APPLICATION_FOCUS_OUT: focus_lost = true
+		if what == NOTIFICATION_APPLICATION_FOCUS_IN: focus_lost = false
+		GameState.suspended = application_paused or focus_lost
+		if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT]:
+			for action in ["move_left", "move_right", "move_up", "move_down", "roll", "interact"]:
+				if InputMap.has_action(action): Input.action_release(action)
+			save_game()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST:
 		save_game()
 		get_tree().quit()

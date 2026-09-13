@@ -128,7 +128,6 @@ func drink_potion(id: String) -> bool:
 	if id == "boss_brew": GameState.boss_brew_seconds = SlimerotEncounters.POTION_SECONDS
 	else:
 		GameState.active_potion_type = id
-		GameState.active_potion_multiplier = luck
 		GameState.potion_remaining_seconds = SlimerotEncounters.POTION_SECONDS
 	GameState.changed.emit()
 	GameState.critical_change.emit("potion_use")

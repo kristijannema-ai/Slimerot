@@ -91,7 +91,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	node_data("slimerot_test_minor", "luck_multiplier", 1.25)
 	node_data("slimerot_test_b1", "checkpoint_luck", 20)
 	node_data("slimerot_test_b2", "checkpoint_luck", 20)
-	GameState.active_potion_multiplier = 2
+	GameState.active_potion_type = "lucky_soda"
 	GameState.potion_remaining_seconds = 60
 	check(RollManager.effective_luck() == 1000, "effective luck = minor product ×20^breakthroughs ×active potion")
 	check(RollManager.set_luck_cap(20) and RollManager.rolling_luck() == 20 and RollManager.effective_luck() == 1000, "x20-era cap only affects roll luck")

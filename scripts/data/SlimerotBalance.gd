@@ -1,7 +1,7 @@
 class_name SlimerotBalance
 extends RefCounted
 
-const SCHEMA_VERSION := 6
+const SCHEMA_VERSION := 8
 const MAX_SLOTS := 5
 const PLAYER_HP := 100.0
 const MOVE_SPEED := 180.0

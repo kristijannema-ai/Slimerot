@@ -1,0 +1,42 @@
+# Slimerot local persistence — Prompt 8
+
+Slimerot writes one logical save under `user://Slimerot-save.json`. All runtime assets and progression are local. No account, network service, remote clock, or offline reward calculation participates in loading or saving.
+
+## Authority and schema
+
+Schema 8 persists wallets and Coin statistics, Lifetime Rolls, historical Roll spending, active playtime, current/highest zone, kills, gates, boss/structure flags, completion, purchased node IDs, inventory pair quantities and stable copy IDs, group/per-copy favorites, ordered equipment, discovery history, potion bottles and active seconds, audio/accessibility settings, Auto Roll, sale filters, Luck Cap and remaining roll cooldown.
+
+`first_roll_completed` must agree with `lifetime_rolls > 0`; Lifetime Rolls remains the runtime authority. `equipped_slot_count` is a validated compatibility field derived from purchases. Luck, potion multipliers, maximum HP, speed, damage, slots and cooldown limits are rebuilt from canonical recipes/nodes, never reapplied to previous values. Potion type and remaining seconds are authoritative; the obsolete saved potion multiplier is ignored during migration. Boss Brew has its own active timer. Loading returns to the saved zone entrance at full derived HP and clears transient attacks, reveal playback and encounter state; it never reruns rewards or roll transactions.
+
+The legacy plain JSON formats from schemas 1–6 migrate in memory before validation. Prompt 7 used schema 6. Historical Roll spend and grandfathered prerequisites remain preserved. Unknown future schemas disable saving and preserve files. Invalid saves do not silently become a new save; Settings exposes the failure and the existing hold-to-reset remains available.
+
+## Commit and recovery
+
+`SlimerotSaveFormat` wraps a serialized JSON payload with the Slimerot format name, monotonically increasing generation and SHA-256 of the format/generation/exact payload string. This detects accidental modification and incomplete writes; it is not an anti-cheat system.
+
+1. Validate the entire snapshot before opening a file.
+2. Write and flush `.tmp`, close it, then read it back and verify checksum/schema/invariants.
+3. Rotate only a validated main to `.bak`; a corrupt main never replaces a good backup.
+4. Rename the verified temporary file to the main path and report success only after replacement succeeds.
+
+Loading checks the main, `.tmp`, `.bak`, `.recover` and any committed `.reset` marker, choosing the highest valid generation. A complete newer temporary transaction takes precedence over an older main. Stale temporary files cannot rewind progression. Recovery stages a copy in `.recover` before replacing the main, preserving its source if replacement fails. Read/write/recovery failures remain visible through the existing Settings save status.
+
+The three-second, cancellable reset first commits a canonical fresh `.reset` marker. Only then does it clear old generations and install fresh main/backup files. A crash during reset cannot resurrect the old campaign, including when resetting a protected future-version file. An ordinary lower-version save cannot override a future save; that exception requires a verified newer reset marker from the explicit reset action.
+
+Flush and rename follow [Godot FileAccess](https://docs.godotengine.org/en/4.5/classes/class_fileaccess.html) and [DirAccess](https://docs.godotengine.org/en/4.5/classes/class_diraccess.html). Godot does not expose portable filesystem directory-fsync guarantees. Recovery protects the application-level write boundaries, but hardware/storage failure can still destroy all copies.
+
+## Lifecycle and timing
+
+Autosave runs every ten active seconds. Existing synchronous critical signals commit skill purchases, structure/gate purchases, boss defeat, mutation, threshold ≥10,000 rolls, first roll, Super Roll/auto-sale, equipment/favorites/sales, settings, zone travel, potion use/crafting and completion. No result/reveal skip path grants currency twice.
+
+App pause/focus-out suspends active time before saving and releases movement input. Independent application-pause and focus-loss latches prevent one resume notification from clearing the other suspension. Settings keeps its explicit pause after app resume; other menus retain Prompt 7's live-world behavior. Pause/closed time never reduces potion/cooldown timers. Window close and tree exit save as well, but Android process termination is not assumed to deliver an exit callback.
+
+An unannounced kill can lose ordinary progress since the last periodic save (up to ten active seconds). Consequential transactions are committed synchronously. No implementation can guarantee an event that has not finished writing when a process or storage device is terminated.
+
+## Validation and manual checks
+
+`SlimerotPersistenceTests.gd` exercises real 100-roll/skill transactions, repeated B1 loads, exact equipment/protection/discovery, potion timing, serialized legacy imports, malformed inputs, checksum damage, interrupted generations, reset markers, future-schema protection, write failure, active timers and all consequential campaign events. Existing Prompt 1–7 suites remain integrated, including real multi-touch/UI dispatch and rendered captures.
+
+`SlimerotRestartProbe.tscn` verifies a committed progressed state in two separate processes. Launch with `--slimerot-restart-probe --slimerot-restart-write`, wait for `Slimerot RESTART READY`, terminate that specific process forcibly, then reopen the same scene with only `--slimerot-restart-probe`. The read process checks 11 conditions and exits nonzero on failure. Probe files use `.godot/Slimerot-restart.json`; ordinary tests use per-process `.godot/` paths. Neither touches player data. Test scenes/scripts are excluded from Android exports, and test bootstrap paths require a debug build.
+
+For manual acceptance: resume an existing Prompt 7 save; change equipment/favorites/settings; buy B1; use both potion channels; background and force-stop; reopen and verify exact state with no extra x20 or elapsed offline time. Complete a mutation, boss and final portal and repeat the restart. Cancel Reset before three seconds, then confirm it on a disposable save and verify the guaranteed first roll. Device airplane-mode and touch/pause steps are in [Slimerot Android readiness](Slimerot-Android.md).

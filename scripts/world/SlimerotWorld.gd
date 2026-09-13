@@ -24,7 +24,7 @@ func _ready() -> void:
 	WorldManager.boss_requested.connect(start_boss_arena)
 	WorldManager.completion_reached.connect(func(): hud.open_menu("Completion"))
 	build_zone(GameState.current_zone)
-	if "--slimerot-test" in OS.get_cmdline_user_args():
+	if OS.is_debug_build() and "--slimerot-test" in OS.get_cmdline_user_args() and ResourceLoader.exists("res://tests/SlimerotTests.gd"):
 		var test: Node = load("res://tests/SlimerotTests.gd").new()
 		add_child(test)
 		test.call_deferred("run", self)
