@@ -30,6 +30,8 @@ var menu_dirty := false
 var menu_refresh_seconds := 0.0
 var menu_scroll: ScrollContainer
 var death_fade: ColorRect
+var map_button: Button
+var boss_label: Label
 
 func _ready() -> void:
 	layer = 10
@@ -48,6 +50,11 @@ func _ready() -> void:
 	text("Slimerot", Rect2(42, 31, 380, 51), 40, Color("b6ed78"))
 	text("OFFLINE  /  FIRST STEPS", Rect2(42, 83, 440, 24), 16, Color("95b4b3"))
 	button("Settings", Rect2(530, 38, 146, 56), func(): open_menu("Settings"))
+	map_button = button("Map",Rect2(554,174,122,50),func(): open_menu("Map"))
+	button("Potions",Rect2(430,174,122,50),func(): open_menu("Potions"))
+	boss_label = text("",Rect2(50,402,620,100),23)
+	boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boss_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wallet = text("", Rect2(42, 116, 632, 38), 26)
 	hp_bar = ProgressBar.new()
 	hp_bar.position = Vector2(42, 170)
@@ -191,10 +198,11 @@ func refresh() -> void:
 		tutorial.text = "Your slime is equipped. Walk to the green exit\nand tap Enter Backyard.  [E on desktop]"
 	else:
 		tutorial.text = SlimerotCampaign.wall_hint(zone.id)
-		if zone.id == 1 and not GameState.structure_unlocked_flags.get("skill_tree_shrine",false): tutorial.text = "Keep moving and rolling.\nRepair the Skill Tree Shrine for 25 Coins."
+		if zone.id == 1 and not GameState.structure_unlocked_flags.get("skill_tree_shrine",false): tutorial.text = "Keep moving and rolling.\nRepair the Bedroom Shrine for 25 Coins."
 		if zone.id == 1 and GameState.structure_unlocked_flags.get("skill_tree_shrine", false) and not GameState.structure_unlocked_flags.get("sell_terminal",false):
-			tutorial.text = "Keep moving and rolling. Buy permanent upgrades in Skills.\nRepair the Sell Terminal for 75 Coins."
-	skills_button.disabled = false
+			tutorial.text = "Keep moving and rolling. Buy upgrades in Skills.\nRepair the Bedroom Sell Terminal for 75 Coins."
+	skills_button.visible = GameState.structure_unlocked_flags.get("skill_tree_shrine",false)
+	map_button.visible = GameState.structure_unlocked_flags.get("fast_travel_pillar",false)
 	skills_button.text = "Skills"
 	super_label.visible = stats.super_roll
 	super_label.text = "SUPER ROLL ×5\n" + ("Next roll!" if RollManager.rolls_until_super() == 1 else "In %d rolls" % RollManager.rolls_until_super())
@@ -202,6 +210,11 @@ func refresh() -> void:
 	auto_button.text = "Auto Roll · Locked" if not stats.auto_roll else ("Auto Roll · ON" if GameState.settings.auto_roll_state else "Auto Roll · OFF")
 
 func _process(delta: float) -> void:
+	var bosses := get_tree().get_nodes_in_group("slimerot_bosses")
+	boss_label.visible = WorldManager.boss_active and not bosses.is_empty()
+	if boss_label.visible:
+		var boss: SlimerotBoss = bosses[0]
+		boss_label.text = "%s · %s / %s HP\n%s%s" % [boss.data.name,SlimeDatabase.format_number(int(boss.hp)),SlimeDatabase.format_number(boss.data.hp),"PHASE 2 · " if boss.enraged else "",boss.attack_label]
 	death_fade.color.a = clampf(1.0 - CombatManager.death_remaining / SlimerotBalance.DEATH_FADE_SECONDS, 0, 1) if GameState.player_dead else 0.0
 	if breakthrough_seconds > 0.0 and not GameState.is_paused():
 		breakthrough_seconds = maxf(0.0, breakthrough_seconds - delta)
@@ -281,6 +294,9 @@ func menu_button(value: String, action: Callable, disabled: bool = false) -> But
 	return control
 
 func open_menu(title: String) -> void:
+	if title == "Skills" and not GameState.structure_unlocked_flags.get("skill_tree_shrine",false):
+		show_notice("Repair the Skill Tree Shrine in the Bedroom Hub.")
+		return
 	close_menu()
 	menu_title = title
 	GameState.menu_paused = title == "Settings"
@@ -293,6 +309,7 @@ func open_menu(title: String) -> void:
 	navigation.columns = 4
 	layout.add_child(navigation)
 	for entry in ["Inventory", "Team", "Collection", "Skills", "Roll Settings", "Stats", "Settings", "Close"]:
+		if entry == "Skills" and not GameState.structure_unlocked_flags.get("skill_tree_shrine",false): continue
 		var tab := Button.new()
 		tab.text = entry
 		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL

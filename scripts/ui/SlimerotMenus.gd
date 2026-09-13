@@ -9,6 +9,7 @@ var copy_page := 0
 var holding := false
 var hold_seconds := 0.0
 var reset_button: Button
+var potion_status: Label
 
 func build(owner_hud: SlimerotHUD, title: String) -> void:
 	hud = owner_hud
@@ -24,6 +25,40 @@ func build(owner_hud: SlimerotHUD, title: String) -> void:
 		"Roll Settings": roll_settings()
 		"Stats": stats()
 		"Settings": settings()
+		"Potions": potions()
+		"Map": map_menu()
+		"Mutation": mutation()
+		"Completion":
+			hud.menu_label("Slimerot completed!\nThe Singularity Admin is defeated.")
+			hud.menu_label("Your collection, team and upgrades are saved. Keep exploring and rolling.")
+			hud.menu_button("Continue exploring",hud.close_menu)
+
+func potions() -> void:
+	hud.menu_label("Sodas do not stack: stronger luck wins. Boss Brew stacks with Boss Hunter at ×1.25. Same-potion use refreshes 5 minutes.",19)
+	for id in SlimerotEncounters.POTIONS:
+		var recipe: Dictionary = SlimerotEncounters.POTIONS[id]
+		hud.menu_label("%s · Owned %d" % [recipe.name,int(GameState.potion_inventory.get(id,0))])
+		hud.menu_button("Drink " + recipe.name,func(): WorldManager.drink_potion(id); hud.open_menu("Potions"), int(GameState.potion_inventory.get(id,0)) == 0 or (id != "boss_brew" and GameState.potion_remaining_seconds > 0 and GameState.active_potion_multiplier > recipe.luck))
+		hud.menu_button("Craft · %s Coins" % SlimeDatabase.format_number(recipe.cost),func(): WorldManager.craft_potion(id); hud.open_menu("Potions"),not WorldManager.potion_recipe_unlocked(id) or GameState.current_zone != 2 or WorldManager.boss_active or GameState.coins < recipe.cost)
+	hud.menu_label("Craft at the repaired Potion Bench in Italian Village. Hyper Soda needs the Z4 boss; Boss Brew needs the Z6 boss.",18)
+	potion_status = Label.new()
+	potion_status.add_theme_font_size_override("font_size",19)
+	hud.menu_body.add_child(potion_status)
+
+func map_menu() -> void:
+	for zone in range(0,9):
+		hud.menu_button(SlimerotCampaign.zone(zone).name + (" · Locked" if zone > GameState.highest_zone_unlocked else ""),func():
+			if WorldManager.fast_travel(zone): hud.close_menu(), not GameState.structure_unlocked_flags.get("fast_travel_pillar",false) or zone > GameState.highest_zone_unlocked or WorldManager.boss_active)
+
+func mutation() -> void:
+	hud.menu_label("5 unprotected Normal copies → 1 Shiny. Favorites and equipped copies cannot be consumed.",20)
+	for pair in InventoryManager.sorted_pairs("Name"):
+		if pair.variant != "normal": continue
+		var slime := SlimeDatabase.get_slime(pair.slime_id)
+		var count := InventoryManager.mutation_candidates(slime.id).size()
+		var fee := slime.base_sell * SlimerotEncounters.MUTATION_FEE_MULTIPLIER
+		hud.menu_label("%s · %d eligible" % [slime.display_name,count],20)
+		hud.menu_button("Mutate · %s Coins" % SlimeDatabase.format_number(fee),func(): InventoryManager.mutate(slime.id); hud.open_menu("Mutation"),count < 5 or GameState.coins < fee or GameState.current_zone != 6 or not GameState.structure_unlocked_flags.get("mutation_lab",false) or WorldManager.boss_active)
 
 func inventory() -> void:
 	var sorting := HBoxContainer.new()
@@ -215,6 +250,7 @@ func settings() -> void:
 	reset_button.mouse_exited.connect(cancel_hold)
 
 func tick(delta: float) -> void:
+	if is_instance_valid(potion_status): potion_status.text = "Luck effect: %.0fs · Boss Brew: %.0fs" % [GameState.potion_remaining_seconds,GameState.boss_brew_seconds]
 	if holding and is_instance_valid(reset_button):
 		if GameState.suspended:
 			cancel_hold()

@@ -5,6 +5,7 @@ var hud: SlimerotHUD
 var zone_root: Node2D
 var interactions: Array[SlimerotInteraction] = []
 var current_interaction: SlimerotInteraction
+var arena: SlimerotBossArena
 
 func _ready() -> void:
 	configure_input()
@@ -18,6 +19,8 @@ func _ready() -> void:
 	hud.interact_requested.connect(interact)
 	WorldManager.zone_changed.connect(build_zone)
 	WorldManager.respawn_requested.connect(respawn_player)
+	WorldManager.boss_requested.connect(start_boss_arena)
+	WorldManager.completion_reached.connect(func(): hud.open_menu("Completion"))
 	build_zone(GameState.current_zone)
 	if "--slimerot-test" in OS.get_cmdline_user_args():
 		var test: Node = load("res://tests/SlimerotTests.gd").new()
@@ -36,6 +39,10 @@ func configure_input() -> void:
 				InputMap.action_add_event(action, event)
 
 func build_zone(zone_id: int) -> void:
+	if is_instance_valid(arena):
+		remove_child(arena)
+		arena.queue_free()
+		arena = null
 	if is_instance_valid(zone_root):
 		remove_child(zone_root)
 		zone_root.queue_free()
@@ -62,10 +69,13 @@ func build_zone(zone_id: int) -> void:
 			if not WorldManager.use_exit(): hud.show_notice(WorldManager.gate_blocker(zone_id)))
 		interactions[-1].set_meta("gate",zone_id)
 		if not SlimerotCampaign.zone(zone_id).boss_id_or_null.is_empty():
-			add_interaction(Vector2(770,230),"Boss entrance",func(): hud.show_notice(WorldManager.boss_encounter_prompt(zone_id)))
-		if zone_id == 1:
-			add_interaction(Vector2(240,990),"Repair Skill Tree Shrine · 25 Coins",func(): repair("skill_tree_shrine"))
-			add_interaction(Vector2(780,970),"Repair Sell Terminal · 75 Coins",func(): repair("sell_terminal"))
+			add_interaction(Vector2(770,230),"Boss entrance",func():
+				if not WorldManager.start_boss(zone_id): hud.show_notice(WorldManager.boss_encounter_prompt(zone_id)))
+	for row in SlimerotEncounters.STRUCTURES:
+		if row[1] == zone_id:
+			var id: String = row[0]
+			add_interaction(row[4],id.replace("_"," ").capitalize()+" · %s Coins" % SlimeDatabase.format_number(row[2]),func(): repair(id))
+			interactions[-1].set_meta("structure",id)
 	respawn_player()
 	if WorldManager.arriving_from_next: player.position = SlimerotCampaign.RETURN_ARRIVAL
 	reset_camera()
@@ -75,9 +85,30 @@ func reset_camera() -> void:
 	for child in player.get_children():
 		if child is Camera2D: child.reset_smoothing()
 
+func start_boss_arena(zone_id: int) -> void:
+	hud.close_menu()
+	arena = SlimerotBossArena.new()
+	arena.zone_id = zone_id
+	arena.z_index = -1
+	add_child(arena)
+	hud.notice.text = ""
+	hud.notice_seconds = 0
+	player.global_position = SlimerotEncounters.ARENA_ORIGIN + SlimerotEncounters.PLAYER_START
+	reset_camera()
+	arena.finished.connect(func(won: bool, died: bool):
+		var old := arena
+		arena = null
+		remove_child(old)
+		old.queue_free()
+		if not died:
+			player.position = Vector2(770,330)
+			reset_camera()
+			hud.show_notice("Boss defeated! First-kill rewards saved." if won else "Boss reset. Your progress is safe.")
+	)
+
 func repair(id: String) -> void:
 	if GameState.structure_unlocked_flags.get(id, false):
-		hud.open_menu("Skills" if id == "skill_tree_shrine" else "Inventory")
+		hud.open_menu({"skill_tree_shrine":"Skills","sell_terminal":"Inventory","potion_bench":"Potions","fast_travel_pillar":"Map","mutation_lab":"Mutation"}[id])
 	elif WorldManager.repair(id):
 		hud.show_notice("Repaired! Available from the Slimerot HUD.")
 	else:
@@ -110,7 +141,7 @@ func add_interaction(at: Vector2, prompt: String, action: Callable) -> void:
 	interactions.append(component)
 
 func interact() -> void:
-	if GameState.player_dead: return
+	if GameState.player_dead or WorldManager.boss_active: return
 	if not GameState.is_paused() and is_instance_valid(current_interaction):
 		current_interaction.activate(player.global_position)
 
@@ -126,17 +157,13 @@ func _process(delta: float) -> void:
 	current_interaction = null
 	var distance := SlimerotBalance.INTERACT_RANGE + 1.0
 	for component in interactions:
-		if component.has_meta("gate"): component.prompt = WorldManager.gate_prompt(int(component.get_meta("gate")))
+		if component.has_meta("gate"): component.prompt = "Enter Completion Portal" if GameState.current_zone == 8 and GameState.completion_portal_unlocked else WorldManager.gate_prompt(int(component.get_meta("gate")))
+		if component.has_meta("structure") and GameState.structure_unlocked_flags.get(component.get_meta("structure"),false): component.prompt = "Open " + str(component.get_meta("structure")).replace("_"," ").capitalize()
 		var candidate := component.global_position.distance_to(player.global_position)
 		if component.is_available(player.global_position) and candidate < distance:
 			distance = candidate
 			current_interaction = component
 	var prompt := current_interaction.prompt if current_interaction != null else ""
-	if current_interaction != null and GameState.current_zone == 1:
-		if current_interaction.position.x == 240 and GameState.structure_unlocked_flags.get("skill_tree_shrine", false):
-			prompt = "Open Skill Tree"
-		elif current_interaction.position.x == 780 and GameState.structure_unlocked_flags.get("sell_terminal", false):
-			prompt = "Open Sell Terminal"
 	hud.set_interaction(prompt)
 	queue_redraw()
 
@@ -168,13 +195,6 @@ func _draw() -> void:
 		label_at(Vector2(438, 1194), "BACKYARD", 20, Color("273f39"))
 		label_at(Vector2(480, 1230), "↓", 32, Color("273f39"))
 	else:
-		if GameState.current_zone == 1:
-			rounded(Rect2(183,945,114,92),Color("8c839f"))
-			draw_circle(Vector2(240,945),31,Color("b6ed78") if GameState.structure_unlocked_flags.get("skill_tree_shrine",false) else Color("b7a2cc"))
-			label_at(Vector2(146,1070),"SKILL TREE SHRINE",18)
-			rounded(Rect2(730,920,100,97),Color("9f8b67"))
-			rounded(Rect2(744,931,72,40),Color("b6ed78") if GameState.structure_unlocked_flags.get("sell_terminal",false) else Color("283e43"))
-			label_at(Vector2(701,1051),"SELL TERMINAL",18)
 		var next := SlimerotCampaign.zone(GameState.current_zone+1).name if GameState.current_zone < 8 else "FINAL BOSS"
 		label_at(Vector2(320,100),next.to_upper(),25)
 		label_at(Vector2(360,270),"OPEN" if WorldManager.gate_open(GameState.current_zone) else "GATE REQUIREMENTS",20)
@@ -182,5 +202,13 @@ func _draw() -> void:
 		if not SlimerotCampaign.zone(GameState.current_zone).boss_id_or_null.is_empty():
 			draw_arc(Vector2(770,230),55,0,TAU,32,Color("c580aa"),12)
 			label_at(Vector2(700,310),"BOSS ENTRANCE",16)
+	for row in SlimerotEncounters.STRUCTURES:
+		if row[1] != GameState.current_zone: continue
+		var at: Vector2 = row[4]
+		rounded(Rect2(at-Vector2(45,45),Vector2(90,80)),Color("727b89"))
+		draw_circle(at-Vector2(0,18),23,Color("b6ed78") if GameState.structure_unlocked_flags.get(row[0],false) else Color("bdabc9"))
+		label_at(at+Vector2(-90,65),str(row[0]).replace("_"," ").to_upper(),17)
+	if GameState.current_zone == 8 and GameState.completion_portal_unlocked:
+		draw_arc(SlimerotCampaign.EXIT_GATE,70,0,TAU,48,Color("d3a6ff"),14)
 	if is_instance_valid(current_interaction):
 		draw_arc(current_interaction.position, 70, 0, TAU, 40, Color(0.8, 0.95, 0.6, 0.65), 2, true)

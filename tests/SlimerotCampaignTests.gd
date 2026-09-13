@@ -49,7 +49,9 @@ func run(world: Node, owner_suite: Node) -> void:
 		check(GameState.coins == earned, "dead enemy cannot double-credit kill %d" % kill)
 		lagling._physics_process(SlimerotCampaign.RESPAWN_SECONDS+0.01)
 	check(GameState.coins == 250 and GameState.zone_kill_counts["1"] == 50 and not lagling.dead and lagling.hp == 45, "repeatable starter farm awards exactly fixed Coins/kills and respawns fixed HP")
+	WorldManager.travel(0)
 	check(WorldManager.repair("skill_tree_shrine") and WorldManager.repair("sell_terminal") and GameState.coins == 150, "canonical first structures consume exactly 25 plus 75 Coins")
+	WorldManager.travel(1)
 	world.player.position = SlimerotCampaign.EXIT_GATE + Vector2(0,50)
 	world._process(0)
 	check(world.current_interaction.prompt.contains("150") and world.current_interaction.prompt.contains("50 / 12"), "physical gate UI exposes currency and current kills")
@@ -69,7 +71,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	check(not WorldManager.unlock_gate(2), "Coins alone cannot bypass kill requirement")
 	GameState.zone_kill_counts["2"] = 20
 	check(not WorldManager.unlock_gate(2) and not WorldManager.gate_open(2) and GameState.coins == 900, "boss placeholder never bypasses boss requirement or charges Coins")
-	check(WorldManager.boss_encounter_prompt(2).contains("unavailable") and not WorldManager.is_boss_zone_defeated(2), "encounter placeholder does not invent boss AI or a defeat")
+	check(WorldManager.boss_encounter_prompt(2).contains("Enter") and not WorldManager.is_boss_zone_defeated(2), "boss entry readiness never awards a defeat")
 	world.player.position = SlimerotCampaign.EXIT_GATE
 	world.reset_camera()
 	GameState.changed.emit()

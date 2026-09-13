@@ -2,6 +2,9 @@ extends Node
 
 signal zone_changed(zone_id: int)
 signal respawn_requested
+signal boss_requested(zone_id: int)
+signal completion_reached
+var boss_active := false
 var structures: Dictionary = {}
 var arriving_from_next := false
 
@@ -13,6 +16,7 @@ func travel(zone_id: int, from_next: bool = false) -> bool:
 	if zone_id < 0 or zone_id > SlimerotBalance.MAX_ZONE or zone_id > GameState.highest_zone_unlocked or GameState.player_dead:
 		return false
 	arriving_from_next = from_next and zone_id > 0
+	boss_active = false
 	GameState.current_zone = zone_id
 	CombatManager.reset_combat()
 	GameState.player_hp = SkillTreeManager.derived_stats().max_hp
@@ -54,7 +58,9 @@ func unlock_gate(zone_id: int) -> bool:
 
 func use_exit() -> bool:
 	var zone := GameState.current_zone
+	if boss_active: return false
 	if zone == 0: return travel(1)
+	if zone == 8 and GameState.completion_portal_unlocked: return complete_campaign()
 	if not gate_open(zone) and not unlock_gate(zone): return false
 	return travel(zone+1) if zone < 8 else true
 
@@ -67,11 +73,70 @@ func boss_encounter_prompt(zone_id: int) -> String:
 	if is_boss_zone_defeated(zone_id): return "Boss defeated. Return to the exit gate."
 	if int(GameState.zone_kill_counts.get(str(zone_id),0)) < data.kill_requirement:
 		return "Defeat %d enemies to reach the boss encounter." % data.kill_requirement
-	return "Boss encounter unavailable in this build. Your progress is saved."
+	return "Enter " + str(SlimerotEncounters.BOSSES[zone_id].name)
+
+func start_boss(zone_id: int) -> bool:
+	if not SlimerotEncounters.BOSSES.has(zone_id) or GameState.current_zone != zone_id or boss_active or GameState.is_paused() or GameState.player_dead or is_boss_zone_defeated(zone_id): return false
+	if int(GameState.zone_kill_counts.get(str(zone_id),0)) < SlimerotCampaign.zone(zone_id).kill_requirement: return false
+	boss_active = true
+	CombatManager.clear_projectiles()
+	boss_requested.emit(zone_id)
+	return true
+
+func finish_boss_reward(zone_id: int) -> bool:
+	if not SlimerotEncounters.BOSSES.has(zone_id) or is_boss_zone_defeated(zone_id): return false
+	var data: Dictionary = SlimerotEncounters.BOSSES[zone_id]
+	GameState.boss_defeated_flags["zone_%d" % zone_id] = true
+	GameState.award_coins(data.coins,false)
+	if not data.potion.is_empty(): GameState.potion_inventory[data.potion] = int(GameState.potion_inventory.get(data.potion,0))+1
+	if zone_id == 8:
+		GameState.completion_portal_unlocked = true
+		GameState.unlocked_gate_flags["8"] = true
+	GameState.changed.emit()
+	GameState.critical_change.emit("boss_defeat")
+	return true
+
+func complete_campaign() -> bool:
+	if GameState.current_zone != 8 or not GameState.completion_portal_unlocked or boss_active or GameState.player_dead: return false
+	GameState.campaign_completed = true
+	GameState.critical_change.emit("completion_portal")
+	completion_reached.emit()
+	return true
+
+func fast_travel(zone_id: int) -> bool:
+	if not GameState.structure_unlocked_flags.get("fast_travel_pillar",false) or boss_active or GameState.is_paused(): return false
+	return travel(zone_id)
+
+func potion_recipe_unlocked(id: String) -> bool:
+	if not SlimerotEncounters.POTIONS.has(id) or not GameState.structure_unlocked_flags.get("potion_bench",false): return false
+	var boss: int = SlimerotEncounters.POTIONS[id].boss
+	return boss == 0 or is_boss_zone_defeated(boss)
+
+func craft_potion(id: String) -> bool:
+	if not potion_recipe_unlocked(id) or GameState.current_zone != 2 or boss_active or GameState.is_paused() or GameState.player_dead: return false
+	if not GameState.spend("Coins",SlimerotEncounters.POTIONS[id].cost,false): return false
+	GameState.potion_inventory[id] = int(GameState.potion_inventory.get(id,0))+1
+	GameState.changed.emit()
+	GameState.critical_change.emit("potion_craft")
+	return true
+
+func drink_potion(id: String) -> bool:
+	if not SlimerotEncounters.POTIONS.has(id) or int(GameState.potion_inventory.get(id,0)) < 1 or GameState.is_paused() or GameState.player_dead: return false
+	var luck: float = SlimerotEncounters.POTIONS[id].luck
+	if id != "boss_brew" and GameState.potion_remaining_seconds > 0 and GameState.active_potion_multiplier > luck: return false
+	GameState.potion_inventory[id] -= 1
+	if id == "boss_brew": GameState.boss_brew_seconds = SlimerotEncounters.POTION_SECONDS
+	else:
+		GameState.active_potion_type = id
+		GameState.active_potion_multiplier = luck
+		GameState.potion_remaining_seconds = SlimerotEncounters.POTION_SECONDS
+	GameState.changed.emit()
+	GameState.critical_change.emit("potion_use")
+	return true
 
 func repair(id: String) -> bool:
 	var data: SlimerotData.StructureData = structures.get(id)
-	if data == null or GameState.current_zone != data.zone or GameState.structure_unlocked_flags.get(data.unlock_flag, false):
+	if data == null or boss_active or GameState.is_paused() or GameState.player_dead or GameState.current_zone != data.zone or GameState.structure_unlocked_flags.get(data.unlock_flag, false):
 		return false
 	if not GameState.spend("Coins", data.coin_cost):
 		return false
