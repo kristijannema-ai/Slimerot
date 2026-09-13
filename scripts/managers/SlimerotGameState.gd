@@ -18,18 +18,36 @@ var settings: Dictionary = SlimerotBalance.SETTINGS.duplicate(true)
 var current_zone := 0
 var player_hp := SlimerotBalance.PLAYER_HP
 var suspended := false
+var menu_paused := false
+var active_potion_multiplier := 1.0
+var coins_earned := 0
+var coins_spent := 0
+var rarest_threshold_reached := 0
+var highest_luck := 1.0
+var best_team_dps := 0.0
+
+func is_paused() -> bool:
+	return suspended or menu_paused
 
 func _process(delta: float) -> void:
-	if suspended:
+	if is_paused():
 		return
 	active_play_seconds += delta
 	if potion_remaining_seconds > 0.0:
 		potion_remaining_seconds = maxf(0.0, potion_remaining_seconds - delta)
 		if potion_remaining_seconds == 0.0:
 			active_potion_type = ""
+			active_potion_multiplier = 1.0
+	highest_luck = maxf(highest_luck, RollManager.effective_luck())
 
 func reset() -> void:
 	coins = 0
+	coins_earned = 0
+	coins_spent = 0
+	rarest_threshold_reached = 0
+	highest_luck = 1.0
+	best_team_dps = 0.0
+	active_potion_multiplier = 1.0
 	rolls_balance = 0
 	lifetime_rolls = 0
 	active_play_seconds = 0.0
@@ -53,6 +71,7 @@ func spend(currency: String, amount: int) -> bool:
 			if coins < amount:
 				return false
 			coins -= amount
+			coins_spent += amount
 		"Rolls":
 			if rolls_balance < amount:
 				return false
@@ -64,4 +83,5 @@ func spend(currency: String, amount: int) -> bool:
 
 func award_coins(amount: int) -> void:
 	coins += maxi(0, amount)
+	coins_earned += maxi(0, amount)
 	changed.emit()

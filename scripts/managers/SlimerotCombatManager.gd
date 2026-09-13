@@ -6,7 +6,7 @@ var attack_timers: Dictionary = {}
 var invulnerable_remaining := 0.0
 
 func _physics_process(delta: float) -> void:
-	if GameState.suspended or not is_instance_valid(player):
+	if GameState.is_paused() or not is_instance_valid(player):
 		return
 	invulnerable_remaining = maxf(0.0, invulnerable_remaining - delta)
 	for copy_id in InventoryManager.equipped_copy_ids:
@@ -32,7 +32,7 @@ func find_target(origin: Vector2) -> Node2D:
 	return target
 
 func damage_player(amount: float) -> void:
-	if invulnerable_remaining > 0.0 or GameState.suspended:
+	if invulnerable_remaining > 0.0 or GameState.is_paused():
 		return
 	GameState.player_hp = maxf(0.0, GameState.player_hp - maxf(0.0, amount))
 	GameState.changed.emit()

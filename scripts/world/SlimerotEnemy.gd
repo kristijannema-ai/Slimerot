@@ -22,7 +22,7 @@ func _ready() -> void:
 	add_to_group("slimerot_enemies")
 
 func _physics_process(delta: float) -> void:
-	if GameState.suspended:
+	if GameState.is_paused():
 		return
 	if dead:
 		respawn_remaining -= delta

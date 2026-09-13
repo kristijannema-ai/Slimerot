@@ -40,6 +40,7 @@ class SkillNodeData extends Resource:
 	@export var cost: int
 	@export var effect_type: String
 	@export var effect_value: float
+	@export var required_boss_zone: int = 0
 
 class ZoneData extends Resource:
 	@export var id: int
@@ -77,7 +78,9 @@ static func zone(zone_id: int) -> ZoneData:
 	data.enemy_level_range = Vector2i.ZERO if zone_id == 0 else Vector2i(1, 1)
 	data.kill_requirement = 0 if zone_id == 0 else SlimerotBalance.BACKYARD_GATE_KILLS
 	data.gate_coin_cost = 0 if zone_id == 0 else SlimerotBalance.BACKYARD_GATE_COINS
-	data.slime_unlock_ids = [SlimerotBalance.FIRST_SLIME]
+	for row in SlimerotRoster.ROWS:
+		if row[2] == zone_id:
+			data.slime_unlock_ids.append(row[0])
 	return data
 
 static func structures() -> Array[StructureData]:

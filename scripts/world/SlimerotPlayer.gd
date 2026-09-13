@@ -20,7 +20,7 @@ func _ready() -> void:
 
 func _physics_process(_delta: float) -> void:
 	var direction := Vector2.ZERO
-	if not GameState.suspended:
+	if not GameState.is_paused():
 		direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 		if is_instance_valid(joystick) and joystick.direction.length() > 0.0:
 			direction = joystick.direction
@@ -29,6 +29,10 @@ func _physics_process(_delta: float) -> void:
 	velocity = direction.limit_length() * SkillTreeManager.derived_stats().move_speed
 	move_and_slide()
 	queue_redraw()
+	for child in get_children():
+		if child is Camera2D:
+			var shaking: bool = not RollManager.active_reveal.is_empty() and RollManager.active_reveal.threshold >= 100000 and GameState.settings.screen_shake and not GameState.is_paused()
+			child.offset = Vector2(sin(RollManager.reveal_remaining * 53), cos(RollManager.reveal_remaining * 47)) * 2 if shaking else Vector2.ZERO
 
 func _draw() -> void:
 	draw_circle(Vector2(0, 17), 24, Color(0, 0, 0, 0.25))
@@ -40,9 +44,8 @@ func _draw() -> void:
 		var angle := float(index) / maxf(1.0, InventoryManager.equipped_copy_ids.size()) * TAU
 		var offset := Vector2(cos(angle), sin(angle)) * 52.0
 		draw_circle(offset + Vector2(0, 8), 17, Color(0, 0, 0, 0.2))
-		draw_circle(offset, 17, Color("b6ed78"))
-		draw_circle(offset + Vector2(-5, -2), 2.5, Color("24342c"))
-		draw_circle(offset + Vector2(5, -2), 2.5, Color("24342c"))
+		var pair := InventoryManager.pair_for_copy(InventoryManager.equipped_copy_ids[index])
+		SlimerotPortrait.paint(self, offset, 17, pair.slime_id, pair.variant, false, GameState.active_play_seconds)
 
 func body_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()

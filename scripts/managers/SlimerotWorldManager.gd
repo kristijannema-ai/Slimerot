@@ -32,7 +32,18 @@ func repair(id: String) -> bool:
 func record_kill(zone_id: int, coins: int) -> void:
 	var key := str(zone_id)
 	GameState.zone_kill_counts[key] = int(GameState.zone_kill_counts.get(key, 0)) + 1
+	GameState.award_coins(roundi(coins * (1.0 + SkillTreeManager.derived_stats().coin_scavenger)))
+
+func is_boss_zone_defeated(zone_id: int) -> bool:
+	return GameState.boss_defeated_flags.get("zone_%d" % zone_id, false)
+
+func award_boss_reward(zone_id: int, coins: int) -> bool:
+	if is_boss_zone_defeated(zone_id):
+		return false
+	GameState.boss_defeated_flags["zone_%d" % zone_id] = true
 	GameState.award_coins(coins)
+	GameState.critical_change.emit("boss_defeat")
+	return true
 
 func respawn() -> void:
 	GameState.player_hp = SkillTreeManager.derived_stats().max_hp

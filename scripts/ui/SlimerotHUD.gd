@@ -19,8 +19,12 @@ var notice_seconds := 0.0
 var menu: PanelContainer
 var menu_body: VBoxContainer
 var menu_title := ""
-var reveal: Label
-var reveal_seconds := 0.0
+var reveal: SlimerotReveal
+var menus := SlimerotMenus.new()
+var portraits: HBoxContainer
+var menu_dirty := false
+var menu_refresh_seconds := 0.0
+var menu_scroll: ScrollContainer
 
 func _ready() -> void:
 	layer = 10
@@ -42,16 +46,21 @@ func _ready() -> void:
 	hp_bar.add_theme_stylebox_override("fill", style(Color("b6ed78")))
 	root.add_child(hp_bar)
 	hp_label = text("", Rect2(42, 192, 278, 27), 17, Color("bbd3c5"))
-	team_label = text("", Rect2(345, 166, 330, 54), 19, Color("bbd3c5"))
+	team_label = text("", Rect2(269, 1178, 164, 55), 17, Color("bbd3c5"))
+	team_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	portraits = HBoxContainer.new()
+	portraits.position = Vector2(266, 1117)
+	portraits.size = Vector2(164, 52)
+	portraits.add_theme_constant_override("separation", 3)
+	root.add_child(portraits)
 	panel(Rect2(20, 245, 680, 145))
 	location_label = text("", Rect2(30, 250, 660, 42), 26)
 	location_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tutorial = text("", Rect2(52, 298, 616, 100), 20, Color("e7dbbb"))
 	tutorial.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tutorial.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	reveal = text("", Rect2(50, 410, 620, 114), 23, Color("d5f794"))
-	reveal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	reveal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	reveal = SlimerotReveal.new()
+	root.add_child(reveal)
 	notice = text("", Rect2(50, 830, 620, 80), 21, Color("fff0bc"))
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -66,13 +75,13 @@ func _ready() -> void:
 	roll_button.add_theme_stylebox_override("normal", style(Color("b6ed78")))
 	roll_button.add_theme_color_override("font_color", Color("1a352d"))
 	roll_button.add_theme_font_size_override("font_size", 32)
-	auto_button = button("Auto Roll · Locked", Rect2(414, 1187, 270, 58), toggle_auto)
+	auto_button = button("Auto Roll · Locked", Rect2(434, 1006, 250, 58), toggle_auto)
 	auto_button.add_theme_font_size_override("font_size", 20)
-	button("Inventory", Rect2(277, 1006, 189, 55), func(): open_menu("Inventory"))
-	skills_button = button("Skills · Locked", Rect2(478, 1006, 206, 55), func(): open_menu("Skills"))
+	button("Inventory", Rect2(269, 1006, 153, 58), func(): open_menu("Inventory"))
+	skills_button = button("Skills · Locked", Rect2(434, 1187, 250, 58), func(): open_menu("Skills"))
 	skills_button.add_theme_font_size_override("font_size", 19)
 	GameState.changed.connect(refresh)
-	RollManager.revealed.connect(on_reveal)
+	GameState.changed.connect(func(): menu_dirty = true)
 	SaveManager.save_failed.connect(show_notice)
 	refresh()
 	if not SaveManager.last_error.is_empty():
@@ -131,12 +140,22 @@ func button(value: String, rect: Rect2, action: Callable) -> Button:
 
 func refresh() -> void:
 	var stats := SkillTreeManager.derived_stats()
-	wallet.text = "Coins  %d      Rolls  %d      Lifetime  %d" % [GameState.coins, GameState.rolls_balance, GameState.lifetime_rolls]
+	wallet.text = "Coins  %d     Rolls  %d     Luck ×%.2f" % [GameState.coins, GameState.rolls_balance, RollManager.effective_luck()]
 	hp_bar.max_value = stats.max_hp
 	hp_bar.value = GameState.player_hp
 	hp_label.text = "HP  %d / %d" % [GameState.player_hp, stats.max_hp]
-	team_label.text = "Team DPS  %.1f   ·   Luck ×%.2f\nEquipped %d / %d  ·  Max 5" % [InventoryManager.team_dps(), stats.luck, InventoryManager.equipped_copy_ids.size(), stats.equipped_slots]
-	location_label.text = "Bedroom Hub" if GameState.current_zone == 0 else "01  /  Backyard · %d kills" % int(GameState.zone_kill_counts.get("1", 0))
+	team_label.text = "Team DPS %.1f\n%d / %d equipped" % [InventoryManager.team_dps(), InventoryManager.equipped_copy_ids.size(), stats.equipped_slots]
+	for child in portraits.get_children():
+		portraits.remove_child(child)
+		child.queue_free()
+	for copy_id in InventoryManager.equipped_copy_ids:
+		var pair := InventoryManager.pair_for_copy(copy_id)
+		var portrait := SlimerotPortrait.new()
+		portrait.slime_id = pair.slime_id
+		portrait.variant = pair.variant
+		portraits.add_child(portrait)
+		portrait.custom_minimum_size = Vector2(30, 42)
+	location_label.text = "Bedroom Hub" if GameState.current_zone == 0 else "Backyard · Lv. 1 · %d kills" % int(GameState.zone_kill_counts.get("1", 0))
 	if GameState.lifetime_rolls == 0:
 		tutorial.text = "Drag the joystick to move, then tap ROLL.\nYour first slime is waiting for you."
 	elif GameState.current_zone == 0:
@@ -157,14 +176,16 @@ func _process(delta: float) -> void:
 		notice_seconds -= delta
 		if notice_seconds <= 0.0:
 			notice.text = ""
-	if reveal_seconds > 0.0:
-		reveal_seconds -= delta
-		if reveal_seconds <= 0.0:
-			reveal.text = ""
+	if menu_dirty and is_instance_valid(menu) and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		menu_refresh_seconds += delta
+		if menu_refresh_seconds >= 0.4:
+			menu_refresh_seconds = 0.0
+			var scroll_value := menu_scroll.scroll_vertical
+			open_menu(menu_title)
+			menu_scroll.set_deferred("scroll_vertical", scroll_value)
+			menu_dirty = false
+	menus.tick(delta)
 
-func on_reveal(slime_id: String, _variant: String, first: bool) -> void:
-	reveal.text = ("FIRST SLIME · AUTO-EQUIPPED\n" if first else "SLIME COLLECTED\n") + SlimeDatabase.get_slime(slime_id).display_name + "\n+1 Rolls  ·  +1 Lifetime Roll"
-	reveal_seconds = 2.2
 
 func set_interaction(prompt: String) -> void:
 	interact_button.visible = not prompt.is_empty() and not is_instance_valid(menu)
@@ -188,8 +209,13 @@ func _input(event: InputEvent) -> void:
 		if roll_button.get_global_rect().has_point(event.position):
 			RollManager.request_roll()
 			get_viewport().set_input_as_handled()
+		elif auto_button.get_global_rect().has_point(event.position):
+			toggle_auto()
+			get_viewport().set_input_as_handled()
 
 func close_menu() -> void:
+	GameState.menu_paused = false
+	menus.cancel_hold()
 	if is_instance_valid(menu):
 		root.remove_child(menu)
 		menu.queue_free()
@@ -203,73 +229,43 @@ func menu_label(value: String, font_size: int = 22) -> void:
 	label.add_theme_font_size_override("font_size", font_size)
 	menu_body.add_child(label)
 
-func menu_button(value: String, action: Callable, disabled: bool = false) -> void:
+func menu_button(value: String, action: Callable, disabled: bool = false) -> Button:
 	var control := Button.new()
 	control.text = value
 	control.custom_minimum_size.y = 62
 	control.disabled = disabled
 	control.pressed.connect(action)
 	menu_body.add_child(control)
+	return control
 
 func open_menu(title: String) -> void:
 	close_menu()
 	menu_title = title
-	menu = panel(Rect2(40, 262, 640, 638))
+	GameState.menu_paused = title == "Settings"
+	menu = panel(Rect2(20, 245, 680, 735))
 	menu.mouse_filter = Control.MOUSE_FILTER_STOP
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	menu.add_child(scroll)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 12)
+	menu.add_child(layout)
+	var navigation := GridContainer.new()
+	navigation.columns = 4
+	layout.add_child(navigation)
+	for entry in ["Inventory", "Team", "Collection", "Skills", "Roll Settings", "Stats", "Settings", "Close"]:
+		var tab := Button.new()
+		tab.text = entry
+		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tab.add_theme_font_size_override("font_size", 18)
+		tab.custom_minimum_size.y = 48
+		tab.pressed.connect(close_menu if entry == "Close" else func(): open_menu(entry))
+		navigation.add_child(tab)
+	menu_scroll = ScrollContainer.new()
+	menu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	menu_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(menu_scroll)
 	menu_body = VBoxContainer.new()
 	menu_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	menu_body.add_theme_constant_override("separation", 13)
-	scroll.add_child(menu_body)
-	menu_label("Slimerot / " + title, 29)
-	menu_button("Close  ×", close_menu)
-	match title:
-		"Inventory":
-			menu_label("Team %d / %d · Collection %d" % [InventoryManager.equipped_copy_ids.size(), SkillTreeManager.derived_stats().equipped_slots, InventoryManager.inventory.size()])
-			if InventoryManager.inventory.is_empty():
-				menu_label("Tap ROLL to meet your first slime.")
-			for key in InventoryManager.inventory:
-				var pair: Dictionary = InventoryManager.inventory[key]
-				menu_label("%s\n%s · owned %d · damage %.0f" % [SlimeDatabase.get_slime(pair.slime_id).display_name, pair.variant.capitalize(), pair.quantity, SlimeDatabase.get_slime(pair.slime_id).base_damage])
-				menu_button("★ Favorited" if pair.favorite else "☆ Favorite", func(): InventoryManager.toggle_favorite(key); open_menu("Inventory"))
-				for copy_id in pair.copy_ids.slice(0, 8):
-					var equipped: bool = copy_id in InventoryManager.equipped_copy_ids
-					menu_button(("Unequip " if equipped else "Equip ") + copy_id.trim_prefix("slimerot_"), func():
-						if equipped: InventoryManager.unequip(copy_id)
-						else: InventoryManager.equip(copy_id)
-						open_menu("Inventory"), not equipped and InventoryManager.equipped_copy_ids.size() >= SkillTreeManager.derived_stats().equipped_slots)
-			if GameState.structure_unlocked_flags.get("sell_terminal", false):
-				menu_button("Sell Duplicates →", func(): open_menu("Sell Duplicates"))
-			else:
-				menu_label("Repair the Sell Terminal to sell duplicates.", 18)
-		"Sell Duplicates":
-			menu_label("Keeps every equipped and favorited copy, and at least one copy of each slime + variant.")
-			menu_button("Sell unprotected duplicates", func():
-				var earned := InventoryManager.sell_duplicates()
-				open_menu("Sell Duplicates")
-				menu_label("Sold for %d Coins." % earned))
-			menu_button("← Inventory", func(): open_menu("Inventory"))
-		"Skills":
-			menu_label("Roll tree · %d Rolls available" % GameState.rolls_balance)
-			for id in SkillTreeManager.nodes:
-				var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]
-				var owned: bool = id in GameState.purchased_skill_node_ids
-				menu_button(id.replace("_", " ").capitalize() + (" · Owned" if owned else " · %d Rolls" % data.cost), func(): SkillTreeManager.purchase(id); open_menu("Skills"), owned or GameState.rolls_balance < data.cost or skills_button.disabled)
-			menu_label("Permanent upgrades. Coin-tree and checkpoint nodes arrive with their full balance tables.", 18)
-		"Settings":
-			menu_label("Fully offline · saved every 10 seconds\nActive play: %.0f seconds" % GameState.active_play_seconds)
-			for key in ["screen_shake", "vibration"]:
-				menu_button(key.replace("_", " ").capitalize() + (" · ON" if GameState.settings[key] else " · OFF"), func(): GameState.settings[key] = not GameState.settings[key]; GameState.critical_change.emit("settings"); open_menu("Settings"))
-			for key in ["master_audio", "music_audio", "sfx_audio"]:
-				menu_label(key.replace("_", " ").capitalize(), 18)
-				var slider := HSlider.new()
-				slider.min_value = 0.0
-				slider.max_value = 1.0
-				slider.step = 0.05
-				slider.value = GameState.settings[key]
-				slider.custom_minimum_size.y = 42
-				slider.value_changed.connect(func(value): GameState.settings[key] = value; GameState.critical_change.emit("settings"))
-				menu_body.add_child(slider)
-			menu_label("Placeholder art · silent audio\nDesktop: WASD/arrows, Space to roll, E to interact.", 18)
+	menu_body.add_theme_constant_override("separation", 12)
+	menu_scroll.add_child(menu_body)
+	menu_label("Slimerot / " + (title if not title.begins_with("Copies:") else "Owned copies"), 28)
+	menus.build(self, title)
+	menu_dirty = false

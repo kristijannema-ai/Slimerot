@@ -3,7 +3,7 @@ extends Control
 
 var direction := Vector2.ZERO
 var touch_id := -1
-var radius := 88.0
+var radius := 90.0
 var center := Vector2(112, 112)
 
 func _ready() -> void:
