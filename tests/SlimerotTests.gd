@@ -69,7 +69,7 @@ func run(world: Node2D) -> void:
 	RollManager.cooldown_remaining = 0.0
 	var mobile_roll := InputEventScreenTouch.new()
 	mobile_roll.index = 1
-	mobile_roll.position = Vector2(550, 1120)
+	mobile_roll.position = world.hud.roll_button.get_global_rect().get_center()
 	mobile_roll.pressed = true
 	get_viewport().push_input(mobile_roll, true)
 	mobile_roll = mobile_roll.duplicate()
@@ -154,6 +154,9 @@ func run(world: Node2D) -> void:
 	var encounter_tests := preload("res://tests/SlimerotEncounterTests.gd").new()
 	add_child(encounter_tests)
 	await encounter_tests.run(world,self)
+	var ux_tests := preload("res://tests/SlimerotUXTests.gd").new()
+	add_child(ux_tests)
+	await ux_tests.run(world, self)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])

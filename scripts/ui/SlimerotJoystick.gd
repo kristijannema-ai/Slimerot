@@ -3,16 +3,19 @@ extends Control
 
 var direction := Vector2.ZERO
 var touch_id := -1
-var radius := 90.0
+var radius := SlimerotPresentation.JOYSTICK_RADIUS
 var center := Vector2(112, 112)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _input(event: InputEvent) -> void:
+	if GameState.is_paused() or GameState.player_dead:
+		reset()
+		return
 	if event is InputEventScreenTouch:
-		var local: Vector2 = event.position - global_position
-		if event.pressed and touch_id == -1 and local.distance_to(center) < radius * 1.25:
+		var local: Vector2 = get_global_transform_with_canvas().affine_inverse() * event.position
+		if event.pressed and touch_id == -1 and local.distance_to(center) <= radius:
 			touch_id = event.index
 			update_direction(local)
 			get_viewport().set_input_as_handled()
@@ -20,7 +23,7 @@ func _input(event: InputEvent) -> void:
 			reset()
 			get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag and event.index == touch_id:
-		update_direction(event.position - global_position)
+		update_direction(get_global_transform_with_canvas().affine_inverse() * event.position)
 		get_viewport().set_input_as_handled()
 
 func update_direction(local: Vector2) -> void:

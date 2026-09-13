@@ -4,122 +4,137 @@ extends Control
 var card: PanelContainer
 var label: Label
 var portrait: SlimerotPortrait
-var sting: AudioStreamPlayer
+var heading: Label
+var skip_hint: Label
 var time := 0.0
 var duration := 0.0
 var tier := 0
 var active := false
+var first_discovery := false
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	z_index = 30
 	card = PanelContainer.new()
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(card)
 	var column := VBoxContainer.new()
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_theme_constant_override("separation", 8)
+	column.add_theme_constant_override("separation", 6)
 	card.add_child(column)
+	heading = Label.new()
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	heading.add_theme_font_size_override("font_size", 34)
+	heading.add_theme_color_override("font_color", Color("ffdc77"))
+	column.add_child(heading)
 	portrait = SlimerotPortrait.new()
-	portrait.custom_minimum_size = Vector2(120, 120)
 	column.add_child(portrait)
 	label = Label.new()
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(label)
-	sting = AudioStreamPlayer.new()
-	sting.stream = make_sting()
-	add_child(sting)
+	skip_hint = Label.new()
+	skip_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	skip_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	skip_hint.add_theme_font_size_override("font_size", 17)
+	skip_hint.add_theme_color_override("font_color", Color("bed1c3"))
+	column.add_child(skip_hint)
 	RollManager.revealed.connect(show_result)
 	RollManager.reveal_finished.connect(hide_result)
+	resized.connect(layout_card)
 	hide()
 
 func show_result(slime_id: String, variant: String, first: bool) -> void:
 	var data := SlimeDatabase.get_slime(slime_id)
-	tier = data.aura_tier
+	tier = SlimerotPresentation.reveal_tier(data.rarity_threshold)
 	duration = RollManager.reveal_remaining
 	time = 0.0
 	active = true
+	first_discovery = RollManager.active_reveal.get("first_discovery", false)
 	card.scale = Vector2.ONE
 	portrait.slime_id = slime_id
 	portrait.variant = variant
 	portrait.visible = tier > 0
-	var is_new: bool = RollManager.active_reveal.first_discovery
-	label.text = ("FIRST SLIME · EQUIPPED\n" if first else ("NEW DISCOVERY\n" if is_new else "")) + data.display_name + " · " + variant.capitalize() + "\n" + SlimeDatabase.threshold_label(slime_id)
-	if RollManager.active_reveal.get("super_roll", false): label.text = "SUPER ROLL · LUCK ×5\n" + label.text
-	if RollManager.active_reveal.get("auto_sold_coins", 0) > 0: label.text += "\nAuto-sold duplicate · +%d Coins" % RollManager.active_reveal.auto_sold_coins
-	label.add_theme_font_size_override("font_size", 19 if tier == 0 else 25)
+	heading.visible = tier >= 2
+	heading.text = ["", "", "RARE FIND!", "SLIME SENSATION!", "JACKPOT!"][tier]
+	label.text = data.display_name + " · " + variant.capitalize()
+	if tier == 0:
+		if first: label.text = "FIRST SLIME · EQUIPPED\n" + label.text
+		elif RollManager.active_reveal.get("auto_sold_coins", 0) > 0:
+			label.text += " · +%d Coins" % RollManager.active_reveal.auto_sold_coins
+	else:
+		label.text = ("NEW DISCOVERY\n" if first_discovery else "") + label.text + "\n" + SlimeDatabase.threshold_label(slime_id)
+		if RollManager.active_reveal.get("super_roll", false): label.text = "SUPER ROLL · LUCK ×5\n" + label.text
+		if RollManager.active_reveal.get("auto_sold_coins", 0) > 0: label.text += "\nAuto-sold duplicate · +%d Coins" % RollManager.active_reveal.auto_sold_coins
+	label.add_theme_font_size_override("font_size", 19 if tier == 0 else 24)
 	label.add_theme_color_override("font_color", SlimerotBalance.VARIANT_DATA[variant].color)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.035, 0.075, 0.10, 0.96)
-	style.border_color = SlimerotBalance.VARIANT_DATA[variant].color
-	style.set_border_width_all(1 if tier < 2 else 3)
-	style.set_corner_radius_all(18)
-	style.content_margin_left = 20
-	style.content_margin_right = 20
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	card.add_theme_stylebox_override("panel", style)
-	card.position = Vector2(30, 255) if tier == 0 else Vector2(55, 340)
-	card.size = Vector2(660, 108) if tier == 0 else Vector2(610, 300)
-	if tier >= 3:
-		card.position = Vector2(12, 350)
-		card.size = Vector2(696, 340)
-	if tier == 4:
-		card.position.y = 420
-		label.text = "JACKPOT\n" + label.text + ("\nFirst discovery · enjoy the moment" if is_new else "\nTap the card to skip")
-	if tier >= 3 and DisplayServer.get_name() != "headless":
-		sting.volume_db = linear_to_db(maxf(0.0001, GameState.settings.master_audio * GameState.settings.sfx_audio * 0.2))
-		sting.play()
+	skip_hint.visible = tier > 0
+	skip_hint.text = "First discovery · enjoy the moment" if tier == 4 and first_discovery else "Tap this card to skip"
+	var appearance := StyleBoxFlat.new()
+	appearance.bg_color = Color("21434d")
+	appearance.border_color = SlimerotBalance.VARIANT_DATA[variant].color
+	appearance.set_border_width_all(2 if tier < 2 else 4)
+	appearance.set_corner_radius_all(22)
+	appearance.content_margin_left = 18
+	appearance.content_margin_right = 18
+	appearance.content_margin_top = 12
+	appearance.content_margin_bottom = 12
+	card.add_theme_stylebox_override("panel", appearance)
+	layout_card()
 	show()
+
+func layout_card() -> void:
+	if not is_instance_valid(card): return
+	var width := minf(520.0, size.x - 48)
+	var height := 74.0
+	if tier == 1: height = 280
+	if tier == 2:
+		width = size.x - 80
+		height = 350
+	if tier >= 3:
+		width = size.x - 24
+		height = 410 if tier == 3 else 500
+	portrait.custom_minimum_size = Vector2(0, 110 if tier == 1 else (155 if tier == 2 else 220))
+	card.size = Vector2(width, height)
+	card.position = Vector2((size.x - width) * 0.5, 250 if tier == 0 else maxf(270, (size.y - height) * 0.42))
 
 func hide_result() -> void:
 	active = false
-	sting.stop()
 	hide()
 	queue_redraw()
-
-func _exit_tree() -> void:
-	sting.stop()
-	sting.stream = null
 
 func _process(delta: float) -> void:
 	if not active or GameState.is_paused(): return
 	time += delta
 	if tier > 0:
 		card.pivot_offset = card.size * 0.5
-		card.scale = Vector2.ONE * (1.0 + sin(minf(time / 0.2, 1.0) * PI) * 0.035)
+		var bounce := 1.0 + sin(minf(time / 0.2, 1.0) * PI) * 0.04
+		card.scale = Vector2.ONE * minf(bounce, (size.x - 12.0) / card.size.x)
 	queue_redraw()
 
 func _input(event: InputEvent) -> void:
-	if not active: return
-	if event is InputEventScreenTouch and event.pressed and card.get_global_rect().has_point(event.position):
+	if not active or tier == 0 or GameState.is_paused(): return
+	var pressed: bool = (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
+	if pressed and card.get_global_rect().has_point(event.position):
 		RollManager.skip_reveal()
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and card.get_global_rect().has_point(event.position):
-		RollManager.skip_reveal()
+		get_viewport().set_input_as_handled()
 
 func _draw() -> void:
 	if not active: return
 	if tier == 4:
-		draw_rect(Rect2(0, 0, 720, 1280), Color(0.13, 0.10, 0.03, 0.76))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.08, 0.15, 0.19, 0.9))
+		for index in 12:
+			var center := size * 0.5
+			var angle := index * TAU / 12.0 + time * 0.15
+			var points := PackedVector2Array([center, center + Vector2.from_angle(angle) * size.length(), center + Vector2.from_angle(angle + 0.12) * size.length()])
+			draw_colored_polygon(points, Color(1, 0.85, 0.3, 0.08))
 	elif tier >= 2:
-		draw_rect(Rect2(0, 0, 720, 1280), Color(1, 0.9, 0.6, maxf(0.0, 0.12 * (1.0 - time / 0.3))))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(1, 0.9, 0.6, maxf(0.0, 0.12 * (1.0 - time / 0.3))))
 	if tier >= 1:
 		for index in (10 if tier == 1 else 26):
 			var angle := float(index) * 2.4
-			var point := Vector2(360, 480) + Vector2.from_angle(angle) * (90 + time * 110 + index * 3)
-			draw_circle(point, 2 + index % 3, Color(1, 0.91, 0.65, maxf(0, 1 - time / duration)))
-
-func make_sting() -> AudioStreamWAV:
-	var stream := AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = 22050
-	var samples := PackedByteArray()
-	samples.resize(11025 * 2)
-	for index in 11025:
-		var seconds := float(index) / 22050.0
-		var envelope := sin(seconds * PI * 2) * exp(-seconds * 5)
-		samples.encode_s16(index * 2, int(sin(seconds * TAU * (660.0 if seconds < 0.18 else 880.0)) * envelope * 14000))
-	stream.data = samples
-	return stream
+			var point := card.position + card.size * 0.5 + Vector2.from_angle(angle) * (90 + time * 110 + index * 3)
+			var alpha := maxf(0.0, 1.0 - time / maxf(duration, 0.001))
+			draw_circle(point, 2 + index % 3, Color(1, 0.91, 0.65, alpha))

@@ -1,8 +1,8 @@
-# Slimerot validation — prompts 1–6
+# Slimerot validation — prompts 1–7
 
 Engine: official Godot 4.5.1 stable on Windows. The project runs headlessly and with the OpenGL compatibility renderer. Tests use isolated per-process files under `.godot/`, preserving player saves.
 
-Result: **644 checks passed, 0 failures** in the combined rendered suite; the final headless pass uses the same assertions. No Slimerot script errors or leaked-object warnings remain.
+Result: **844 checks passed, 0 failures** in the combined rendered suite; the final headless pass uses the same assertions. No Slimerot script errors or leaked-object warnings remain.
 
 ## Automated coverage
 
@@ -90,3 +90,8 @@ Rendered Espresso slam, Sand Router fan, Janitor burst, Admin shrinking circle, 
 27. Repair the Z4 Pillar for 15,000. Map lists Hub and all zones, disabling locked destinations. Select an unlocked zone and confirm its entrance arrival without changing unlocks or wallet.
 28. Repair the Z6 Lab for 250,000. With seven identical Normal copies, equip one and favorite one; mutate the other five for the exact fee. Confirm one Shiny appears and protected copies remain. Insufficient funds or copies must consume nothing.
 29. Defeat Singularity Admin, enter the completion portal, and restart. The victory, 6,000,000-Coin first payout, portal and completion state persist. Continuing exploration does not grant another payout or start prestige.
+## Prompt 7 mobile interaction validation
+
+The Prompt 6 baseline passed 644 checks before implementation. Prompt 7 adds 200 assertions, including safe-inset coordinate scaling, actual touch scrolling from buttons, simultaneous joystick/ROLL, contextual interaction, Android Back notification routing, gated menus, reset cancellation, all reveal deadlines/skips/queues, all three Breakthrough purchases, media loading and volume settings. See [Slimerot-Prompt-7.md](Slimerot-Prompt-7.md) for the complete implementation and manual device checklist.
+
+Rendered layouts were inspected at 720×1280, 720×1440 and 800×1280. Physical Android hardware, APK export, cutouts and audio mixing still require device testing. In headless mode the presentation service validates resources and settings without starting a speaker playback; rendered tests exercise the real audio players. Windows host certificate-store and restricted shader-cache warnings are external to the game scripts.

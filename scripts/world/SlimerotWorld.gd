@@ -6,9 +6,11 @@ var zone_root: Node2D
 var interactions: Array[SlimerotInteraction] = []
 var current_interaction: SlimerotInteraction
 var arena: SlimerotBossArena
+var rounded_styles: Dictionary = {}
 
 func _ready() -> void:
 	configure_input()
+	GameState.changed.connect(queue_redraw)
 	player = SlimerotPlayer.new()
 	player.name = "SlimerotPlayer"
 	add_child(player)
@@ -150,10 +152,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		RollManager.request_roll()
 	if event.is_action_pressed("interact") and not event.is_echo():
 		interact()
-	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		hud.close_menu()
 
 func _process(delta: float) -> void:
+	var previous_interaction := current_interaction
 	current_interaction = null
 	var distance := SlimerotBalance.INTERACT_RANGE + 1.0
 	for component in interactions:
@@ -165,13 +166,16 @@ func _process(delta: float) -> void:
 			current_interaction = component
 	var prompt := current_interaction.prompt if current_interaction != null else ""
 	hud.set_interaction(prompt)
-	queue_redraw()
+	if previous_interaction != current_interaction: queue_redraw()
 
 func rounded(rect: Rect2, color: Color, radius: int = 12) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = color
-	style.set_corner_radius_all(radius)
-	draw_style_box(style, rect)
+	var key := str(color) + str(radius)
+	if not rounded_styles.has(key):
+		var appearance := StyleBoxFlat.new()
+		appearance.bg_color = color
+		appearance.set_corner_radius_all(radius)
+		rounded_styles[key] = appearance
+	draw_style_box(rounded_styles[key], rect)
 
 func label_at(at: Vector2, text: String, size: int = 22, color: Color = Color("e7e9df")) -> void:
 	draw_string(ThemeDB.fallback_font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
@@ -195,20 +199,32 @@ func _draw() -> void:
 		label_at(Vector2(438, 1194), "BACKYARD", 20, Color("273f39"))
 		label_at(Vector2(480, 1230), "↓", 32, Color("273f39"))
 	else:
+		var gate := SlimerotAssets.structure("gate_open" if WorldManager.gate_open(GameState.current_zone) else "gate_closed")
+		if gate != null: draw_texture_rect(gate, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(65, 72), Vector2(130, 130)), false)
+		var return_gate := SlimerotAssets.structure("gate_open")
+		if return_gate != null: draw_texture_rect(return_gate, Rect2(SlimerotCampaign.RETURN_GATE - Vector2(50, 65), Vector2(100, 100)), false)
 		var next := SlimerotCampaign.zone(GameState.current_zone+1).name if GameState.current_zone < 8 else "FINAL BOSS"
 		label_at(Vector2(320,100),next.to_upper(),25)
 		label_at(Vector2(360,270),"OPEN" if WorldManager.gate_open(GameState.current_zone) else "GATE REQUIREMENTS",20)
 		label_at(Vector2(385,1430),"← RETURN",22,Color("273f39"))
 		if not SlimerotCampaign.zone(GameState.current_zone).boss_id_or_null.is_empty():
 			draw_arc(Vector2(770,230),55,0,TAU,32,Color("c580aa"),12)
+			var portal := SlimerotAssets.structure("boss_portal")
+			if portal != null: draw_texture_rect(portal, Rect2(710, 160, 120, 120), false)
 			label_at(Vector2(700,310),"BOSS ENTRANCE",16)
 	for row in SlimerotEncounters.STRUCTURES:
 		if row[1] != GameState.current_zone: continue
 		var at: Vector2 = row[4]
-		rounded(Rect2(at-Vector2(45,45),Vector2(90,80)),Color("727b89"))
-		draw_circle(at-Vector2(0,18),23,Color("b6ed78") if GameState.structure_unlocked_flags.get(row[0],false) else Color("bdabc9"))
+		var sprite := SlimerotAssets.structure(row[0])
+		if sprite != null:
+			draw_texture_rect(sprite, Rect2(at - Vector2(64, 74), Vector2(128, 128)), false, Color.WHITE if GameState.structure_unlocked_flags.get(row[0], false) else Color(0.65, 0.65, 0.72))
+		else:
+			rounded(Rect2(at-Vector2(45,45),Vector2(90,80)),Color("727b89"))
+			draw_circle(at-Vector2(0,18),23,Color("b6ed78") if GameState.structure_unlocked_flags.get(row[0],false) else Color("bdabc9"))
 		label_at(at+Vector2(-90,65),str(row[0]).replace("_"," ").to_upper(),17)
 	if GameState.current_zone == 8 and GameState.completion_portal_unlocked:
 		draw_arc(SlimerotCampaign.EXIT_GATE,70,0,TAU,48,Color("d3a6ff"),14)
+		var portal := SlimerotAssets.structure("portal")
+		if portal != null: draw_texture_rect(portal, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(75, 90), Vector2(150, 150)), false)
 	if is_instance_valid(current_interaction):
 		draw_arc(current_interaction.position, 70, 0, TAU, 40, Color(0.8, 0.95, 0.6, 0.65), 2, true)
