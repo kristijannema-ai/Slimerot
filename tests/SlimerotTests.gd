@@ -93,6 +93,8 @@ func run(world: Node2D) -> void:
 	var coins := GameState.coins
 	var rolls := GameState.rolls_balance
 	CombatManager.damage_player(1000)
+	check(GameState.player_dead and GameState.player_hp == 0, "death starts the 1.5-second fade")
+	for frame in 92: await get_tree().physics_frame
 	check(GameState.player_hp == 100 and world.player.position.distance_to(SlimerotBalance.ENTRANCES[1]) < 1, "death respawns at current entrance")
 	check(GameState.coins == coins and GameState.rolls_balance == rolls and InventoryManager.equipped_copy_ids.size() == 1, "death has no currency or slime loss")
 	GameState.coins = 25
@@ -140,6 +142,9 @@ func run(world: Node2D) -> void:
 	var skill_tests := preload("res://tests/SlimerotSkillTreeTests.gd").new()
 	add_child(skill_tests)
 	await skill_tests.run(world, self)
+	var combat_tests := preload("res://tests/SlimerotCombatTests.gd").new()
+	add_child(combat_tests)
+	await combat_tests.run(world, self)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])

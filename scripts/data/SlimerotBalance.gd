@@ -1,13 +1,18 @@
 class_name SlimerotBalance
 extends RefCounted
 
-const SCHEMA_VERSION := 3
+const SCHEMA_VERSION := 4
 const MAX_SLOTS := 5
 const PLAYER_HP := 100.0
 const MOVE_SPEED := 180.0
 const ROLL_COOLDOWN := 2.4
 const ATTACK_INTERVAL := 1.0
 const ATTACK_RANGE := 180.0
+const PROJECTILE_SPEED := 500.0
+const REGEN_DELAY := 4.0
+const REGEN_FRACTION := 0.05
+const DEATH_FADE_SECONDS := 1.5
+const SLIME_ORBIT_RADIUS := 52.0
 const AUTOSAVE_SECONDS := 10.0
 const FIRST_SLIME := "tung_tung_tung_sahur"
 const VARIANTS := ["normal", "shiny", "glitched", "golden"]
@@ -19,7 +24,6 @@ const VARIANT_DATA := {
 }
 const VARIANT_SENSE_MULTIPLIER := 1.25
 const LUCK_CAPS := {"MAX": 0.0, "x20-era": 20.0, "x1": 1.0}
-const TEAM_SLOTS := [["team_slot_2", 350, 0], ["team_slot_3", 3500, 2], ["team_slot_4", 25000, 4], ["team_slot_5", 250000, 6]]
 const MAX_ZONE := 8
 const RESET_HOLD_SECONDS := 3.0
 # Slimerot's early enemy tuning remains provisional; roster and Roll tree are canonical.

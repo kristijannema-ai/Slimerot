@@ -20,7 +20,7 @@ func _ready() -> void:
 
 func _physics_process(_delta: float) -> void:
 	var direction := Vector2.ZERO
-	if not GameState.is_paused():
+	if not GameState.is_paused() and not GameState.player_dead:
 		direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 		if is_instance_valid(joystick) and joystick.direction.length() > 0.0:
 			direction = joystick.direction
@@ -41,8 +41,7 @@ func _draw() -> void:
 	draw_circle(Vector2(-7, -8) + facing * 2.0, 3, Color("172d39"))
 	draw_circle(Vector2(7, -8) + facing * 2.0, 3, Color("172d39"))
 	for index in InventoryManager.equipped_copy_ids.size():
-		var angle := float(index) / maxf(1.0, InventoryManager.equipped_copy_ids.size()) * TAU
-		var offset := Vector2(cos(angle), sin(angle)) * 52.0
+		var offset := to_local(CombatManager.slime_position(index))
 		draw_circle(offset + Vector2(0, 8), 17, Color(0, 0, 0, 0.2))
 		var pair := InventoryManager.pair_for_copy(InventoryManager.equipped_copy_ids[index])
 		SlimerotPortrait.paint(self, offset, 17, pair.slime_id, pair.variant, false, GameState.active_play_seconds)

@@ -80,7 +80,7 @@ func select_variant(uniform: float, variant_sense: bool = false) -> String:
 	return "normal"
 
 func request_roll() -> bool:
-	if completing or cooldown_remaining > 0.0 or GameState.is_paused():
+	if completing or cooldown_remaining > 0.0 or GameState.is_paused() or GameState.player_dead:
 		return false
 	completing = true
 	var first := GameState.lifetime_rolls == 0

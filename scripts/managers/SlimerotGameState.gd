@@ -18,6 +18,7 @@ var potion_remaining_seconds := 0.0
 var settings: Dictionary = SlimerotBalance.SETTINGS.duplicate(true)
 var current_zone := 0
 var player_hp := SlimerotBalance.PLAYER_HP
+var player_dead := false
 var suspended := false
 var menu_paused := false
 var active_potion_multiplier := 1.0
@@ -63,6 +64,7 @@ func reset() -> void:
 	settings = SlimerotBalance.SETTINGS.duplicate(true)
 	current_zone = 0
 	player_hp = SlimerotBalance.PLAYER_HP
+	CombatManager.reset_combat()
 	changed.emit()
 
 func spend(currency: String, amount: int, notify: bool = true) -> bool:
