@@ -41,33 +41,39 @@ func build_zone(zone_id: int) -> void:
 		zone_root.queue_free()
 	interactions.clear()
 	current_interaction = null
-	CombatManager.attack_timers.clear()
-	zone_root = Node2D.new()
-	zone_root.name = "SlimerotBedroom" if zone_id == 0 else "SlimerotBackyard"
+	CombatManager.reset_combat()
+	var path := "res://scenes/zones/%s.tscn" % SlimerotCampaign.SCENES[zone_id]
+	var packed: PackedScene = load(path)
+	zone_root = packed.instantiate()
 	add_child(zone_root)
-	zone_root.z_index = 0
-	wall(Rect2(0, 0, 1000, 32))
-	wall(Rect2(0, 0, 32, 1400))
-	wall(Rect2(968, 0, 32, 1400))
-	wall(Rect2(0, 1368, 1000, 32))
+	zone_root.z_index = -1
 	if zone_id == 0:
-		wall(Rect2(110, 650, 175, 250))
-		wall(Rect2(720, 680, 175, 100))
-		wall(Rect2(110, 360, 280, 100))
-		add_interaction(Vector2(500, 1190), "Enter Backyard", func(): WorldManager.travel(1))
+		wall(Rect2(0,0,1000,32))
+		wall(Rect2(0,0,32,1400))
+		wall(Rect2(968,0,32,1400))
+		wall(Rect2(0,1368,1000,32))
+		wall(Rect2(110,650,175,250))
+		wall(Rect2(720,680,175,100))
+		wall(Rect2(110,360,280,100))
+		add_interaction(Vector2(500,1190),"Enter Backyard",func(): WorldManager.use_exit())
 	else:
-		wall(Rect2(140, 520, 110, 110))
-		wall(Rect2(770, 660, 110, 110))
-		add_interaction(Vector2(500, 1250), "Return to Bedroom", func(): WorldManager.travel(0))
-		add_interaction(Vector2(240, 990), "Repair Skill Tree Shrine · 25 Coins", func(): repair("skill_tree_shrine"))
-		add_interaction(Vector2(780, 970), "Repair Sell Terminal · 75 Coins", func(): repair("sell_terminal"))
-		add_interaction(Vector2(500, 230), "Italian Village · next stage", func(): hud.show_notice("Italian Village arrives in a later stage."))
-		for spawn in [Vector2(500, 900), Vector2(380, 670), Vector2(660, 550), Vector2(400, 380)]:
-			var enemy := SlimerotEnemy.new()
-			enemy.position = spawn
-			zone_root.add_child(enemy)
+		add_interaction(SlimerotCampaign.RETURN_GATE,"Return to " + SlimerotCampaign.zone(zone_id-1).name,func(): WorldManager.return_through_gate())
+		add_interaction(SlimerotCampaign.EXIT_GATE,WorldManager.gate_prompt(zone_id),func():
+			if not WorldManager.use_exit(): hud.show_notice(WorldManager.gate_blocker(zone_id)))
+		interactions[-1].set_meta("gate",zone_id)
+		if not SlimerotCampaign.zone(zone_id).boss_id_or_null.is_empty():
+			add_interaction(Vector2(770,230),"Boss entrance",func(): hud.show_notice(WorldManager.boss_encounter_prompt(zone_id)))
+		if zone_id == 1:
+			add_interaction(Vector2(240,990),"Repair Skill Tree Shrine · 25 Coins",func(): repair("skill_tree_shrine"))
+			add_interaction(Vector2(780,970),"Repair Sell Terminal · 75 Coins",func(): repair("sell_terminal"))
 	respawn_player()
+	if WorldManager.arriving_from_next: player.position = SlimerotCampaign.RETURN_ARRIVAL
+	reset_camera()
 	queue_redraw()
+
+func reset_camera() -> void:
+	for child in player.get_children():
+		if child is Camera2D: child.reset_smoothing()
 
 func repair(id: String) -> void:
 	if GameState.structure_unlocked_flags.get(id, false):
@@ -120,6 +126,7 @@ func _process(delta: float) -> void:
 	current_interaction = null
 	var distance := SlimerotBalance.INTERACT_RANGE + 1.0
 	for component in interactions:
+		if component.has_meta("gate"): component.prompt = WorldManager.gate_prompt(int(component.get_meta("gate")))
 		var candidate := component.global_position.distance_to(player.global_position)
 		if component.is_available(player.global_position) and candidate < distance:
 			distance = candidate
@@ -161,27 +168,19 @@ func _draw() -> void:
 		label_at(Vector2(438, 1194), "BACKYARD", 20, Color("273f39"))
 		label_at(Vector2(480, 1230), "↓", 32, Color("273f39"))
 	else:
-		rounded(Rect2(0, 0, 1000, 1400), Color("304e43"), 0)
-		for y in range(65, 1350, 80):
-			for x in range(65, 950, 95):
-				draw_line(Vector2(x, y), Vector2(x + 4, y - 7), Color("416250"), 2)
-		for y in range(300, 1270, 85):
-			rounded(Rect2(455 + sin(y) * 24, y, 90, 55), Color("637364"), 10)
-		rounded(Rect2(140, 520, 110, 110), Color("46795a"), 35)
-		rounded(Rect2(770, 660, 110, 110), Color("46795a"), 35)
-		rounded(Rect2(183, 945, 114, 92), Color("8c839f"), 10)
-		draw_circle(Vector2(240, 945), 31, Color("b6ed78") if GameState.structure_unlocked_flags.get("skill_tree_shrine", false) else Color("b7a2cc"))
-		label_at(Vector2(146, 1070), "SKILL TREE SHRINE", 18)
-		rounded(Rect2(730, 920, 100, 97), Color("9f8b67"))
-		rounded(Rect2(744, 931, 72, 40), Color("b6ed78") if GameState.structure_unlocked_flags.get("sell_terminal", false) else Color("283e43"))
-		label_at(Vector2(701, 1051), "SELL TERMINAL", 18)
-		rounded(Rect2(398, 1213, 204, 83), Color("bdad8e"))
-		label_at(Vector2(431, 1260), "BEDROOM", 22, Color("273f39"))
-		for x in range(350, 650, 45):
-			rounded(Rect2(x, 200, 16, 90), Color("ad9471"), 3)
-		label_at(Vector2(354, 179), "ITALIAN VILLAGE", 28)
-		label_at(Vector2(355, 325), "12 kills · 150 Coins · later stage", 18)
-	for rect in [Rect2(0, 0, 1000, 32), Rect2(0, 0, 32, 1400), Rect2(968, 0, 32, 1400), Rect2(0, 1368, 1000, 32)]:
-		draw_rect(rect, Color("263b3d"))
+		if GameState.current_zone == 1:
+			rounded(Rect2(183,945,114,92),Color("8c839f"))
+			draw_circle(Vector2(240,945),31,Color("b6ed78") if GameState.structure_unlocked_flags.get("skill_tree_shrine",false) else Color("b7a2cc"))
+			label_at(Vector2(146,1070),"SKILL TREE SHRINE",18)
+			rounded(Rect2(730,920,100,97),Color("9f8b67"))
+			rounded(Rect2(744,931,72,40),Color("b6ed78") if GameState.structure_unlocked_flags.get("sell_terminal",false) else Color("283e43"))
+			label_at(Vector2(701,1051),"SELL TERMINAL",18)
+		var next := SlimerotCampaign.zone(GameState.current_zone+1).name if GameState.current_zone < 8 else "FINAL BOSS"
+		label_at(Vector2(320,100),next.to_upper(),25)
+		label_at(Vector2(360,270),"OPEN" if WorldManager.gate_open(GameState.current_zone) else "GATE REQUIREMENTS",20)
+		label_at(Vector2(385,1430),"← RETURN",22,Color("273f39"))
+		if not SlimerotCampaign.zone(GameState.current_zone).boss_id_or_null.is_empty():
+			draw_arc(Vector2(770,230),55,0,TAU,32,Color("c580aa"),12)
+			label_at(Vector2(700,310),"BOSS ENTRANCE",16)
 	if is_instance_valid(current_interaction):
 		draw_arc(current_interaction.position, 70, 0, TAU, 40, Color(0.8, 0.95, 0.6, 0.65), 2, true)

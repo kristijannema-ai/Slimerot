@@ -1,8 +1,8 @@
-# Slimerot validation — prompts 1–4
+# Slimerot validation — prompts 1–5
 
 Engine: official Godot 4.5.1 stable on Windows. The project runs headlessly and with the OpenGL compatibility renderer. Tests use isolated per-process files under `.godot/`, preserving player saves.
 
-Result: **336 checks passed, 0 failures** in the combined rendered suite; the final headless pass uses the same assertions. No Slimerot script errors or leaked-object warnings remain.
+Result: **557 checks passed, 0 failures** in the combined rendered suite; the final headless pass uses the same assertions. No Slimerot script errors or leaked-object warnings remain.
 
 ## Automated coverage
 
@@ -34,6 +34,10 @@ The combined suites exercise real Godot nodes and input dispatch plus determinis
 
 The test runner prints a single final check/failure count and exits nonzero on assertion failures. Save reset tests only delete the suite's isolated files.
 
+Stage 5 adds every fixed HP/reward/damage row and level range, all kill/gate/boss requirements, physical Z1→Z2 interaction from fresh currencies and starter ownership, repeated fixed-reward farm kills/respawns, exact structure/gate costs, no duplicate kill credits, zero-balance return traversal, persistent global pool expansion, and boss-placeholder non-bypass. Every later scene loads independently with 11 correctly configured enemies. Grid paths verify both main routes and closed farming loops. Fixtures verify each gate's exact price, one-Coin-short rejection, current-zone death/respawn, and zero progression loss. Schema 5 round trips current Z8/gates/kills and migrates previous unlocks. Shooter retreat/approach, firing intervals and fixed projectile damage are checked. Wealth and luck do not alter enemy data.
+
+The Z1 economy fixture uses seven actual rounded starter hits per 45-HP Chaser and 50 repeated kills for 250 Coins: 25 Shrine + 75 Sell Terminal + 150 gate. It advances respawn time directly, so this proves accounting/repeatability rather than a timed beginner playtest. The earlier live combat regression exercises real projectile cadence. Full 12-minute beginner onboarding and 3-hour campaign/Coins-per-minute pacing remain manual validation, especially while bosses await Prompt 6.
+
 ## Render inspection
 
 Inspected fresh Bedroom, Collection, Team, Inventory, and Golden Brainrot Singularity jackpot captures. Collection cards wrap names, retain threshold labels, and display distinct silhouettes for undiscovered bases. HUD Lifetime Rolls was removed. The reveal layer keeps the joystick and ROLL control usable. Jackpot bounce is centered to preserve screen margins.
@@ -41,6 +45,8 @@ Inspected fresh Bedroom, Collection, Team, Inventory, and Golden Brainrot Singul
 Stage 3 additionally inspects mainline, optional branches, and Roll Settings captures at the 720×1280 virtual resolution. Scrollable cards expose prerequisites, descriptions and purchase state; the high-luck wallet and Super counter fit. Breakthrough banners expire without pausing movement.
 
 Stage 4 Coin Tree and five-copy Team captures were inspected. Per-hit damage, raw DPS, portraits, purchase state and prerequisite labels fit the portrait layout. The rendered projectile collision fixture explicitly synchronizes teleported physics bodies before querying, matching live physics behavior.
+
+Stage 5 inspects themed campaign captures, the Backyard purchase gate, and a boss-locked exit. HUD zone names/level ranges/kill counts and contextual costs fit portrait controls. The obsolete later-zone Sell Terminal tutorial hint was removed. Reusable original procedural props distinguish trees, houses, pyramids, city buildings, Backrooms walls, Moon craters and dimensional crystals.
 
 Audio playback is skipped in headless mode and stopped/released when reveals end or the scene exits. The rendered build uses a generated sound sting; no third-party media is required.
 
@@ -65,3 +71,7 @@ The sandbox emits an engine certificate-store diagnostic at startup and the edit
 15. Take damage, then stay clear: HP remains unchanged for four seconds, then regenerates at 5% max HP/sec. Pause freezes regeneration. Die on a disposable save: observe the 1.5s fade and full-HP entrance respawn, with wallets, equipment and inventory preserved.
 16. In a progressed fixture, purchase Bonds, Boss Hunter, Toughness and Fleet Feet. Verify ordinary per-hit damage is rounded after 2.5x at Final Bond, boss damage gets a further 1.5x, raw Team DPS excludes the conditional boss bonus, HP reaches 250 and move speed 216 px/s. Check Scavenger affects only normal kills and Dealer only sales.
 17. Reload a stage-three save with old slot upgrades: team capacity, wallets and historical Coin accounting survive migration. New Coin nodes show exact canonical costs and world prerequisites.
+18. On a disposable fresh save, roll the guaranteed starter, enter Backyard, and farm the outer route. Repair both structures, reach at least 12 kills and save 150 Coins. Approach the far gate: confirm exact requirements, purchase and walk into Italian Village. Backtrack and return with zero Coins; no second payment occurs.
+19. In Italian Village, reach 20 kills and 900 Coins without a boss flag. Its exit must remain locked and preserve Coins. The boss entrance reports that the encounter is unavailable; it never awards a fake victory. Later campaign QA uses explicit test fixtures until Prompt 6 supplies real bosses.
+20. Visit each fixture-unlocked zone: traverse both the main path and farming loop, observe its themed props, distinct Chaser/Shooter/Tank silhouettes and fixed levels, dodge Shooter shots, and repeat farm spawns. Check Z3/Z5/Z7 walls at 40/60/90 kills and 4,000/75,000/1,200,000 Coins.
+21. Die in each zone and reload saves from later zones: current-zone entrance, full HP, gate flags, Coins, Rolls, equipment and pool unlocks remain correct. Confirm Z8 requires 100 kills plus its final boss and has no extra paid gate or Z9.

@@ -1,7 +1,7 @@
 class_name SlimerotBalance
 extends RefCounted
 
-const SCHEMA_VERSION := 4
+const SCHEMA_VERSION := 5
 const MAX_SLOTS := 5
 const PLAYER_HP := 100.0
 const MOVE_SPEED := 180.0
@@ -26,21 +26,15 @@ const VARIANT_SENSE_MULTIPLIER := 1.25
 const LUCK_CAPS := {"MAX": 0.0, "x20-era": 20.0, "x1": 1.0}
 const MAX_ZONE := 8
 const RESET_HOLD_SECONDS := 3.0
-# Slimerot's early enemy tuning remains provisional; roster and Roll tree are canonical.
+# Slimerot fixed campaign enemy data lives in SlimerotCampaign.
 const STARTER_DAMAGE := 7.0
 const STARTER_SELL := 5
 const EARLY_STRUCTURES := [["skill_tree_shrine", 25, "skill_tree"], ["sell_terminal", 75, "sell_duplicates"]]
 const BACKYARD_GATE_KILLS := 12
 const BACKYARD_GATE_COINS := 150
-const LAGLING_HP := 30.0
-const LAGLING_DAMAGE := 8.0
-const LAGLING_COINS := 5
-const LAGLING_SPEED := 55.0
-const LAGLING_ATTACK_INTERVAL := 1.0
-const ENEMY_RESPAWN_SECONDS := 5.0
 const INTERACT_RANGE := 110.0
 const WORLD_SIZE := Vector2(1000, 1400)
-const ENTRANCES := {0: Vector2(500, 1090), 1: Vector2(500, 1150)}
+const ENTRANCES := {0: Vector2(500,1090),1: Vector2(500,1350),2: Vector2(500,1350),3: Vector2(500,1350),4: Vector2(500,1350),5: Vector2(500,1350),6: Vector2(500,1350),7: Vector2(500,1350),8: Vector2(500,1350)}
 const SETTINGS := {
 	"master_audio": 1.0, "music_audio": 0.7, "sfx_audio": 1.0,
 	"screen_shake": true, "vibration": true, "auto_roll_state": false,

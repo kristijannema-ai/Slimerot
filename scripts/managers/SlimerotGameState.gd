@@ -9,6 +9,7 @@ var lifetime_rolls := 0
 var active_play_seconds := 0.0
 var highest_zone_unlocked := 1
 var zone_kill_counts: Dictionary = {}
+var unlocked_gate_flags: Dictionary = {}
 var boss_defeated_flags: Dictionary = {}
 var structure_unlocked_flags: Dictionary = {}
 var purchased_skill_node_ids: Array[String] = []
@@ -55,6 +56,7 @@ func reset() -> void:
 	active_play_seconds = 0.0
 	highest_zone_unlocked = 1
 	zone_kill_counts.clear()
+	unlocked_gate_flags.clear()
 	boss_defeated_flags.clear()
 	structure_unlocked_flags.clear()
 	purchased_skill_node_ids.clear()

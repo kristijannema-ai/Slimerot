@@ -1,6 +1,6 @@
 # Slimerot
 
-Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1–4 are implemented: the playable Bedroom/Backyard foundation, complete rolling math, 24 canonical base slimes, four variants, team/inventory/collection, both complete skill trees, automatic projectile combat, and the Coin economy.
+Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1–5 are implemented: the Hub and eight physical campaign zones, complete rolling math, 24 canonical base slimes, four variants, team/inventory/collection, both complete skill trees, automatic projectile combat, and the Coin economy.
 
 ## Play and controls
 
@@ -38,7 +38,7 @@ Ownership uses unlimited quantities per slime + variant, stable copy IDs, per-co
 
 Inventory sorts by DPS, rarity, or name. Its copy manager is paginated for performance without limiting ownership. Equipped/favorited copies cannot be sold. Sell Duplicates retains protected copies and at least one copy per pair; an individual unprotected copy can be sold after unequipping. Auto Equip Strongest selects highest actual variant-adjusted DPS, including multiple copies of one slime.
 
-The five-slot Team view shows locked slots and each copy's rounded damage per hit. Coin-tree slots cost 350 / 3,500 / 25,000 / 250,000, requiring C01 / C05 / C08 / C13 respectively. Slots 3/4/5 also require Z2/Z4/Z6 boss flags. The exact table does not require earlier slot nodes, so each upgrade sets the maximum slot count directly. WorldManager uses stable `zone_2`, `zone_4`, `zone_6` defeat keys; no boss encounters are introduced here.
+The five-slot Team view shows locked slots and each copy's rounded damage per hit. Coin-tree slots cost 350 / 3,500 / 25,000 / 250,000, requiring C01 / C05 / C08 / C13 respectively. Slots 3/4/5 also require Z2/Z4/Z6 boss flags. The exact table does not require earlier slot nodes, so each upgrade sets the maximum slot count directly. WorldManager uses stable `zone_2`, `zone_4`, `zone_6` defeat keys; boss encounters are explicit placeholders until Prompt 6.
 
 Normal-enemy rewards use Coin Scavenger. Duplicate sales use Duplicate Dealer independently. Boss reward bookkeeping is one-time and ignores Coin Scavenger. Final Coin amounts are rounded to the nearest integer after multipliers.
 
@@ -60,15 +60,21 @@ Reveals last 0.35s (0.20s with Skip Common), 0.65s, 1.10s, 1.70s, or 2.80s for a
 
 Eight autoloads remain the architecture: GameState, SlimeDatabase, SkillTreeManager, InventoryManager, WorldManager, CombatManager, RollManager, SaveManager. Typed content contracts are in `SlimerotData.gd`; shared balance is in `SlimerotBalance.gd`.
 
-Schema 4 saves under `user://Slimerot-save.json` preserve discovery history, favorite copy IDs, statistics, potion state, and a `roll_skill_spend` ledger. Schema 1–3 migrate automatically: provisional Quick Hands I, Luck I and Auto Roll become R01/R02/R03 while recording their historical 10/15/25 costs. Missing ancestors for previously unlocked standalone upgrades are granted with zero recorded spend. Neither wallet nor Lifetime Rolls changes, and existing Auto Roll stays unlocked. Legacy team_slot_2/3/4/5 become C02/C06/C10/C15, granting required Bond ancestors without charging Coins or changing historical Coins Earned/Spent. Existing equipment capacity is preserved. New purchases always pay canonical prices. Pre-stage-3 auto-sale settings initialize OFF at threshold 100; schema 3 settings persist. Recoverable historical Coin spending is reconstructed for schema 1; absent historical luck/DPS records cannot be fully reconstructed. Invalid/future saves remain protected rather than silently overwritten.
+Schema 5 saves under `user://Slimerot-save.json` preserve discovery history, favorite copy IDs, statistics, potion state, and a `roll_skill_spend` ledger. Schema 1–4 migrate automatically: provisional Quick Hands I, Luck I and Auto Roll become R01/R02/R03 while recording their historical 10/15/25 costs. Missing ancestors for previously unlocked standalone upgrades are granted with zero recorded spend. Neither wallet nor Lifetime Rolls changes, and existing Auto Roll stays unlocked. Legacy team_slot_2/3/4/5 become C02/C06/C10/C15, granting required Bond ancestors without charging Coins or changing historical Coins Earned/Spent. Existing equipment capacity is preserved. New purchases always pay canonical prices. Pre-stage-3 auto-sale settings initialize OFF at threshold 100; schema 3 settings persist. Recoverable historical Coin spending is reconstructed for schema 1; absent historical luck/DPS records cannot be fully reconstructed. Invalid/future saves remain protected rather than silently overwritten.
 
 Ten-second autosave, immediate progression/lifecycle saves, flushed temporary files, and backup recovery remain intact. Super completions and automatic sales also save immediately. Pause stops active play, roll cooldowns, combat, and potion duration. There is no offline progress.
 
 ## Stage boundary
 
-All 24 roll entries and eight-zone eligibility work now. Physical zones remain Bedroom and Backyard; later zone construction and boss encounters belong to later prompts. The database does not require those scenes to exist.
+All nine separately loaded locations now exist: Bedroom Hub → Backyard → Italian Village → Cursed Forest → Sahara → Brainrot City → Backrooms → Moon → Brainrot Dimension. Each campaign scene uses a portrait 20×30 grid of 50 px tiles (1000×1500), a main route, a connected farming loop, themed collision props, a safe entrance, return gate, and far-end progression point. Eleven enemies per zone reuse Chaser/Shooter/Tank behavior with theme palettes. Only the current scene stays active.
 
-Early Lagling HP/damage/speed/respawn remain provisional. Potion sources, Fast Travel, mutations, XP, manual weapons, online systems, monetization and prestige are not introduced. Hourly campaign wall pacing requires the later physical zones and bosses; exact Roll-tree values are preserved without claiming a three-hour campaign playtest.
+SlimerotCampaign.gd is the canonical source for all 24 fixed enemy HP/damage/reward combinations, zone level ranges, exact kill requirements and gate prices. No enemy scales with player stats. Chasers pursue; Shooters keep distance and fire dodgeable projectiles with their own timer and terrain line-of-sight; Tanks move slowly and hit harder. Grid routing handles props, enemies separate, and defeated spawns return after five seconds when the player is not standing on them. Behavior speeds and firing intervals are centralized tuning values because the specification does not fix them.
+
+Gate interaction shows kills, Coins and boss requirements. A successful purchase saves a permanent unlocked_gate_flags entry, spends the exact price once, and immediately expands the global roll pool. Returning through a gate preserves unlocks and arrives near that zone's far exit. Death always returns to the current zone entrance. Schema 5 accepts all eight current-zone IDs, saves gates/kill counters, and preserves earlier global unlocks during migration.
+
+Late-Z3/Z5/Z7 walls retain exactly 40/60/90 kills and 4,000/75,000/1,200,000 Coins, with farming hints for the corresponding Breakthrough. Gates never require a specific slime or a mandatory Breakthrough. Boss flags remain mandatory at Z2/Z4/Z6/Z8; encounter placeholders do not grant fake victories. A normal new save can play through Z1 into Z2; continuing past its boss gate awaits Prompt 6. Tests use explicit boss fixtures to validate the remaining physical campaign.
+
+Potion sources, Fast Travel, mutations, XP, manual weapons, online systems, monetization and prestige remain deferred. Exact balance numbers are preserved. Full hourly pacing, boss-clear timing and the >=3x Coins/minute progression target require equipped-team campaign playtests after boss implementation; no three-hour playtest is claimed.
 
 ## Run validation
 
