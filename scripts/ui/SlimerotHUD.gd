@@ -14,6 +14,10 @@ var roll_button: Button
 var auto_button: Button
 var interact_button: Button
 var skills_button: Button
+var super_label: Label
+var breakthrough_banner: PanelContainer
+var breakthrough_text: Label
+var breakthrough_seconds := 0.0
 var notice: Label
 var notice_seconds := 0.0
 var menu: PanelContainer
@@ -78,8 +82,22 @@ func _ready() -> void:
 	auto_button = button("Auto Roll · Locked", Rect2(434, 1006, 250, 58), toggle_auto)
 	auto_button.add_theme_font_size_override("font_size", 20)
 	button("Inventory", Rect2(269, 1006, 153, 58), func(): open_menu("Inventory"))
-	skills_button = button("Skills · Locked", Rect2(434, 1187, 250, 58), func(): open_menu("Skills"))
+	skills_button = button("Skills", Rect2(269, 1068, 153, 44), func(): open_menu("Skills"))
 	skills_button.add_theme_font_size_override("font_size", 19)
+	super_label = text("", Rect2(434, 1187, 250, 58), 18, Color("ffdc77"))
+	super_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	breakthrough_banner = panel(Rect2(20, 390, 680, 156))
+	breakthrough_banner.z_index = 40
+	breakthrough_banner.add_theme_stylebox_override("panel", style(Color("264b45")))
+	breakthrough_text = Label.new()
+	breakthrough_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	breakthrough_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	breakthrough_text.add_theme_font_size_override("font_size", 25)
+	breakthrough_text.add_theme_color_override("font_color", Color("d5ff8f"))
+	breakthrough_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	breakthrough_banner.add_child(breakthrough_text)
+	breakthrough_banner.hide()
+	SkillTreeManager.purchased.connect(on_skill_purchased)
 	GameState.changed.connect(refresh)
 	GameState.changed.connect(func(): menu_dirty = true)
 	SaveManager.save_failed.connect(show_notice)
@@ -140,7 +158,8 @@ func button(value: String, rect: Rect2, action: Callable) -> Button:
 
 func refresh() -> void:
 	var stats := SkillTreeManager.derived_stats()
-	wallet.text = "Coins  %d     Rolls  %d     Luck ×%.2f" % [GameState.coins, GameState.rolls_balance, RollManager.effective_luck()]
+	wallet.text = "Coins %s   Rolls %s   Luck ×%s" % [SlimeDatabase.format_number(GameState.coins), SlimeDatabase.format_number(GameState.rolls_balance), "%.2f" % RollManager.effective_luck()]
+	wallet.add_theme_font_size_override("font_size", 22 if wallet.text.length() > 44 else 26)
 	hp_bar.max_value = stats.max_hp
 	hp_bar.value = GameState.player_hp
 	hp_label.text = "HP  %d / %d" % [GameState.player_hp, stats.max_hp]
@@ -164,12 +183,17 @@ func refresh() -> void:
 		tutorial.text = "Stay within 180 px of a Lagling to attack automatically.\nKeep moving and rolling. Repair the Shrine for 25 Coins."
 		if GameState.structure_unlocked_flags.get("skill_tree_shrine", false):
 			tutorial.text = "Keep moving and rolling. Buy permanent upgrades in Skills.\nRepair the Sell Terminal for 75 Coins."
-	skills_button.disabled = not GameState.structure_unlocked_flags.get("skill_tree_shrine", false)
-	skills_button.text = "Skills" if not skills_button.disabled else "Skills · Locked"
+	skills_button.disabled = false
+	skills_button.text = "Skills"
+	super_label.visible = stats.super_roll
+	super_label.text = "SUPER ROLL ×5\n" + ("Next roll!" if RollManager.rolls_until_super() == 1 else "In %d rolls" % RollManager.rolls_until_super())
 	auto_button.disabled = not stats.auto_roll
 	auto_button.text = "Auto Roll · Locked" if not stats.auto_roll else ("Auto Roll · ON" if GameState.settings.auto_roll_state else "Auto Roll · OFF")
 
 func _process(delta: float) -> void:
+	if breakthrough_seconds > 0.0 and not GameState.is_paused():
+		breakthrough_seconds = maxf(0.0, breakthrough_seconds - delta)
+		if breakthrough_seconds == 0.0: breakthrough_banner.hide()
 	roll_button.text = "ROLL  ·  %.1fs" % RollManager.cooldown_remaining if RollManager.cooldown_remaining > 0.0 else "ROLL"
 	roll_button.disabled = RollManager.cooldown_remaining > 0.0
 	if notice_seconds > 0.0:
@@ -185,6 +209,12 @@ func _process(delta: float) -> void:
 			menu_scroll.set_deferred("scroll_vertical", scroll_value)
 			menu_dirty = false
 	menus.tick(delta)
+
+func on_skill_purchased(id: String, previous_luck: float, new_luck: float) -> void:
+	if SkillTreeManager.nodes[id].effect_type != "checkpoint_luck": return
+	breakthrough_text.text = "%s\nLuck ×%.2f → ×%.2f\nTOTAL LUCK ×20" % [SkillTreeManager.nodes[id].display_name, previous_luck, new_luck]
+	breakthrough_seconds = 3.0
+	breakthrough_banner.show()
 
 
 func set_interaction(prompt: String) -> void:

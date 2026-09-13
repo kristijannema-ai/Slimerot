@@ -27,20 +27,29 @@ func _process(delta: float) -> void:
 	if GameState.settings.auto_roll_state and SkillTreeManager.derived_stats().auto_roll:
 		request_roll()
 
-func effective_luck() -> float:
+func effective_luck(single_roll_multiplier: float = 1.0) -> float:
 	var stats := SkillTreeManager.derived_stats()
 	var luck: float = stats.luck
 	if GameState.potion_remaining_seconds > 0.0:
 		luck *= GameState.active_potion_multiplier
-	return luck
+	return luck * single_roll_multiplier
 
-func rolling_luck() -> float:
+func rolling_luck(single_roll_multiplier: float = 1.0) -> float:
 	var luck := effective_luck()
 	if SkillTreeManager.derived_stats().breakthrough_count > 0:
 		var cap: float = GameState.settings.luck_cap
 		if cap in SlimerotBalance.LUCK_CAPS.values() and cap > 0.0:
 			luck = minf(luck, cap)
-	return luck
+	# The cap selects persistent rolling luck; a Super Roll remains exactly ×5 in every mode.
+	return luck * single_roll_multiplier
+
+func next_roll_multiplier() -> float:
+	if SkillTreeManager.derived_stats().super_roll and (GameState.lifetime_rolls + 1) % SlimerotRollTree.SUPER_ROLL_INTERVAL == 0:
+		return SlimerotRollTree.SUPER_ROLL_MULTIPLIER
+	return 1.0
+
+func rolls_until_super() -> int:
+	return SlimerotRollTree.SUPER_ROLL_INTERVAL - GameState.lifetime_rolls % SlimerotRollTree.SUPER_ROLL_INTERVAL
 
 func set_luck_cap(cap: float) -> bool:
 	if cap not in SlimerotBalance.LUCK_CAPS.values() or SkillTreeManager.derived_stats().breakthrough_count == 0:
@@ -75,9 +84,12 @@ func request_roll() -> bool:
 		return false
 	completing = true
 	var first := GameState.lifetime_rolls == 0
+	var multiplier := next_roll_multiplier()
+	var luck_used := rolling_luck(multiplier)
+	var uncapped_luck := effective_luck(multiplier)
 	# randi spans 0..2^32-1: U is strictly (0,1], with no clamped tail.
 	var uniform := (float(rng.randi()) + 1.0) / 4294967296.0
-	var selected := SlimerotBalance.FIRST_SLIME if first else select_base(rolling_luck(), uniform, GameState.highest_zone_unlocked)
+	var selected := SlimerotBalance.FIRST_SLIME if first else select_base(luck_used, uniform, GameState.highest_zone_unlocked)
 	var variant := select_variant(float(variant_rng.randi()) / 4294967296.0, SkillTreeManager.derived_stats().variant_sense)
 	var first_discovery := not InventoryManager.discoveries.has(selected)
 	var copy_id := InventoryManager.add_copy(selected, variant, false)
@@ -90,16 +102,19 @@ func request_roll() -> bool:
 	cooldown_remaining = SkillTreeManager.derived_stats().roll_cooldown
 	if first:
 		InventoryManager.equipped_copy_ids.assign([copy_id])
+	var auto_sold_coins := InventoryManager.auto_sell_roll(copy_id)
 	var slime := SlimeDatabase.get_slime(selected)
 	GameState.rarest_threshold_reached = maxi(GameState.rarest_threshold_reached, slime.rarity_threshold)
-	GameState.highest_luck = maxf(GameState.highest_luck, effective_luck())
+	GameState.highest_luck = maxf(GameState.highest_luck, uncapped_luck)
 	GameState.best_team_dps = maxf(GameState.best_team_dps, InventoryManager.team_dps())
 	last_result = {"slime_id": selected, "variant": variant, "first_roll": first, "first_discovery": first_discovery,
-		"threshold": slime.rarity_threshold, "copy_id": copy_id}
+		"threshold": slime.rarity_threshold, "copy_id": copy_id,
+		"lifetime_roll": GameState.lifetime_rolls, "luck_used": luck_used, "effective_luck": uncapped_luck,
+		"super_roll": multiplier > 1.0, "auto_sold_coins": auto_sold_coins}
 	GameState.changed.emit()
 	result_committed.emit(last_result.duplicate())
 	queue_reveal(last_result)
-	if first or slime.rarity_threshold >= 10000:
+	if first or slime.rarity_threshold >= 10000 or multiplier > 1.0 or auto_sold_coins > 0:
 		GameState.critical_change.emit("first_or_rare_roll")
 	completing = false
 	return true

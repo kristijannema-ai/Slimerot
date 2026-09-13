@@ -47,6 +47,8 @@ func show_result(slime_id: String, variant: String, first: bool) -> void:
 	portrait.visible = tier > 0
 	var is_new: bool = RollManager.active_reveal.first_discovery
 	label.text = ("FIRST SLIME · EQUIPPED\n" if first else ("NEW DISCOVERY\n" if is_new else "")) + data.display_name + " · " + variant.capitalize() + "\n" + SlimeDatabase.threshold_label(slime_id)
+	if RollManager.active_reveal.get("super_roll", false): label.text = "SUPER ROLL · LUCK ×5\n" + label.text
+	if RollManager.active_reveal.get("auto_sold_coins", 0) > 0: label.text += "\nAuto-sold duplicate · +%d Coins" % RollManager.active_reveal.auto_sold_coins
 	label.add_theme_font_size_override("font_size", 19 if tier == 0 else 25)
 	label.add_theme_color_override("font_color", SlimerotBalance.VARIANT_DATA[variant].color)
 	var style := StyleBoxFlat.new()

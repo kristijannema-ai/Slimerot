@@ -33,6 +33,7 @@ func snapshot() -> Dictionary:
 		"boss_defeated_flags": GameState.boss_defeated_flags.duplicate(true),
 		"structure_unlocked_flags": GameState.structure_unlocked_flags.duplicate(true),
 		"purchased_skill_node_ids": GameState.purchased_skill_node_ids.duplicate(),
+		"roll_skill_spend": GameState.roll_skill_spend.duplicate(),
 		"equipped_slot_count": SkillTreeManager.derived_stats().equipped_slots,
 		"equipped_copy_ids": InventoryManager.equipped_copy_ids.duplicate(),
 		"inventory": InventoryManager.inventory.duplicate(true), "next_copy_id": InventoryManager.next_copy_id,
@@ -119,7 +120,7 @@ func validate(data: Variant) -> bool:
 		return false
 	if data.rolls_balance > data.lifetime_rolls or data.current_zone > 1 or data.highest_zone_unlocked < 1 or data.highest_zone_unlocked > SlimerotBalance.MAX_ZONE:
 		return false
-	for key in ["zone_kill_counts", "boss_defeated_flags", "structure_unlocked_flags", "inventory", "settings", "discoveries"]:
+	for key in ["zone_kill_counts", "boss_defeated_flags", "structure_unlocked_flags", "inventory", "settings", "discoveries", "roll_skill_spend"]:
 		if not data.get(key) is Dictionary:
 			return false
 	for count in data.zone_kill_counts.values():
@@ -136,7 +137,15 @@ func validate(data: Variant) -> bool:
 		if not id is String or not SkillTreeManager.nodes.has(id) or id in unique_nodes:
 			return false
 		unique_nodes.append(id)
-	if int(data.lifetime_rolls) != int(data.rolls_balance) + SkillTreeManager.rolls_spent(data.purchased_skill_node_ids):
+		for prerequisite in SkillTreeManager.nodes[id].prerequisite_ids:
+			if prerequisite not in data.purchased_skill_node_ids: return false
+	for id in data.roll_skill_spend:
+		if id not in data.purchased_skill_node_ids or SkillTreeManager.nodes[id].currency_type != "Rolls": return false
+		var paid: Variant = data.roll_skill_spend[id]
+		if (not paid is int and not paid is float) or not is_finite(float(paid)) or paid < 0 or paid != floor(float(paid)) or paid > SkillTreeManager.nodes[id].cost: return false
+	for id in data.purchased_skill_node_ids:
+		if SkillTreeManager.nodes[id].currency_type == "Rolls" and not data.roll_skill_spend.has(id): return false
+	if int(data.lifetime_rolls) != int(data.rolls_balance) + SkillTreeManager.rolls_spent(data.purchased_skill_node_ids, data.roll_skill_spend):
 		return false
 	var seen: Array = []
 	for key in data.inventory:
@@ -183,6 +192,11 @@ func validate(data: Variant) -> bool:
 			return false
 	if data.settings.get("luck_cap", 0.0) not in SlimerotBalance.LUCK_CAPS.values():
 		return false
+	var filters: Variant = data.settings.get("auto_sell_settings", {})
+	if not filters is Dictionary or not filters.get("enabled") is bool: return false
+	if not filters.get("threshold") is int and not filters.get("threshold") is float: return false
+	if not is_finite(float(filters.threshold)) or float(filters.threshold) != floor(float(filters.threshold)): return false
+	if int(filters.threshold) not in InventoryManager.auto_sell_thresholds(data.purchased_skill_node_ids, data.discoveries): return false
 	return true
 
 func apply_snapshot(data: Dictionary) -> void:
@@ -196,6 +210,7 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.boss_defeated_flags = data.boss_defeated_flags.duplicate(true)
 	GameState.structure_unlocked_flags = data.structure_unlocked_flags.duplicate(true)
 	GameState.purchased_skill_node_ids.assign(data.purchased_skill_node_ids)
+	GameState.roll_skill_spend = data.roll_skill_spend.duplicate()
 	GameState.active_potion_type = data.active_potion_type
 	GameState.potion_remaining_seconds = float(data.active_potion_remaining_seconds)
 	GameState.settings = SlimerotBalance.SETTINGS.duplicate(true)
@@ -215,12 +230,14 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.changed.emit()
 
 func migrate(value: Variant) -> Variant:
-	if not value is Dictionary or value.get("schema_version") != 1:
+	if not value is Dictionary or value.get("schema_version") not in [1, 2]:
 		return value
 	var data: Dictionary = value.duplicate(true)
 	if not data.get("inventory") is Dictionary or not data.get("purchased_skill_node_ids") is Array:
 		return data
-	data.schema_version = SlimerotBalance.SCHEMA_VERSION
+	if data.schema_version == 2:
+		return migrate_roll_tree(data)
+	data.schema_version = 2
 	data.discoveries = {}
 	data.active_potion_multiplier = 1.0
 	data.coins_earned = data.get("coins", 0)
@@ -245,6 +262,31 @@ func migrate(value: Variant) -> Variant:
 			if not data.discoveries.has(pair.slime_id): data.discoveries[pair.slime_id] = []
 			data.discoveries[pair.slime_id].append(pair.variant)
 			data.rarest_threshold_reached = maxi(data.rarest_threshold_reached, SlimeDatabase.get_slime(pair.slime_id).rarity_threshold)
+	return migrate_roll_tree(data)
+
+func migrate_roll_tree(data: Dictionary) -> Dictionary:
+	if not data.get("purchased_skill_node_ids") is Array or not data.get("settings") is Dictionary: return data
+	var purchased_ids: Array[String] = []
+	var paid_costs: Dictionary = {}
+	for old_id in data.purchased_skill_node_ids:
+		if not old_id is String: return data
+		var id: String = SlimerotRollTree.LEGACY_NODES.get(old_id, {}).get("id", old_id)
+		if not SkillTreeManager.nodes.has(id): return data
+		if id not in purchased_ids: purchased_ids.append(id)
+		if SkillTreeManager.nodes[id].currency_type == "Rolls":
+			paid_costs[id] = SlimerotRollTree.LEGACY_NODES.get(old_id, {}).get("paid", data.get("roll_skill_spend", {}).get(id, SkillTreeManager.nodes[id].cost))
+		if SlimerotRollTree.LEGACY_NODES.has(old_id):
+			# Grandfather the required ancestors, preserving an already unlocked Auto Roll.
+			# Neither wallet nor Lifetime Rolls changes; the ledger records historical spend.
+			for number in range(1, int(id.trim_prefix("R"))):
+				var prerequisite := "R%02d" % number
+				if prerequisite not in purchased_ids: purchased_ids.append(prerequisite)
+				if not paid_costs.has(prerequisite): paid_costs[prerequisite] = 0
+	data.purchased_skill_node_ids = purchased_ids
+	data.roll_skill_spend = paid_costs
+	data.schema_version = SlimerotBalance.SCHEMA_VERSION
+	if not data.settings.get("auto_sell_settings", {}) is Dictionary: return data
+	data.settings.auto_sell_settings = {"enabled": false, "threshold": SlimerotRollTree.DEFAULT_SELL_THRESHOLD}
 	return data
 
 func reset_save() -> bool:

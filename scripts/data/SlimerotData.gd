@@ -34,6 +34,9 @@ class BossData extends Resource:
 
 class SkillNodeData extends Resource:
 	@export var id: String
+	@export var display_name: String
+	@export var description: String
+	@export var optional: bool = false
 	@export var tree_type: String
 	@export var prerequisite_ids: Array[String] = []
 	@export var currency_type: String

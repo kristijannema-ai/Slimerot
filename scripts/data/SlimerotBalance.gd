@@ -1,7 +1,7 @@
 class_name SlimerotBalance
 extends RefCounted
 
-const SCHEMA_VERSION := 2
+const SCHEMA_VERSION := 3
 const MAX_SLOTS := 5
 const PLAYER_HP := 100.0
 const MOVE_SPEED := 180.0
@@ -22,10 +22,9 @@ const LUCK_CAPS := {"MAX": 0.0, "x20-era": 20.0, "x1": 1.0}
 const TEAM_SLOTS := [["team_slot_2", 350, 0], ["team_slot_3", 3500, 2], ["team_slot_4", 25000, 4], ["team_slot_5", 250000, 6]]
 const MAX_ZONE := 8
 const RESET_HOLD_SECONDS := 3.0
-# Slimerot's early enemy/skill tuning remains provisional; roster stats are canonical.
+# Slimerot's early enemy tuning remains provisional; roster and Roll tree are canonical.
 const STARTER_DAMAGE := 7.0
 const STARTER_SELL := 5
-const EARLY_ROLL_NODES := [["quick_hands_1", 10, "cooldown_multiplier", 0.9], ["luck_1", 15, "luck_multiplier", 1.25], ["auto_roll", 25, "auto_roll", 1.0]]
 const EARLY_STRUCTURES := [["skill_tree_shrine", 25, "skill_tree"], ["sell_terminal", 75, "sell_duplicates"]]
 const BACKYARD_GATE_KILLS := 12
 const BACKYARD_GATE_COINS := 150
@@ -41,5 +40,5 @@ const ENTRANCES := {0: Vector2(500, 1090), 1: Vector2(500, 1150)}
 const SETTINGS := {
 	"master_audio": 1.0, "music_audio": 0.7, "sfx_audio": 1.0,
 	"screen_shake": true, "vibration": true, "auto_roll_state": false,
-	"auto_sell_settings": {"enabled": false}, "luck_cap": 0.0,
+	"auto_sell_settings": {"enabled": false, "threshold": 100}, "luck_cap": 0.0,
 }

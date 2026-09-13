@@ -12,6 +12,7 @@ var zone_kill_counts: Dictionary = {}
 var boss_defeated_flags: Dictionary = {}
 var structure_unlocked_flags: Dictionary = {}
 var purchased_skill_node_ids: Array[String] = []
+var roll_skill_spend: Dictionary = {}
 var active_potion_type := ""
 var potion_remaining_seconds := 0.0
 var settings: Dictionary = SlimerotBalance.SETTINGS.duplicate(true)
@@ -56,6 +57,7 @@ func reset() -> void:
 	boss_defeated_flags.clear()
 	structure_unlocked_flags.clear()
 	purchased_skill_node_ids.clear()
+	roll_skill_spend.clear()
 	active_potion_type = ""
 	potion_remaining_seconds = 0.0
 	settings = SlimerotBalance.SETTINGS.duplicate(true)
@@ -63,7 +65,7 @@ func reset() -> void:
 	player_hp = SlimerotBalance.PLAYER_HP
 	changed.emit()
 
-func spend(currency: String, amount: int) -> bool:
+func spend(currency: String, amount: int, notify: bool = true) -> bool:
 	if amount < 0:
 		return false
 	match currency:
@@ -78,10 +80,10 @@ func spend(currency: String, amount: int) -> bool:
 			rolls_balance -= amount
 		_:
 			return false
-	changed.emit()
+	if notify: changed.emit()
 	return true
 
-func award_coins(amount: int) -> void:
+func award_coins(amount: int, notify: bool = true) -> void:
 	coins += maxi(0, amount)
 	coins_earned += maxi(0, amount)
-	changed.emit()
+	if notify: changed.emit()

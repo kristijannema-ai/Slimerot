@@ -98,9 +98,9 @@ func run(world: Node2D) -> void:
 	GameState.coins = 25
 	check(WorldManager.repair("skill_tree_shrine") and GameState.coins == 0, "Shrine costs exactly 25 Coins")
 	check(not WorldManager.repair("skill_tree_shrine"), "no repeat structure purchase")
-	GameState.rolls_balance = 50
-	GameState.lifetime_rolls = 50
-	check(SkillTreeManager.purchase("auto_roll"), "Auto Roll purchase through shared derived stats")
+	GameState.rolls_balance = 200
+	GameState.lifetime_rolls = 200
+	check((SkillTreeManager.purchase("R01") and SkillTreeManager.purchase("R02") and SkillTreeManager.purchase("R03")), "Auto Roll purchase through shared derived stats")
 	GameState.settings.auto_roll_state = true
 	RollManager.cooldown_remaining = 0.0
 	var lifetime := GameState.lifetime_rolls
@@ -137,6 +137,9 @@ func run(world: Node2D) -> void:
 	var rolling_tests := preload("res://tests/SlimerotRollingTests.gd").new()
 	add_child(rolling_tests)
 	await rolling_tests.run(world, self)
+	var skill_tests := preload("res://tests/SlimerotSkillTreeTests.gd").new()
+	add_child(skill_tests)
+	await skill_tests.run(world, self)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
