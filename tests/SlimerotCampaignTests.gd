@@ -1,11 +1,11 @@
 extends Node
 
 var suite: Node
-const HP := [[45,70,130],[180,280,520],[700,1100,2000],[2600,4000,7500],[9000,14000,26000],[30000,48000,90000],[95000,150000,280000],[300000,480000,900000]]
+const HP := [[45,70,130],[180,280,520],[700,1100,2000],[2600,4000,7500],[9000,14000,26000],[15000,24000,45000],[35000,55000,105000],[65000,104000,195000]]
 const COINS := [[5,7,10],[18,25,40],[65,90,150],[250,350,600],[900,1300,2200],[3500,5000,8500],[14000,20000,34000],[55000,80000,140000]]
 const HITS := [[8,6,12],[12,10,18],[18,15,26],[26,22,38],[38,32,55],[55,45,80],[75,65,110],[100,85,150]]
 const KILLS := [12,20,40,30,60,40,90,100]
-const GATES := [150,900,4000,18000,75000,300000,1200000,0]
+const GATES := [1000,4000,30000,18000,200000,1000000,5000000,0]
 const LEVELS := [[1,3],[4,7],[8,12],[13,18],[19,26],[27,36],[37,48],[49,65]]
 
 func check(value: bool, label: String) -> void:
@@ -42,24 +42,24 @@ func run(world: Node, owner_suite: Node) -> void:
 	for enemy in get_tree().get_nodes_in_group("slimerot_enemies"): enemy.set_physics_process(false)
 	var lagling: SlimerotEnemy = world.zone_root.get_children().filter(func(n): return n is SlimerotEnemy and n.data.archetype == "chaser")[0]
 	var copy: String = InventoryManager.equipped_copy_ids[0]
-	for kill in 50:
+	for kill in 220:
 		while not lagling.dead: lagling.take_damage(InventoryManager.damage_for_copy(copy))
 		var earned := GameState.coins
 		lagling.take_damage(999)
-		check(GameState.coins == earned, "dead enemy cannot double-credit kill %d" % kill)
+		if kill < 50: check(GameState.coins == earned, "dead enemy cannot double-credit kill %d" % kill)
 		lagling._physics_process(SlimerotCampaign.RESPAWN_SECONDS+0.01)
-	check(GameState.coins == 250 and GameState.zone_kill_counts["1"] == 50 and not lagling.dead and lagling.hp == 45, "repeatable starter farm awards exactly fixed Coins/kills and respawns fixed HP")
+	check(GameState.coins == 1100 and GameState.zone_kill_counts["1"] == 220 and not lagling.dead and lagling.hp == 45, "repeatable starter farm awards exactly fixed Coins/kills and respawns fixed HP")
 	WorldManager.travel(0)
-	check(WorldManager.repair("skill_tree_shrine") and WorldManager.repair("sell_terminal") and GameState.coins == 150, "canonical first structures consume exactly 25 plus 75 Coins")
+	check(WorldManager.repair("skill_tree_shrine") and WorldManager.repair("sell_terminal") and GameState.coins == 1000, "canonical first structures consume exactly 25 plus 75 Coins")
 	WorldManager.travel(1)
 	world.player.position = SlimerotCampaign.EXIT_GATE + Vector2(0,50)
 	world._process(0)
-	check(world.current_interaction.prompt.contains("150") and world.current_interaction.prompt.contains("50 / 12"), "physical gate UI exposes currency and current kills")
+	check(world.current_interaction.prompt.contains(SlimeDatabase.format_number(1000)) and world.current_interaction.prompt.contains("220 / 12"), "physical gate UI exposes currency and current kills")
 	RollManager.finish_reveal()
 	world.reset_camera()
 	await suite.capture("Slimerot-stage-5-backyard-gate")
 	world.interact()
-	check(GameState.current_zone == 2 and WorldManager.gate_open(1) and GameState.coins == 0 and GameState.highest_zone_unlocked == 2, "Z1 to Z2 end-to-end pays 150 once and permanently unlocks zone")
+	check(GameState.current_zone == 2 and WorldManager.gate_open(1) and GameState.coins == 0 and GameState.highest_zone_unlocked == 2, "Z1 to Z2 end-to-end pays 1000 once and permanently unlocks zone")
 	check(SlimeDatabase.eligible(2).size() == 6 and RollManager.select_base(800,1,GameState.highest_zone_unlocked) == "tralalero_tralala", "gate unlock immediately expands global roll eligibility")
 	WorldManager.return_through_gate()
 	check(GameState.current_zone == 1 and world.player.position == SlimerotCampaign.RETURN_ARRIVAL and GameState.highest_zone_unlocked == 2, "backtracking arrives at far gate and never shrinks pool")
@@ -67,10 +67,10 @@ func run(world: Node, owner_suite: Node) -> void:
 	world._process(0)
 	world.interact()
 	check(GameState.current_zone == 2 and GameState.coins == 0, "unlocked gate traverses freely with zero wallet")
-	GameState.coins = 900
+	GameState.coins = 4000
 	check(not WorldManager.unlock_gate(2), "Coins alone cannot bypass kill requirement")
 	GameState.zone_kill_counts["2"] = 20
-	check(not WorldManager.unlock_gate(2) and not WorldManager.gate_open(2) and GameState.coins == 900, "boss placeholder never bypasses boss requirement or charges Coins")
+	check(not WorldManager.unlock_gate(2) and not WorldManager.gate_open(2) and GameState.coins == 4000, "boss placeholder never bypasses boss requirement or charges Coins")
 	check(WorldManager.boss_encounter_prompt(2).contains("Enter") and not WorldManager.is_boss_zone_defeated(2), "boss entry readiness never awards a defeat")
 	world.player.position = SlimerotCampaign.EXIT_GATE
 	world.reset_camera()

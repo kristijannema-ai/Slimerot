@@ -1,6 +1,7 @@
 extends Node
 
 signal save_failed(message: String)
+signal snapshot_applied(previous_active_play_seconds: float)
 var save_path := "user://Slimerot-save.json"
 var elapsed := 0.0
 var enabled := true
@@ -13,6 +14,11 @@ var focus_lost := false
 var writing := false
 
 func _ready() -> void:
+	# Slimerot's standalone developer estimator must never load or write a player save.
+	if OS.is_debug_build() and "--slimerot-estimate" in OS.get_cmdline_user_args():
+		enabled = false
+		set_process(false)
+		return
 	if OS.is_debug_build() and "--slimerot-test" in OS.get_cmdline_user_args():
 		# Test saves are isolated from player data and work in restricted CI sandboxes.
 		save_path = "res://.godot/Slimerot-test-%d.json" % OS.get_process_id()
@@ -280,6 +286,7 @@ func validate(data: Variant) -> bool:
 
 func apply_snapshot(data: Dictionary) -> void:
 	# Rebuild from authoritative fields; never multiply the previous runtime stats.
+	var previous_active_play_seconds := GameState.active_play_seconds
 	RollManager.reset()
 	GameState.coins = int(data.coins)
 	GameState.rolls_balance = int(data.rolls_balance)
@@ -315,6 +322,8 @@ func apply_snapshot(data: Dictionary) -> void:
 	CombatManager.reset_combat()
 	WorldManager.boss_active = false
 	WorldManager.arriving_from_next = false
+	# Slimerot observers baseline the loaded state before old arena nodes exit.
+	snapshot_applied.emit(previous_active_play_seconds)
 	WorldManager.zone_changed.emit(GameState.current_zone)
 	GameState.changed.emit()
 

@@ -1,7 +1,7 @@
 extends Node
 
 var suite: Node
-const COSTS := [25,40,75,125,175,275,350,800,350,400,550,550,1000,700,700,900,900,1300]
+const COSTS := [25,40,75,125,175,275,350,900,350,400,550,550,1300,700,700,900,900,1300]
 const SPEEDS := {"R01":2.2,"R04":1.9,"R06":1.55,"R09":1.25,"R11":1.0,"R14":0.8,"R16":0.65,"RO7":0.5}
 const OPTIONAL := [["RO1","R04",150],["RO2","R08",450],["RO3","R08",300],["RO4","R13",500],["RO5","R13",650],["RO6","R13",700],["RO7","R18",1400]]
 
@@ -38,7 +38,7 @@ func run(world: Node, owner_suite: Node) -> void:
 		if node.tree_type == "Roll": roll_nodes += 1
 	check(roll_nodes == 25, "exactly 18 canonical mainline and seven optional Roll nodes")
 	check(not SkillTreeManager.nodes.has("auto_roll") and not SkillTreeManager.nodes.has("luck_1"), "provisional IDs removed from purchasable tree")
-	check(COSTS.slice(0,8).reduce(func(a,b):return a+b,0) == 1865 and COSTS.slice(8,13).reduce(func(a,b):return a+b,0) == 2850 and COSTS.slice(13,18).reduce(func(a,b):return a+b,0) == 4500, "canonical spend blocks 1865 / 2850 / 4500")
+	check(COSTS.slice(0,8).reduce(func(a,b):return a+b,0) == 1965 and COSTS.slice(8,13).reduce(func(a,b):return a+b,0) == 3150 and COSTS.slice(13,18).reduce(func(a,b):return a+b,0) == 4500, "Prompt 9 spend blocks 1965 / 3150 / 4500")
 	for index in range(1,19):
 		var id := "R%02d" % index
 		var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]

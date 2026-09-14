@@ -1,8 +1,8 @@
-# Slimerot validation — prompts 1–8
+# Slimerot validation — prompts 1–9
 
 Engine: official Godot 4.5.1 stable on Windows. The project runs headlessly and with the OpenGL compatibility renderer. Tests use isolated per-process files under `.godot/`, preserving player saves.
 
-Result: **946 checks passed, 0 failures** in both the combined headless and rendered suites. An actual forced-termination/reopen probe passed **11 additional checks**, with the writer killed after its durable save completed. No Slimerot script errors or leaked-object warnings remain.
+Result: **1,165 checks passed, 0 failures** in both the final combined headless and rendered suites using the Prompt 9 balance tables. An actual forced-termination/reopen probe passed **11 additional checks** on the final source, with the writer killed after its durable save completed. No Slimerot script errors or leaked-object warnings remain. These checks include the prior 946-check Prompt 8 coverage, updated where Prompt 9 intentionally changes prices or HP.
 
 ## Automated coverage
 
@@ -36,7 +36,7 @@ The test runner prints a single final check/failure count and exits nonzero on a
 
 Stage 5 adds every fixed HP/reward/damage row and level range, all kill/gate/boss requirements, physical Z1→Z2 interaction from fresh currencies and starter ownership, repeated fixed-reward farm kills/respawns, exact structure/gate costs, no duplicate kill credits, zero-balance return traversal, persistent global pool expansion, and boss-entry readiness without automatic victory. Every later scene loads independently with 11 correctly configured enemies. Grid paths verify both main routes and closed farming loops. Fixtures verify each gate's exact price, one-Coin-short rejection, current-zone death/respawn, and zero progression loss. Schema 5 round trips current Z8/gates/kills and migrates previous unlocks. Shooter retreat/approach, firing intervals and fixed projectile damage are checked. Wealth and luck do not alter enemy data.
 
-The Z1 economy fixture uses seven actual rounded starter hits per 45-HP Chaser and 50 repeated kills for 250 Coins: 25 Shrine + 75 Sell Terminal + 150 gate. It advances respawn time directly, so this proves accounting/repeatability rather than a timed beginner playtest. The earlier live combat regression exercises real projectile cadence. Full 12-minute beginner onboarding and 3-hour campaign/Coins-per-minute pacing remain manual validation.
+The current Z1 economy fixture uses seven actual rounded starter hits per 45-HP Chaser and 220 repeated kills for 1,100 Coins: 25 Shrine + 75 Sell Terminal + 1,000 gate. It advances respawn time directly, so this proves accounting/repeatability rather than a timed beginner playtest. The earlier live combat regression exercises real projectile cadence. Full 12-minute beginner onboarding and 3-hour campaign/Coins-per-minute pacing remain manual validation; Prompt 9's estimates are reported separately below.
 
 ## Render inspection
 
@@ -71,9 +71,9 @@ The sandbox emits an engine certificate-store diagnostic at startup and the edit
 15. Take damage, then stay clear: HP remains unchanged for four seconds, then regenerates at 5% max HP/sec. Pause freezes regeneration. Die on a disposable save: observe the 1.5s fade and full-HP entrance respawn, with wallets, equipment and inventory preserved.
 16. In a progressed fixture, purchase Bonds, Boss Hunter, Toughness and Fleet Feet. Verify ordinary per-hit damage is rounded after 2.5x at Final Bond, boss damage gets a further 1.5x, raw Team DPS excludes the conditional boss bonus, HP reaches 250 and move speed 216 px/s. Check Scavenger affects only normal kills and Dealer only sales.
 17. Reload a stage-three save with old slot upgrades: team capacity, wallets and historical Coin accounting survive migration. New Coin nodes show exact canonical costs and world prerequisites.
-18. On a disposable fresh save, roll the guaranteed starter, enter Backyard, and farm the outer route. Return to the Bedroom Hub to repair both structures, reach at least 12 kills and save 150 Coins. Approach the far gate: confirm exact requirements, purchase and walk into Italian Village. Backtrack and return with zero Coins; no second payment occurs.
-19. In Italian Village, reach 20 kills and 900 Coins without a boss flag. Its exit must remain locked and preserve Coins. Enter the Espresso Golem arena and defeat it. Only the real victory grants the flag/reward; the exit gate still costs 900 Coins.
-20. Visit each fixture-unlocked zone: traverse both the main path and farming loop, observe its themed props, distinct Chaser/Shooter/Tank silhouettes and fixed levels, dodge Shooter shots, and repeat farm spawns. Check Z3/Z5/Z7 walls at 40/60/90 kills and 4,000/75,000/1,200,000 Coins.
+18. On a disposable fresh save, roll the guaranteed starter, enter Backyard, and farm the outer route. Return to the Bedroom Hub to repair both structures, reach at least 12 kills and save 1,000 Coins. Approach the far gate: confirm exact requirements, purchase and walk into Italian Village. Backtrack and return with zero Coins; no second payment occurs.
+19. In Italian Village, reach 20 kills and 4,000 Coins without a boss flag. Its exit must remain locked and preserve Coins. Enter the Espresso Golem arena and defeat it. Only the real victory grants the flag/reward; the exit gate still costs 4,000 Coins.
+20. Visit each fixture-unlocked zone: traverse both the main path and farming loop, observe its themed props, distinct Chaser/Shooter/Tank silhouettes and fixed levels, dodge Shooter shots, and repeat farm spawns. Check Z3/Z5/Z7 walls at 40/60/90 kills and 30,000/200,000/5,000,000 Coins. The complete Z1–Z8 gate-price sequence is 1,000/4,000/30,000/18,000/200,000/1,000,000/5,000,000/0 Coins.
 21. Die in each zone and reload saves from later zones: current-zone entrance, full HP, gate flags, Coins, Rolls, equipment and pool unlocks remain correct. Confirm Z8 requires 100 kills plus its final boss and has no extra paid gate or Z9.
 
 ## Stage 6 acceptance and validation
@@ -105,3 +105,37 @@ A separate SlimerotRestartProbe process created a progressed B1 save, printed re
 Prompt 7 Settings and portrait HUD captures were inspected; existing multi-touch, scrolling, menu actions, Back handling, reveal queue, audio and reset cancellation assertions passed. Source/export audits found no runtime network APIs or URLs, with Android Internet/network-state permissions disabled. Tests ran in the network-restricted workspace. Physical Android airplane-mode launch-to-final-boss and 1h/2h/3h pacing still require a device/long-session playtest; those are not claimed here.
 
 Save implementation and recovery limits: [Slimerot-Saves.md](Slimerot-Saves.md). Device checklist: [Slimerot-Android.md](Slimerot-Android.md). Test files are isolated under .godot and excluded from Android exports. Import and test commands used an explicit workspace --log-file to avoid this sandbox's user-log-directory restriction. The certificate-store startup warning and missing Android build-tools warning are environmental; final runs contain no Slimerot parser/runtime failures.
+
+## Prompt 9 integration and pacing validation
+
+The final combined headless and rendered suites each pass **1,165 checks**. Prompt 9 includes **87 developer-logger checks** covering explicit debug opt-in, absence on ordinary launches, required snapshot fields, strongest currently owned/equipped copies, active-time sampling, bounded event/sample buffers, timestamped milestones, JSON/text export and visible write failures. The observer leaves saves, progression and both rolling RNG streams unchanged. Save-load tests cover identical, forward and backward clocks, import baselines without invented milestones, load during a boss fight, and clean disconnection. Overlay checks cover safe-area layout and simultaneous touch controls. The rendered overlay and existing HUD/Settings captures were inspected.
+
+Balance tests use actual CombatManager projectiles stepped at 60 Hz against stationary targets. Appropriately equipped Normal teams kill Chasers in all eight zones within 2.5–12.5 seconds and defeat all four boss fixtures within 50–240 seconds. These fixtures exercise hit cadence, projectile flight and exact reward accounting, but freeze enemy AI for controlled timing. A separate normal-speed fight exercises moving input, live enemy AI, Auto Roll completions, projectile kills, Coin rewards and the ordinary active clock together.
+
+Historical-price tests load Prompt 8 saves with R08/R13 ledger entries of 800/1,000 Rolls after the new 900/1,300 prices take effect. Wallets, Lifetime Rolls, unlocked gates and exactly-once derived x20 multipliers survive two save generations without retroactive charges or refunds. The final separate process-kill/reopen probe also passes all **11 checks** with the updated purchase fixture.
+
+Estimator tests verify reproducible seeded reports, agreement with live ordinary/variant samplers and derived Roll/Coin effects, unchanged live save fields/RNG, null results for unreached milestones, and the uninterrupted mandatory Breakthrough clocks. The final 12-seed continuous-Auto-Roll estimate reaches Breakthroughs at approximately 56.30, 115.97 and 172.80 active minutes, then the final boss at a median **210.57 minutes** (207.40–213.87 range). The model assumes 70% combat/boss utilisation, two seconds of target travel, frequent strongest-team selection and periodic sales; it does not simulate dodging, deaths or full world movement. The 90% rolling sensitivity reaches a 226.97-minute median, while buying every pre-completion optional Roll branch reaches 243.64 minutes. These are estimates, not human playthrough results.
+
+The requested same-team >=3x Coins/minute increase between adjacent zones remains unmet. The final modeled ratios for entering Z2–Z8 are 1.73/1.66/1.50/1.35/2.51/1.97/2.43. Every newer zone is more profitable with the same team, but this does not satisfy the literal target. Ten-minute post-Breakthrough strongest-copy improvements are also probabilistic, so a lucky pre-owned copy can make the immediate improvement smaller. Full targets, every tuned constant and the distinction between simulated and physical checks are recorded in [Slimerot-Prompt-9.md](Slimerot-Prompt-9.md).
+
+For a real debug-build playtest, run from the project directory:
+
+```sh
+godot --path . -- --slimerot-playtest
+```
+
+F8 / **Hide log** toggles details; F9 / **Export log** writes JSON and text to `user://Slimerot-playtests`. Add `--slimerot-playtest-output=<absolute directory>` after `--` to select an external output directory. The observer records timestamps and a source fingerprint while leaving normal saves enabled for the playthrough. Use a disposable game save when testing reset or migration.
+
+To repeat the independent model without loading or writing a player save:
+
+```sh
+godot --headless --path . --script res://tools/SlimerotPacingEstimator.gd -- --slimerot-estimate --slimerot-estimate-seeds=12 --slimerot-estimate-output=<absolute filename stem>
+```
+
+The estimator requires its explicit flag and a debug build. Keep generated reports and screenshots outside version control. `tests/*`, `docs/*`, `dev/*` and `tools/*` are excluded from Android exports.
+
+30. Record a complete fresh-save campaign with the developer logger. Measure active-time Z2 entry, B1/B2/B3 purchases, Z5/Z7 entry, final-boss defeat and completion; export at each major checkpoint and at the end. Pause/background time must not advance the active clock.
+31. After each x20 purchase, keep rolling and compare the strongest owned/equipped copy, Team DPS, farm time and zones cleared over the next 10–20 active minutes. Record periods spent waiting for a useful roll and distinguish them from gate-Coin farming.
+32. Compare equal-duration farming samples in adjacent zones with exactly the same team, Coin upgrades and sale policy. Record kills, Coins earned and travel/death time separately; do not treat a changed loadout as evidence for the >=3x target.
+33. Repeat with optional Roll purchases, delayed manual sales/equipment, and ordinary mobile interruptions. Confirm optional branches never become mandatory prerequisites, then measure the timing cost of choosing them.
+34. On physical Android hardware, complete a long offline session with simultaneous movement/Auto Roll, menu use, boss dodging, pause/background and OS-kill recovery. APK export, battery/performance, touch/audio and a real 3–3.5-hour campaign remain outstanding acceptance work.

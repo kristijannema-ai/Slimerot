@@ -4,8 +4,8 @@ extends RefCounted
 const BOSSES := {
 	2:{"id":"espresso_golem","name":"Espresso Golem","hp":3000,"contact":16,"slam":24,"shot":0,"aoe":0,"coins":1000,"potion":"lucky_soda","speed":65.0},
 	4:{"id":"sand_router","name":"Sand Router","hp":50000,"contact":35,"slam":0,"shot":50,"aoe":0,"coins":20000,"potion":"hyper_soda","speed":70.0},
-	6:{"id":"backrooms_janitor","name":"Backrooms Janitor","hp":650000,"contact":65,"slam":0,"shot":80,"aoe":0,"coins":350000,"potion":"","speed":0.0},
-	8:{"id":"singularity_admin","name":"Singularity Admin","hp":7500000,"contact":110,"slam":0,"shot":140,"aoe":170,"coins":6000000,"potion":"","speed":75.0},
+	6:{"id":"backrooms_janitor","name":"Backrooms Janitor","hp":260000,"contact":65,"slam":0,"shot":80,"aoe":0,"coins":350000,"potion":"","speed":0.0},
+	8:{"id":"singularity_admin","name":"Singularity Admin","hp":2000000,"contact":110,"slam":0,"shot":140,"aoe":170,"coins":6000000,"potion":"","speed":75.0},
 }
 # id, location, Coins, function, interaction position.
 const STRUCTURES := [
