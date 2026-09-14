@@ -255,7 +255,11 @@ func refresh() -> void:
 	hp_bar.value = GameState.player_hp
 	hp_label.text = "HP  %d / %d" % [GameState.player_hp, stats.max_hp]
 	team_label.text = "Team DPS %s\n%d / %d equipped" % [compact(InventoryManager.team_dps()), InventoryManager.equipped_copy_ids.size(), stats.equipped_slots]
-	var signature := str(InventoryManager.equipped_copy_ids)
+	var identities: Array = []
+	for copy_id in InventoryManager.equipped_copy_ids:
+		var identity := InventoryManager.pair_for_copy(copy_id)
+		identities.append([copy_id, identity.get("slime_id", ""), identity.get("variant", "")])
+	var signature := str(identities)
 	if signature != equipped_signature:
 		equipped_signature = signature
 		for child in portraits.get_children():

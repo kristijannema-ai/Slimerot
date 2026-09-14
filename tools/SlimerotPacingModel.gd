@@ -1,4 +1,3 @@
-class_name SlimerotPacingModel
 extends RefCounted
 
 # Slimerot decision-event estimate, deliberately independent of gameplay managers.

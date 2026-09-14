@@ -1,6 +1,6 @@
 # Slimerot
 
-Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1–8 are implemented: the Hub and eight physical campaign zones, complete rolling math, 24 canonical base slimes, four variants, team/inventory/collection, both complete skill trees, automatic projectile combat, and the Coin economy. Prompt 9 adds developer playtest logging, reproducible pacing estimates, and targeted HP, gate-price and Breakthrough-price tuning. Full human campaign pacing remains to be validated.
+Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1–10 are integrated: the Hub and eight physical campaign zones, complete rolling math, 24 canonical base slimes, four variants, team/inventory/collection, both complete skill trees, automatic projectile combat, and the Coin economy. Prompt 9 adds developer playtest logging, reproducible pacing estimates, and targeted HP, gate-price and Breakthrough-price tuning. Prompt 10 fixes large-inventory stalls, loaded HUD portraits and an exported developer-class reference, and adds campaign, endurance and packaged-resource validation. See the [final integration audit](docs/Slimerot-Final-Audit.md) for results, architecture, export instructions and remaining real-device/human acceptance work.
 
 ## Play and controls
 
@@ -76,7 +76,7 @@ Gate interaction shows kills, Coins and boss requirements. A successful purchase
 
 Gate prices from Z1 through Z8 are 1,000 / 4,000 / 30,000 / 18,000 / 200,000 / 1,000,000 / 5,000,000 / 0 Coins. Late-Z3/Z5/Z7 walls retain exactly 40/60/90 kills, with farming hints for the corresponding Breakthrough. Gates never require a specific slime or a mandatory Breakthrough. Boss flags remain mandatory at Z2/Z4/Z6/Z8. Meeting the zone kill requirement opens the boss entrance. Defeating the boss grants its fixed first reward; the normal gate still charges its listed price. The Z8 victory unlocks the completion portal.
 
-Prompt 9 reduces Chaser/Shooter/Tank HP to 15,000/24,000/45,000 in Z6, 35,000/55,000/105,000 in Z7, and 65,000/104,000/195,000 in Z8. Normal-enemy damage and Coin rewards, Coin-node prices, rarity thresholds and the three x20 effects remain unchanged. XP, manual weapons, online systems, monetization and prestige remain deferred; no Prompt 10 systems are added.
+Prompt 9 reduces Chaser/Shooter/Tank HP to 15,000/24,000/45,000 in Z6, 35,000/55,000/105,000 in Z7, and 65,000/104,000/195,000 in Z8. Normal-enemy damage and Coin rewards, Coin-node prices, rarity thresholds and the three x20 effects remain unchanged. Prompt 10 retains those values and the first-build scope; XP, manual weapons, online systems, monetization and prestige remain deferred.
 
 The final 12-seed continuous-Auto-Roll estimate reaches the final boss at a median 210.57 active minutes (207.40–213.87 range). This is a model with explicit combat/travel assumptions, not a completed human playthrough. Same-team farming gains between adjacent zones remain below the requested >=3x target; buying every pre-completion optional Roll branch also pushes the modeled completion later. See [Prompt 9 changes, measured results and remaining targets](docs/Slimerot-Prompt-9.md).
 

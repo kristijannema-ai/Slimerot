@@ -46,14 +46,22 @@ func unequip(copy_id: String) -> void:
 	notify_change("team_change")
 
 func auto_equip_strongest() -> void:
-	var copies: Array[String] = []
+	# Slimerot needs at most five winners, not a full copy sort with repeated
+	# inventory searches and derived-stat calculations in every comparison.
+	var strongest: Array[Dictionary] = []
+	var slots: int = SkillTreeManager.derived_stats().equipped_slots
 	for pair in inventory.values():
-		copies.append_array(pair.copy_ids)
-	copies.sort_custom(func(a, b):
-		var a_damage := damage_for_copy(a)
-		var b_damage := damage_for_copy(b)
-		return a.naturalnocasecmp_to(b) < 0 if is_equal_approx(a_damage, b_damage) else a_damage > b_damage)
-	equipped_copy_ids.assign(copies.slice(0, SkillTreeManager.derived_stats().equipped_slots))
+		var damage := damage_for_pair(pair)
+		if strongest.size() == slots and damage < strongest.back().damage: continue
+		for copy_id: String in pair.copy_ids:
+			if strongest.size() == slots:
+				var weakest: Dictionary = strongest.back()
+				if damage < weakest.damage or (is_equal_approx(damage, weakest.damage) and copy_id.naturalnocasecmp_to(weakest.id) >= 0): continue
+			strongest.append({"id": copy_id, "damage": damage})
+			strongest.sort_custom(func(a, b): return a.id.naturalnocasecmp_to(b.id) < 0 if is_equal_approx(a.damage, b.damage) else a.damage > b.damage)
+			if strongest.size() > slots: strongest.pop_back()
+	equipped_copy_ids.clear()
+	for entry in strongest: equipped_copy_ids.append(entry.id)
 	notify_change("team_change")
 
 func toggle_favorite(key: String) -> void:
@@ -99,17 +107,23 @@ func sell_duplicates() -> int:
 	var earned := 0
 	for key in inventory:
 		var pair: Dictionary = inventory[key]
+		if pair.favorite: continue
+		var favorites: Dictionary = {}
+		for id in pair.favorite_copy_ids: favorites[id] = true
 		var remaining: Array = []
 		for copy_id in pair.copy_ids:
-			if is_protected(copy_id):
+			if copy_id in equipped_copy_ids or favorites.has(copy_id):
 				remaining.append(copy_id)
+		var retained: Dictionary = {}
+		for id in remaining: retained[id] = true
+		var value := sell_value(key)
 		for copy_id in pair.copy_ids:
-			if copy_id in remaining:
+			if retained.has(copy_id):
 				continue
 			if remaining.is_empty():
 				remaining.append(copy_id)
 			else:
-				earned += sell_value(key)
+				earned += value
 		pair.copy_ids = remaining
 		pair.quantity = remaining.size()
 	GameState.award_coins(earned)
@@ -167,8 +181,12 @@ func damage_for_pair(pair: Dictionary, boss: bool = false) -> float:
 
 func mutation_candidates(slime_id: String) -> Array[String]:
 	var result: Array[String] = []
-	for copy_id in inventory.get(slime_id+":normal",{}).get("copy_ids",[]):
-		if not is_protected(copy_id): result.append(copy_id)
+	var pair: Dictionary = inventory.get(slime_id+":normal", {})
+	if pair.get("favorite", false): return result
+	var favorites: Dictionary = {}
+	for id in pair.get("favorite_copy_ids", []): favorites[id] = true
+	for copy_id in pair.get("copy_ids", []):
+		if copy_id not in equipped_copy_ids and not favorites.has(copy_id): result.append(copy_id)
 	return result
 
 func mutate(slime_id: String) -> bool:

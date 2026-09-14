@@ -1,15 +1,16 @@
 # Slimerot Android readiness and offline verification
 
-Prompt 8 continues the merged Prompt 7 presentation and input systems. The Android preset uses the Slimerot package name `com.slimerot.game`, version code `8`, version name `0.3.0-stage8`, and writes `build/Slimerot.apk`. Runtime saves belong in Godot's app-private `user://` directory. Replacing an installed build with the same package and signing identity preserves that directory; uninstalling the app or clearing its storage removes it.
+Prompt 10 preserves the Prompt 7 presentation/input and Prompt 8 persistence systems. The Android preset uses the Slimerot package name `com.slimerot.game`, version code `10`, version name `0.3.0`, and writes `build/Slimerot.apk`. Runtime saves belong in Godot's app-private `user://` directory. Replacing an installed build with the same package and signing identity preserves that directory; uninstalling the app or clearing its storage removes it.
 
 ## Repository configuration
 
 - Portrait virtual resolution is 720×1280 with an expanding canvas. Prompt 7 retains safe-area layout, 90 px joystick acquisition, simultaneous movement/ROLL touch input, scroll handling and Android Back navigation.
 - Rendering uses GL Compatibility on desktop and mobile. The export targets ARM64; 32-bit-only devices are outside this preset.
 - `permissions/internet=false` and `permissions/access_network_state=false`. There are no network permissions or custom Android plugins enabled by this preset.
+- `permissions/vibrate=true` enables the existing vibration setting on Android. It does not add network access.
 - `user_data_backup/allow=false` keeps progression local instead of relying on Android backup restoration. No login, network clock, online account, remote configuration, advertisements, analytics or asset download is needed by gameplay.
 - Scenes, balance data, art and audio resolve from bundled `res://` resources. Missing optional presentation files fall back safely; they never initiate a download.
-- The repository excludes tests and documentation from exports. The APK uses the regular main scene and gameplay managers.
+- The repository excludes tests, documentation, developer instrumentation and standalone tools from exports. The APK uses the regular main scene and gameplay managers. Prompt 10 validates the exported resource pack from an empty scratch project so missing files cannot resolve from source; all 148 pack checks pass. SDK/signing and actual APK/device validation remain external steps.
 
 The source audit scanned `scripts/`, `scenes/`, `project.godot` and `export_presets.cfg` for HTTP clients, WebSocket/TCP/UDP/multiplayer APIs, platform bridges, process launch calls and remote resource URLs. No runtime network access was found. This is source and configuration evidence; it is not a claim that an APK or a physical phone was tested.
 

@@ -1,8 +1,27 @@
-# Slimerot validation — prompts 1–9
+# Slimerot validation — prompts 1–10
 
 Engine: official Godot 4.5.1 stable on Windows. The project runs headlessly and with the OpenGL compatibility renderer. Tests use isolated per-process files under `.godot/`, preserving player saves.
 
-Result: **1,165 checks passed, 0 failures** in both the final combined headless and rendered suites using the Prompt 9 balance tables. An actual forced-termination/reopen probe passed **11 additional checks** on the final source, with the writer killed after its durable save completed. No Slimerot script errors or leaked-object warnings remain. These checks include the prior 946-check Prompt 8 coverage, updated where Prompt 9 intentionally changes prices or HP.
+Result: **1,383 checks passed, 0 failures** in both the final combined headless and rendered suites using the unchanged Prompt 9 balance tables. An actual forced-termination/reopen probe passed **11 additional checks** on the final source, with the writer killed after its durable save completed. An isolated exported-resource audit passed **148 checks** and the packed main scene launched successfully. No Slimerot script errors or leaked-object warnings remain in the final runs. The combined suite retains the 1,165-check merged Prompt 9 baseline and its earlier save/UI coverage.
+
+## Prompt 10 final integration results
+
+The final combined suite passes **1,383 checks** in both headless and rendered runs. New suites cover a continuous accelerated nine-location campaign with actual context interactions/manager signals, all structures and skills, completion and restored free roam; 5,000-copy save/equip/sale protection and HUD identity restoration; and bounded endurance. Fixtures fund progression and advance selected timers/resolve combat directly, so these are integration checks rather than a human campaign.
+
+Endurance coverage exercises 1,800 projectile lifetimes, 45 zone loads, 20 arena resets, 3,600 automatic rolls (30 accelerated minutes), 84 menu cycles and 1,000 sound/track switches. Node counts, weak references, pending reveals and resource caches remain bounded after teardown. It does not establish real-device memory, battery or 30-minute wall-clock performance.
+
+The 5,000-copy regression originally measured a 4,859.726 ms Auto Equip and 400.976/652.830/751.387 ms saves. The final headless result measured 9.155 ms Auto Equip, 100.049/146.057/136.282 ms saves, 68.560 ms load and 5.174 ms for a protected 4,998-copy duplicate sale. No hardware-specific timing assertion is used. Saves still run synchronously; target-device storage/frame pacing remains a manual check.
+
+The separate forced-termination/reopen probe passes **11 checks**. The exported resource audit passes **148 checks**, and a packed main-scene launch completes 120 frames without Slimerot errors. The pack audit runs in an empty scratch project with no source assets/scripts, verifies all gameplay resources plus 80 art SVGs/app icon/10 WAVs and rejects included developer tools. It also checks every packed global-class path; this caught and led to removal of the excluded pacing model's global registration. The model remains explicitly preloaded by its estimator and tests.
+
+To reproduce the pack audit after normal import, export a pack with the checked-in Android preset. Create an empty scratch project whose `project.godot` contains only `config_version=5`. Run the audit from that scratch directory, substituting absolute paths:
+
+```sh
+godot --headless --path <Slimerot project> --export-pack "Slimerot Android" <absolute Slimerot-final.pck>
+godot --headless --path <scratch directory> --script <absolute Slimerot project>/tools/SlimerotExportAudit.gd -- --slimerot-export-audit --slimerot-export-pack=<absolute Slimerot-final.pck> --slimerot-export-audit-output=<absolute Slimerot-export-audit.json>
+```
+
+Seven source configuration assertions pass for app naming, portrait/stretch settings, offline permissions, haptics, release version and export exclusions. The unchanged twelve-seed pacing estimate was rerun. Manual review inspected rendered HUD, Settings and final-boss telegraph captures; physical touch and a manually played campaign were not performed. The existing Prompt 7 synthetic touch/Back/reveal/menu and Prompt 8 save/reset assertions remain passing. Full findings, files, limitations and device checklist are in the [final audit](Slimerot-Final-Audit.md).
 
 ## Automated coverage
 
