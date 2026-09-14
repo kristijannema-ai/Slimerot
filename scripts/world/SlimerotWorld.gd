@@ -24,6 +24,20 @@ func _ready() -> void:
 	WorldManager.boss_requested.connect(start_boss_arena)
 	WorldManager.completion_reached.connect(func(): hud.open_menu("Completion"))
 	build_zone(GameState.current_zone)
+	# Slimerot diagnostics are optional observers, excluded from player exports.
+	if OS.is_debug_build() and "--slimerot-playtest" in OS.get_cmdline_user_args() and ResourceLoader.exists("res://dev/SlimerotPlaytestLogger.gd"):
+		var logger: Node = load("res://dev/SlimerotPlaytestLogger.gd").new()
+		logger.name = "SlimerotPlaytestLogger"
+		add_child(logger)
+		var output_directory := "user://Slimerot-playtests"
+		for argument in OS.get_cmdline_user_args():
+			if argument.begins_with("--slimerot-playtest-output="):
+				output_directory = argument.trim_prefix("--slimerot-playtest-output=")
+		if logger.start(output_directory) and ResourceLoader.exists("res://dev/SlimerotPlaytestOverlay.gd"):
+			var overlay: Node = load("res://dev/SlimerotPlaytestOverlay.gd").new()
+			overlay.logger = logger
+			overlay.hud = hud
+			add_child(overlay)
 	if OS.is_debug_build() and "--slimerot-test" in OS.get_cmdline_user_args() and ResourceLoader.exists("res://tests/SlimerotTests.gd"):
 		var test: Node = load("res://tests/SlimerotTests.gd").new()
 		add_child(test)

@@ -1,6 +1,6 @@
 # Slimerot
 
-Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1–8 are implemented: the Hub and eight physical campaign zones, complete rolling math, 24 canonical base slimes, four variants, team/inventory/collection, both complete skill trees, automatic projectile combat, and the Coin economy.
+Offline Android · top-down 2D · Godot 4.5.1 / GDScript. Prompts 1–8 are implemented: the Hub and eight physical campaign zones, complete rolling math, 24 canonical base slimes, four variants, team/inventory/collection, both complete skill trees, automatic projectile combat, and the Coin economy. Prompt 9 adds developer playtest logging, reproducible pacing estimates, and targeted HP, gate-price and Breakthrough-price tuning. Full human campaign pacing remains to be validated.
 
 ## Play and controls
 
@@ -26,7 +26,7 @@ After R08, Roll Settings exposes MAX / x20-era / x1. MAX is the initial and firs
 
 `SlimerotRollTree.gd` centralizes all 18 mandatory nodes R01–R18 and seven independent optional branches RO1–RO7, with exact costs, prerequisites, descriptions and effects. R01 is the mainline starting node. Repairing the Bedroom Shrine adds the Skills HUD button and opens the Roll/Coin panels. Optional purchases never become mainline prerequisites.
 
-Mandatory spending blocks are 1,865 / 2,850 / 4,500 Rolls. Quick Hands sets cooldowns to 2.20 / 1.90 / 1.55 / 1.25 / 1.00 / 0.80 / 0.65 seconds. RO7 is the 1,400-Roll post-campaign 0.50-second upgrade. Derived minor multipliers and exactly x20 per Breakthrough yield x30.36 / x910.8 / x28,462.5 before potions. Nothing destructively multiplies saved luck.
+Mandatory spending blocks are 1,965 / 3,150 / 4,500 Rolls. R08 costs 900 Rolls, R13 costs 1,300, and R18 costs 1,300. Quick Hands sets cooldowns to 2.20 / 1.90 / 1.55 / 1.25 / 1.00 / 0.80 / 0.65 seconds. RO7 is the 1,400-Roll post-campaign 0.50-second upgrade. Derived minor multipliers and exactly x20 per Breakthrough yield x30.36 / x910.8 / x28,462.5 before potions. Nothing destructively multiplies saved luck.
 
 R03 unlocks Auto Roll while walking/fighting. RO1 shortens only reveals below threshold 100. RO2 unlocks opt-in auto-sale of newly rolled Normal duplicates at threshold <=100; it does not require the manual Sell Terminal. Existing inventory is never swept. At least one copy per pair and every favorite/equipped copy are protected. RO3 adds 20/100/1,000 filters; RO4 permits any discovered base threshold. These branches are independent. Filters and enable state persist.
 
@@ -64,6 +64,8 @@ Schema 8 saves under `user://Slimerot-save.json` preserve discovery history, fav
 
 Prompt 8 adds checksummed generations, validated temporary-file replacement, newest-generation recovery, protected legacy migration, and a durable reset marker. Ten-second autosave and immediate progression/lifecycle saves remain intact. Potion multipliers derive from recipe identity, and independent pause/focus latches prevent early resume. See [Slimerot save architecture](docs/Slimerot-Saves.md) and [Android readiness](docs/Slimerot-Android.md). Super completions and automatic sales also save immediately. Pause stops active play, roll cooldowns, combat, and potion duration. There is no offline progress.
 
+Prompt 9 retains schema 8. Existing saves keep historical Roll prices in their spend ledger, retain unlocked gates, and receive no retroactive charge or refund. A read-only save-load notification lets the developer logger distinguish restored state from newly earned milestones.
+
 ## Stage boundary
 
 All nine separately loaded locations now exist: Bedroom Hub → Backyard → Italian Village → Cursed Forest → Sahara → Brainrot City → Backrooms → Moon → Brainrot Dimension. Each campaign scene uses a portrait 20×30 grid of 50 px tiles (1000×1500), a main route, a connected farming loop, themed collision props, a safe entrance, return gate, and far-end progression point. Eleven enemies per zone reuse Chaser/Shooter/Tank behavior with theme palettes. Only the current scene stays active.
@@ -72,13 +74,15 @@ SlimerotCampaign.gd is the canonical source for all 24 fixed enemy HP/damage/rew
 
 Gate interaction shows kills, Coins and boss requirements. A successful purchase saves a permanent unlocked_gate_flags entry, spends the exact price once, and immediately expands the global roll pool. Returning through a gate preserves unlocks and arrives near that zone's far exit. Death always returns to the current zone entrance. The save accepts all eight current-zone IDs, saves gates/kill counters, and preserves earlier global unlocks during migration.
 
-Late-Z3/Z5/Z7 walls retain exactly 40/60/90 kills and 4,000/75,000/1,200,000 Coins, with farming hints for the corresponding Breakthrough. Gates never require a specific slime or a mandatory Breakthrough. Boss flags remain mandatory at Z2/Z4/Z6/Z8. Meeting the zone kill requirement opens the boss entrance. Defeating the boss grants its fixed first reward; the normal gate still charges its listed price. The Z8 victory unlocks the completion portal.
+Gate prices from Z1 through Z8 are 1,000 / 4,000 / 30,000 / 18,000 / 200,000 / 1,000,000 / 5,000,000 / 0 Coins. Late-Z3/Z5/Z7 walls retain exactly 40/60/90 kills, with farming hints for the corresponding Breakthrough. Gates never require a specific slime or a mandatory Breakthrough. Boss flags remain mandatory at Z2/Z4/Z6/Z8. Meeting the zone kill requirement opens the boss entrance. Defeating the boss grants its fixed first reward; the normal gate still charges its listed price. The Z8 victory unlocks the completion portal.
 
-XP, manual weapons, online systems, monetization and prestige remain deferred. Exact balance numbers are preserved. Full hourly pacing, boss-clear timing and the >=3x Coins/minute progression target still require equipped-team campaign playtests; no three-hour playtest is claimed.
+Prompt 9 reduces Chaser/Shooter/Tank HP to 15,000/24,000/45,000 in Z6, 35,000/55,000/105,000 in Z7, and 65,000/104,000/195,000 in Z8. Normal-enemy damage and Coin rewards, Coin-node prices, rarity thresholds and the three x20 effects remain unchanged. XP, manual weapons, online systems, monetization and prestige remain deferred; no Prompt 10 systems are added.
+
+The final 12-seed continuous-Auto-Roll estimate reaches the final boss at a median 210.57 active minutes (207.40–213.87 range). This is a model with explicit combat/travel assumptions, not a completed human playthrough. Same-team farming gains between adjacent zones remain below the requested >=3x target; buying every pre-completion optional Roll branch also pushes the modeled completion later. See [Prompt 9 changes, measured results and remaining targets](docs/Slimerot-Prompt-9.md).
 
 ## Bosses, structures and completion
 
-SlimerotEncounters.gd centralizes all boss profiles, structures and recipes. Espresso Golem has 3,000 HP, contact 16, a 3s chase then 0.8s warning/slam for 24, and rewards 1,000 Coins plus a Lucky Soda. Sand Router has 50,000 HP, contact 35, a telegraphed five-way 50-damage fan every 4s, and rewards 20,000 Coins plus Hyper Soda. Backrooms Janitor has 650,000 HP, contact 65, teleports among four points every 6s and fires two aimed three-shot 80-damage bursts; its reward is 350,000 Coins. Singularity Admin has 7,500,000 HP, contact 110, alternating fan/teleport shots for 140, and adds shrinking 170-damage warning circles at 40% HP; victory gives 6,000,000 Coins and the completion portal.
+SlimerotEncounters.gd centralizes all boss profiles, structures and recipes. Espresso Golem has 3,000 HP, contact 16, a 3s chase then 0.8s warning/slam for 24, and rewards 1,000 Coins plus a Lucky Soda. Sand Router has 50,000 HP, contact 35, a telegraphed five-way 50-damage fan every 4s, and rewards 20,000 Coins plus Hyper Soda. Backrooms Janitor has 260,000 HP, contact 65, teleports among four points every 6s and fires two aimed three-shot 80-damage bursts; its reward is 350,000 Coins. Singularity Admin has 2,000,000 HP, contact 110, alternating fan/teleport shots for 140, and adds shrinking 170-damage warning circles at 40% HP; victory gives 6,000,000 Coins and the completion portal.
 
 A closed collision arena suspends normal-zone enemies while the fight is active. Crossing the gold reset boundary returns to the entrance, clears projectiles, resets boss HP/patterns and leaves player HP and progression unchanged. Death uses the ordinary loss-free current-zone respawn. Fast Travel and world gates are blocked in combat. Boss rewards are one-time fixed payouts, never multiplied by Scavenger. Reloading does not resume a partly damaged boss. Entering the final portal saves campaign completion without adding repeated rewards or prestige.
 
@@ -99,10 +103,28 @@ Tests use per-process saves under `.godot/`, never player saves. For rendered ca
 
 The 720×1280 portrait Android ARM64 preset disables Internet/network permissions. Export requires locally installed matching Godot templates, Android SDK/JDK and signing configuration. No credentials are committed. Physical Android and APK validation remain outstanding.
 
+## Prompt 9 developer playtesting
+
+Launch a debug/editor build with the explicit opt-in flag:
+
+```sh
+godot --path . -- --slimerot-playtest
+```
+
+The overlay shows active play time, Lifetime and spendable Rolls, Coins, Team DPS, slots, Effective Luck, strongest owned/equipped copies, and observed boss timing. F8 or **Hide log** toggles details; F9 or **Export log** writes comparable JSON and text. Output defaults to `user://Slimerot-playtests`; append `--slimerot-playtest-output=<absolute directory>` to choose a directory outside the repository. Timestamped milestones and 30-active-second samples include a source fingerprint and distinguish save-load boundaries. The bounded observer does not alter progression, saves, or rolling RNG. Ordinary launches do not create it; `dev/*` and `tools/*` are excluded from Android exports.
+
+Run the separate estimator against the current source tables:
+
+```sh
+godot --headless --path . --script res://tools/SlimerotPacingEstimator.gd -- --slimerot-estimate --slimerot-estimate-seeds=12 --slimerot-estimate-output=<absolute filename stem>
+```
+
+The required estimator flag disables save loading/writing before estimation. Reports contain raw seeded runs and clearly label continuous rolling, 90% rolling sensitivity, and optional-purchase policies. The estimator does not simulate player dodging, deaths, or full world physics; use the logger for a real uninterrupted campaign playtest. Full instructions, every tuned value and remaining acceptance gaps are in [the Prompt 9 report](docs/Slimerot-Prompt-9.md).
+
 ## Prompt 7 mobile presentation
 
 The HUD adapts to portrait aspect ratios and mobile safe areas: HP and location at top left; Coins, Rolls and Luck at top center; Pause and unlocked Fast Travel at top right; a 90 px joystick at bottom left; ROLL, Auto and the unlocked Super counter at bottom right; equipped portraits and Team DPS at bottom center. Only nearby world interactions show the compact INTERACT control.
 
 Menus use touch-sized controls, scroll gestures that do not accidentally purchase or favorite items, live Stats/save/audio readouts, five visibly chained Team slots, and drawn prerequisite paths in both skill trees. Inventory actions retain scroll position. The three Breakthrough purchases each show their exact ×20 luck change in a 1.8-second celebration. Pause freezes gameplay while audio sliders remain previewable.
 
-See [Prompt 7 implementation and validation](docs/Slimerot-Prompt-7.md), [asset replacement guide](docs/Slimerot-Assets.md), and [testing notes](docs/Slimerot-Testing.md). Art and music remain original, replaceable placeholders. Prompt 8 features are not implemented.
+See [Prompt 7 implementation and validation](docs/Slimerot-Prompt-7.md), [asset replacement guide](docs/Slimerot-Assets.md), and [testing notes](docs/Slimerot-Testing.md). Art and music remain original, replaceable placeholders. Prompt 8 save hardening and Prompt 9 integration are described above.

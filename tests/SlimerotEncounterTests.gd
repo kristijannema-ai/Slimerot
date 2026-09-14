@@ -99,7 +99,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	world.hud.close_menu()
 	# Isolated boss patterns and their actual arena lifecycle.
 	fresh(world)
-	var hp_values := [3000,50000,650000,7500000]
+	var hp_values := [3000,50000,260000,2000000]
 	var rewards := [1000,20000,350000,6000000]
 	var contacts := [16,35,65,110]
 	for index in 4:
@@ -152,7 +152,7 @@ func run(world: Node, owner_suite: Node) -> void:
 			boss.step(0.5)
 			check(CombatManager.get_child_count() == 6 and not boss.admin_teleport, "Admin teleport double burst alternates back to fan")
 			boss.take_damage(float(boss.data.hp)*0.60)
-			check(boss.enraged and boss.hp == 3000000, "Admin phase two starts at exactly 40 percent HP")
+			check(boss.enraged and boss.hp == 800000, "Admin phase two starts at exactly 40 percent HP")
 			GameState.player_hp = 1000
 			boss.step(4)
 			check(boss.warnings.size() == 1 and GameState.player_hp == 1000, "phase-two shrinking circle gives a readable warning before damage")

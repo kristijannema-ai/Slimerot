@@ -13,6 +13,13 @@ func check(condition: bool, description: String) -> void:
 
 func run(world: Node2D) -> void:
 	print("Slimerot USER DATA: ", OS.get_user_data_dir())
+	if "--slimerot-balance-only" in OS.get_cmdline_user_args():
+		var balance_probe := preload("res://tests/SlimerotBalanceTests.gd").new()
+		add_child(balance_probe)
+		await balance_probe.run(world, self)
+		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
+		get_tree().quit(0 if failures == 0 else 1)
+		return
 	SaveManager.enabled = false
 	GameState.reset()
 	InventoryManager.inventory.clear()
@@ -160,6 +167,12 @@ func run(world: Node2D) -> void:
 	var persistence_tests := preload("res://tests/SlimerotPersistenceTests.gd").new()
 	add_child(persistence_tests)
 	await persistence_tests.run(world, self)
+	var playtest_tests := preload("res://tests/SlimerotPlaytestTests.gd").new()
+	add_child(playtest_tests)
+	await playtest_tests.run(world, self)
+	var balance_tests := preload("res://tests/SlimerotBalanceTests.gd").new()
+	add_child(balance_tests)
+	await balance_tests.run(world, self)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
