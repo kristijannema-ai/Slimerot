@@ -173,6 +173,15 @@ func run(world: Node2D) -> void:
 	var balance_tests := preload("res://tests/SlimerotBalanceTests.gd").new()
 	add_child(balance_tests)
 	await balance_tests.run(world, self)
+	var performance_tests := preload("res://tests/SlimerotSavePerformanceTests.gd").new()
+	add_child(performance_tests)
+	await performance_tests.run(world, self)
+	var final_tests := preload("res://tests/SlimerotFinalIntegrationTests.gd").new()
+	add_child(final_tests)
+	await final_tests.run(world, self)
+	var endurance_tests := preload("res://tests/SlimerotEnduranceTests.gd").new()
+	add_child(endurance_tests)
+	await endurance_tests.run(world, self)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])

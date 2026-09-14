@@ -82,19 +82,21 @@ func commit_snapshot(data: Dictionary) -> bool:
 	var backup := save_path + ".bak"
 	# Refuse to overwrite a newer schema, even if it appeared after startup.
 	var reset_marker := read_candidate(save_path + ".reset")
+	var main_valid := false
 	for suffix in SlimerotSaveFormat.SUFFIXES:
 		var existing := SlimerotSaveFormat.read(save_path + suffix)
 		if is_future(existing) and not superseded_by_reset(existing, reset_marker):
 			enabled = false
 			return fail("This Slimerot save requires a newer version. Saving is disabled to protect it.")
 		if not existing.is_empty(): generation = maxi(generation, int(existing.generation))
+		if suffix == "": main_valid = not validated_candidate(existing).is_empty()
 	var next_generation := generation + 1
 	if not SlimerotSaveFormat.write(temporary, SlimerotSaveFormat.encode(data, next_generation)):
 		return fail("Slimerot could not finish writing the save.")
 	if read_candidate(temporary).is_empty(): return fail("Slimerot could not verify the temporary save.")
 	# Only a validated main may replace the known-good backup. At every boundary
 	# a complete main, temporary or backup remains available to recovery.
-	if not read_candidate(save_path).is_empty():
+	if main_valid:
 		if DirAccess.rename_absolute(save_path, backup) != OK:
 			return fail("Slimerot could not preserve the previous save.")
 	if DirAccess.rename_absolute(temporary, save_path) != OK:
@@ -124,7 +126,7 @@ func load_game() -> bool:
 		if is_future(candidate) and not superseded_by_reset(candidate, reset_marker):
 			enabled = false
 			return fail("This Slimerot save requires a newer version. Saving is disabled to protect it.")
-		candidate = read_candidate(path)
+		candidate = validated_candidate(candidate)
 		if not candidate.is_empty() and (best.is_empty() or candidate.generation > best.generation):
 			best = candidate
 			best.path = path
@@ -158,7 +160,9 @@ func superseded_by_reset(candidate: Dictionary, marker: Dictionary) -> bool:
 	return not marker.is_empty() and not marker.state.first_roll_completed and marker.generation > candidate.generation
 
 func read_candidate(path: String) -> Dictionary:
-	var candidate := SlimerotSaveFormat.read(path)
+	return validated_candidate(SlimerotSaveFormat.read(path))
+
+func validated_candidate(candidate: Dictionary) -> Dictionary:
 	if candidate.is_empty(): return {}
 	var state: Variant = migrate(candidate.state)
 	if not validate(state): return {}
@@ -237,11 +241,7 @@ func validate(data: Variant) -> bool:
 			return false
 		if not pair.get("favorite_copy_ids") is Array:
 			return false
-		var favorites: Dictionary = {}
-		for favorite_id in pair.favorite_copy_ids:
-			if not favorite_id is String or favorite_id not in pair.copy_ids or favorites.has(favorite_id):
-				return false
-			favorites[favorite_id] = true
+		var pair_ids: Dictionary = {}
 		for copy_id in pair.copy_ids:
 			if not copy_id is String or not copy_id.begins_with("slimerot_copy_") or copy_id in seen:
 				return false
@@ -249,6 +249,13 @@ func validate(data: Variant) -> bool:
 			if not serial.is_valid_int() or int(serial) < 1 or int(serial) >= int(data.next_copy_id):
 				return false
 			seen[copy_id] = true
+			pair_ids[copy_id] = true
+		# A whole favorited pair can contain thousands of copies. Hash membership
+		# keeps validation linear instead of rescanning its array for each favorite.
+		var favorites: Dictionary = {}
+		for favorite_id in pair.favorite_copy_ids:
+			if not favorite_id is String or not pair_ids.has(favorite_id) or favorites.has(favorite_id): return false
+			favorites[favorite_id] = true
 	for id in data.discoveries:
 		if not SlimeDatabase.slimes.has(id) or not data.discoveries[id] is Array:
 			return false

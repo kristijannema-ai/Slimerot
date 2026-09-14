@@ -1,5 +1,7 @@
 extends Node
 
+const SlimerotPacingModel = preload("res://tools/SlimerotPacingModel.gd")
+
 # Slimerot controlled 60 Hz projectile fixtures plus a real moving/Auto Roll fight.
 # Fixture kills measure attack cadence and flight, not human dodging or campaign time.
 const STEP := 1.0 / 60.0
