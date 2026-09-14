@@ -22,7 +22,10 @@ var player_hp := SlimerotBalance.PLAYER_HP
 var player_dead := false
 var suspended := false
 var menu_paused := false
-var active_potion_multiplier := 1.0
+var active_potion_multiplier: float:
+	get:
+		if potion_remaining_seconds <= 0.0: return 1.0
+		return float(SlimerotEncounters.POTIONS.get(active_potion_type, {}).get('luck', 1.0))
 var coins_earned := 0
 var coins_spent := 0
 var rarest_threshold_reached := 0
@@ -47,7 +50,6 @@ func _process(delta: float) -> void:
 		potion_remaining_seconds = maxf(0.0, potion_remaining_seconds - delta)
 		if potion_remaining_seconds == 0.0:
 			active_potion_type = ""
-			active_potion_multiplier = 1.0
 			changed.emit()
 	highest_luck = maxf(highest_luck, RollManager.effective_luck())
 
@@ -62,7 +64,6 @@ func reset() -> void:
 	boss_brew_seconds = 0.0
 	completion_portal_unlocked = false
 	campaign_completed = false
-	active_potion_multiplier = 1.0
 	rolls_balance = 0
 	lifetime_rolls = 0
 	active_play_seconds = 0.0

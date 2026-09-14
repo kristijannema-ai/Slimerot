@@ -361,7 +361,9 @@ func settings() -> void:
 
 func refresh_live() -> void:
 	if is_instance_valid(potion_status): potion_status.text = "Luck effect: %.0fs · Boss Brew: %.0fs" % [GameState.potion_remaining_seconds, GameState.boss_brew_seconds]
-	if is_instance_valid(save_status): save_status.text = "Save: " + (SaveManager.last_saved_at if SaveManager.last_error.is_empty() else SaveManager.last_error)
+	if is_instance_valid(save_status):
+		save_status.text = "Save: " + (SaveManager.last_saved_at if SaveManager.last_error.is_empty() else SaveManager.last_error)
+		if not SaveManager.recovery_status.is_empty(): save_status.text += " · " + SaveManager.recovery_status
 	if is_instance_valid(luck_status): luck_status.text = "Effective Luck ×%.2f · Next roll ×%.2f" % [RollManager.effective_luck(), RollManager.rolling_luck(RollManager.next_roll_multiplier())]
 	if is_instance_valid(auto_status): auto_status.text = "Auto Roll · " + ("ON" if GameState.settings.auto_roll_state else "OFF")
 	if stat_labels.is_empty(): return

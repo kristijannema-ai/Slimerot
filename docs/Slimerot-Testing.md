@@ -1,8 +1,8 @@
-# Slimerot validation — prompts 1–7
+# Slimerot validation — prompts 1–8
 
 Engine: official Godot 4.5.1 stable on Windows. The project runs headlessly and with the OpenGL compatibility renderer. Tests use isolated per-process files under `.godot/`, preserving player saves.
 
-Result: **844 checks passed, 0 failures** in the combined rendered suite; the final headless pass uses the same assertions. No Slimerot script errors or leaked-object warnings remain.
+Result: **946 checks passed, 0 failures** in both the combined headless and rendered suites. An actual forced-termination/reopen probe passed **11 additional checks**, with the writer killed after its durable save completed. No Slimerot script errors or leaked-object warnings remain.
 
 ## Automated coverage
 
@@ -95,3 +95,13 @@ Rendered Espresso slam, Sand Router fan, Janitor burst, Admin shrinking circle, 
 The Prompt 6 baseline passed 644 checks before implementation. Prompt 7 adds 200 assertions, including safe-inset coordinate scaling, actual touch scrolling from buttons, simultaneous joystick/ROLL, contextual interaction, Android Back notification routing, gated menus, reset cancellation, all reveal deadlines/skips/queues, all three Breakthrough purchases, media loading and volume settings. See [Slimerot-Prompt-7.md](Slimerot-Prompt-7.md) for the complete implementation and manual device checklist.
 
 Rendered layouts were inspected at 720×1280, 720×1440 and 800×1280. Physical Android hardware, APK export, cutouts and audio mixing still require device testing. In headless mode the presentation service validates resources and settings without starting a speaker playback; rendered tests exercise the real audio players. Windows host certificate-store and restricted shader-cache warnings are external to the game scripts.
+
+## Prompt 8 save hardening validation
+
+The baseline from merged Prompt 7 passed all 844 checks before changes. The final combined suite retains that coverage and adds 102 persistence checks: real 100-roll and skill-spend accounting; B1 repeated load; ordered physical copies, favorites and sold-out collection history; potion channels and settings; plain JSON schema 1–6 imports; invalid/future schemas; checksum damage; newer/stale temporary generations; reset recovery including a protected future version; write failure; notification overlap; ten-second autosave; structure/gate/boss/mutation/rare-roll/completion writes.
+
+A separate SlimerotRestartProbe process created a progressed B1 save, printed readiness, and was forcibly terminated via Stop-Process -Force. A new Godot process passed 11 assertions for currencies, team order/quantities/favorites, collection, derived luck, exact potion/active-play timers, cooldown, zone/gates/kills and final completion. This validates reopening after a real desktop process kill rather than only calling load inside the same process.
+
+Prompt 7 Settings and portrait HUD captures were inspected; existing multi-touch, scrolling, menu actions, Back handling, reveal queue, audio and reset cancellation assertions passed. Source/export audits found no runtime network APIs or URLs, with Android Internet/network-state permissions disabled. Tests ran in the network-restricted workspace. Physical Android airplane-mode launch-to-final-boss and 1h/2h/3h pacing still require a device/long-session playtest; those are not claimed here.
+
+Save implementation and recovery limits: [Slimerot-Saves.md](Slimerot-Saves.md). Device checklist: [Slimerot-Android.md](Slimerot-Android.md). Test files are isolated under .godot and excluded from Android exports. Import and test commands used an explicit workspace --log-file to avoid this sandbox's user-log-directory restriction. The certificate-store startup warning and missing Android build-tools warning are environmental; final runs contain no Slimerot parser/runtime failures.
