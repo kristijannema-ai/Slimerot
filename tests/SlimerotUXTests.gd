@@ -291,6 +291,21 @@ func reveal_result(slime_id: String, first_discovery: bool) -> Dictionary:
 func test_reveals() -> void:
 	fresh()
 	RollManager.set_process(false)
+	# A newly created card can measure wrapping before it receives its final width.
+	# Exercise real container sorting, not only the immediate size assignment.
+	var cold_reveal := SlimerotReveal.new()
+	hud.root.add_child(cold_reveal)
+	cold_reveal.size = hud.root.size
+	RollManager.start_reveal(reveal_result(SlimerotBalance.FIRST_SLIME, false))
+	await settled()
+	check(cold_reveal.card.size.y <= 90, "fresh common toast shrinks after text wrapping settles")
+	RollManager.reset()
+	RollManager.start_reveal(reveal_result("brainrot_singularity", false))
+	await settled()
+	check(cold_reveal.card.size.y <= 500.1 and get_viewport().get_visible_rect().encloses(cold_reveal.card.get_global_rect()), "common-to-jackpot layout settles without retaining a tall minimum")
+	RollManager.reset()
+	cold_reveal.queue_free()
+	await settled()
 	for row in [[99, 0, 0.35], [100, 1, 0.65], [9999, 1, 0.65], [10000, 2, 1.10], [99999, 2, 1.10], [100000, 3, 1.70], [999999, 3, 1.70], [1000000, 4, 2.80]]:
 		check(SlimerotPresentation.reveal_tier(row[0]) == row[1] and is_equal_approx(RollManager.reveal_duration(row[0], true), row[2]), "threshold %d uses tier %d for exactly %.2fs" % [row[0], row[1], row[2]])
 	var shown_tiers: Dictionary = {}

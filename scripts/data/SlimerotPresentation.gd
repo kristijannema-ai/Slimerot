@@ -11,10 +11,14 @@ const REVEAL_SECONDS := [0.35, 0.65, 1.10, 1.70, 2.80]
 const SKIP_COMMON_SECONDS := 0.20
 const REPEAT_JACKPOT_SECONDS := 1.0
 const MAX_PENDING_REVEALS := 32
-const INK := Color("183b47")
-const CREAM := Color("f3ffe3")
-const MINT := Color("b9f578")
-const TEAL := Color("28535c")
+const INK := Color("101c2d")
+const CREAM := Color("f0f5ed")
+const MINT := Color("c8fa7c")
+const TEAL := Color("22354b")
+const MUTED := Color("9fb1bd")
+const SURFACE := Color("172639")
+const BORDER := Color("34475c")
+const GOLD := Color("ffd47d")
 
 static func reveal_tier(threshold: int) -> int:
 	for index in REVEAL_LIMITS.size():
