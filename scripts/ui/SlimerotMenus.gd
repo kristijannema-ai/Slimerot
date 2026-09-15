@@ -22,12 +22,12 @@ var sliders: Array[HSlider] = []
 var slider_touch := -1
 var active_slider: HSlider
 
-const INK := Color("214953")
-const MUTED := Color("527780")
-const PAPER := Color("effaf3")
-const MINT := Color("d9f1dc")
-const GOLD := Color("ffe9a2")
-const ROSE := Color("ffe0dc")
+const INK := Color("f0f5ed")
+const MUTED := Color("9fb1bd")
+const PAPER := Color("1d2e43")
+const MINT := Color("203c37")
+const GOLD := Color("3d3324")
+const ROSE := Color("402b36")
 
 func build(owner_hud: SlimerotHUD, title: String) -> void:
 	hud = owner_hud
@@ -64,9 +64,10 @@ func potions() -> void:
 	hud.menu_label("Sodas do not stack: stronger luck wins. Boss Brew stacks with Boss Hunter at ×1.25. Same-potion use refreshes 5 minutes.",19)
 	for id in SlimerotEncounters.POTIONS:
 		var recipe: Dictionary = SlimerotEncounters.POTIONS[id]
-		hud.menu_label("%s · Owned %d" % [recipe.name,int(GameState.potion_inventory.get(id,0))])
-		hud.menu_button("Drink " + recipe.name,func(): WorldManager.drink_potion(id); hud.open_menu("Potions"), int(GameState.potion_inventory.get(id,0)) == 0 or (id != "boss_brew" and GameState.potion_remaining_seconds > 0 and GameState.active_potion_multiplier > recipe.luck))
-		hud.menu_button("Craft · %s Coins" % SlimeDatabase.format_number(recipe.cost),func(): WorldManager.craft_potion(id); hud.open_menu("Potions"),not WorldManager.potion_recipe_unlocked(id) or GameState.current_zone != 2 or WorldManager.boss_active or GameState.coins < recipe.cost)
+		var section := section_box(PAPER)
+		label_in(section, "%s · Owned %d" % [recipe.name,int(GameState.potion_inventory.get(id,0))], 23)
+		action_in(section, "Drink " + recipe.name,func(): WorldManager.drink_potion(id); hud.open_menu("Potions"), int(GameState.potion_inventory.get(id,0)) == 0 or (id != "boss_brew" and GameState.potion_remaining_seconds > 0 and GameState.active_potion_multiplier > recipe.luck))
+		action_in(section, "Craft · %s Coins" % SlimeDatabase.format_number(recipe.cost),func(): WorldManager.craft_potion(id); hud.open_menu("Potions"),not WorldManager.potion_recipe_unlocked(id) or GameState.current_zone != 2 or WorldManager.boss_active or GameState.coins < recipe.cost)
 	hud.menu_label("Craft at the repaired Potion Bench in Italian Village. Hyper Soda needs the Z4 boss; Boss Brew needs the Z6 boss.",18)
 	potion_status = Label.new()
 	potion_status.add_theme_font_size_override("font_size",19)
@@ -87,8 +88,9 @@ func mutation() -> void:
 		var slime := SlimeDatabase.get_slime(pair.slime_id)
 		var count := InventoryManager.mutation_candidates(slime.id).size()
 		var fee := slime.base_sell * SlimerotEncounters.MUTATION_FEE_MULTIPLIER
-		hud.menu_label("%s · %d eligible" % [slime.display_name,count],20)
-		hud.menu_button("Mutate · %s Coins" % SlimeDatabase.format_number(fee),func(): InventoryManager.mutate(slime.id); hud.open_menu("Mutation"),count < 5 or GameState.coins < fee or GameState.current_zone != 6 or not GameState.structure_unlocked_flags.get("mutation_lab",false) or WorldManager.boss_active)
+		var section := section_box(PAPER)
+		label_in(section, "%s · %d eligible" % [slime.display_name,count],23)
+		action_in(section, "Mutate · %s Coins" % SlimeDatabase.format_number(fee),func(): InventoryManager.mutate(slime.id); hud.open_menu("Mutation"),count < 5 or GameState.coins < fee or GameState.current_zone != 6 or not GameState.structure_unlocked_flags.get("mutation_lab",false) or WorldManager.boss_active)
 
 func inventory() -> void:
 	var pairs := InventoryManager.sorted_pairs(sort_order)
@@ -104,6 +106,7 @@ func inventory() -> void:
 		option.custom_minimum_size.y = 62
 		option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		option.disabled = order == sort_order
+		style_selection(option, order == sort_order)
 		option.pressed.connect(func(): sort_order = order; hud.open_menu("Inventory"))
 		sorting.add_child(option)
 	var can_sell: bool = GameState.structure_unlocked_flags.get("sell_terminal", false)
@@ -116,7 +119,8 @@ func inventory() -> void:
 		var actions := HBoxContainer.new()
 		actions.add_theme_constant_override("separation", 8)
 		box.get_child(0).add_child(actions)
-		action_in(actions, "Favorited" if pair.favorite else "Favorite", func(): InventoryManager.toggle_favorite(key); hud.open_menu("Inventory"))
+		var favorite := action_in(actions, "Favorited" if pair.favorite else "Favorite", func(): InventoryManager.toggle_favorite(key); hud.open_menu("Inventory"))
+		style_selection(favorite, pair.favorite)
 		action_in(actions, "Equip / copies", func(): copy_page = 0; hud.open_menu("Copies:" + key))
 	if pairs.is_empty():
 		card("Meet your first blob!", "Close this menu and tap ROLL.\nEvery roll is free.", SlimerotBalance.FIRST_SLIME, "normal", true)
@@ -170,7 +174,7 @@ func team() -> void:
 		var slot_panel := PanelContainer.new()
 		slot_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var locked: bool = index >= SkillTreeManager.derived_stats().equipped_slots
-		slot_panel.add_theme_stylebox_override("panel", compact_style(Color("dbe5e8") if locked else MINT))
+		slot_panel.add_theme_stylebox_override("panel", compact_style(Color("172639") if locked else MINT))
 		row.add_child(slot_panel)
 		var column := VBoxContainer.new()
 		column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -189,6 +193,7 @@ func team() -> void:
 		column.add_child(portrait)
 		var state := label_in(column, "Locked" if locked else ("Empty" if portrait.empty_slot else "Ready"), 15)
 		state.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		state.add_theme_color_override("font_color", MUTED if locked or portrait.empty_slot else SlimerotPresentation.MINT)
 	hud.menu_button("Auto Equip Strongest", func(): InventoryManager.auto_equip_strongest(); hud.open_menu("Team"))
 	for copy_id in InventoryManager.equipped_copy_ids:
 		var pair := InventoryManager.pair_for_copy(copy_id)
@@ -215,6 +220,7 @@ func skills() -> void:
 	hud.menu_body.add_child(tabs)
 	for tab in ["Roll", "Coin"]:
 		var tab_button := action_in(tabs, "%s Tree\n%s %s" % [tab, SlimeDatabase.format_number(GameState.rolls_balance if tab == "Roll" else GameState.coins), "Rolls" if tab == "Roll" else "Coins"], func(): skill_tab = tab; hud.open_menu("Skills"), tab == skill_tab)
+		style_selection(tab_button, tab == skill_tab)
 		set_icon(tab_button, "rolls" if tab == "Roll" else "coins")
 	if skill_tab == "Roll":
 		hud.menu_label("Luck ×%.2f · Cooldown %.2fs\nBreakthroughs %d / 3 · every one multiplies TOTAL luck ×20" % [RollManager.effective_luck(), SkillTreeManager.derived_stats().roll_cooldown, SkillTreeManager.derived_stats().breakthrough_count], 19)
@@ -251,8 +257,9 @@ func skills() -> void:
 		var is_breakthrough := data.effect_type == "checkpoint_luck"
 		var owned: bool = id in GameState.purchased_skill_node_ids
 		var appearance := hud.style(GOLD if is_breakthrough else (MINT if owned else PAPER))
-		appearance.set_border_width_all(3 if is_breakthrough else 2)
-		appearance.border_color = Color("e8ae47") if is_breakthrough else Color("bad5c8")
+		appearance.set_border_width_all(1)
+		appearance.border_width_top = 4 if is_breakthrough else 2
+		appearance.border_color = SlimerotPresentation.GOLD if is_breakthrough else (Color("74995e") if owned else SlimerotPresentation.BORDER)
 		box.add_theme_stylebox_override("panel", appearance)
 		box.add_to_group("slimerot_skill_node")
 		box.set_meta("skill_id", id)
@@ -261,9 +268,9 @@ func skills() -> void:
 		for prerequisite in data.prerequisite_ids:
 			graph.add_edge(prerequisite, id)
 		var column := VBoxContainer.new()
-		column.add_theme_constant_override("separation", 10)
+		column.add_theme_constant_override("separation", 12)
 		box.add_child(column)
-		if is_breakthrough: label_in(column, "TOTAL LUCK ×20", 29, Color("986022"))
+		if is_breakthrough: label_in(column, "TOTAL LUCK ×20", 29, SlimerotPresentation.GOLD)
 		label_in(column, id + " · " + data.display_name, 23)
 		var detail := label_in(column, data.description, 19, MUTED)
 		for prerequisite in data.prerequisite_ids:
@@ -276,9 +283,10 @@ func skills() -> void:
 		var blocker := SkillTreeManager.purchase_blocker(id)
 		var buy := action_in(column, "Owned" if owned else "%s · %s %s" % ["BREAK THROUGH" if is_breakthrough else "Buy", SlimeDatabase.format_number(data.cost), data.currency_type], func(): SkillTreeManager.purchase(id); hud.open_menu("Skills"), not blocker.is_empty())
 		set_icon(buy, "rolls" if data.currency_type == "Rolls" else "coins")
+		if owned: style_selection(buy, true)
 		buy.tooltip_text = blocker
 		if not blocker.is_empty() and blocker != "Owned":
-			label_in(column, blocker, 18, Color("8e5754"))
+			label_in(column, blocker, 18, Color("eeb0ad"))
 
 func roll_settings() -> void:
 	hud.menu_label("Rolling is free. Each completed roll grants +1 Rolls.", 20)
@@ -290,7 +298,9 @@ func roll_settings() -> void:
 	if SkillTreeManager.derived_stats().breakthrough_count > 0:
 		hud.menu_label("Luck Cap · affects rolling only", 20)
 		for cap in SlimerotBalance.LUCK_CAPS:
-			hud.menu_button(cap + (" ✓" if GameState.settings.luck_cap == SlimerotBalance.LUCK_CAPS[cap] else ""), func(): RollManager.set_luck_cap(SlimerotBalance.LUCK_CAPS[cap]); hud.open_menu("Roll Settings"))
+			var selected: bool = GameState.settings.luck_cap == SlimerotBalance.LUCK_CAPS[cap]
+			var cap_button := hud.menu_button(cap + (" ✓" if selected else ""), func(): RollManager.set_luck_cap(SlimerotBalance.LUCK_CAPS[cap]); hud.open_menu("Roll Settings"))
+			style_selection(cap_button, selected)
 	else:
 		hud.menu_label("Luck Cap unlocks with Breakthrough I. Default: MAX.", 18)
 	var stats := SkillTreeManager.derived_stats()
@@ -320,7 +330,7 @@ func stats() -> void:
 	for key in ["Lifetime Rolls", "Coins Earned", "Coins Spent", "Rarest Threshold Reached", "Collection", "Bosses Defeated", "Playtime", "Highest Luck", "Best Team DPS"]:
 		var box := section_box(PAPER)
 		label_in(box, key, 18, MUTED)
-		stat_labels[key] = label_in(box, "", 25)
+		stat_labels[key] = label_in(box, "", 30, SlimerotPresentation.GOLD if key.begins_with("Coins") else SlimerotPresentation.MINT)
 	refresh_live()
 
 func settings() -> void:
@@ -347,7 +357,8 @@ func settings() -> void:
 		sliders.append(slider)
 	hud.menu_label("Reset permanently erases this local save. Hold continuously for 3 seconds. Moving off the button cancels.", 18)
 	reset_button = hud.menu_button("Hold 3 seconds to reset Slimerot", func(): pass)
-	reset_button.add_theme_stylebox_override("normal", hud.style(Color("805058")))
+	reset_button.add_theme_stylebox_override("normal", hud.style(ROSE))
+	reset_button.add_theme_color_override("font_color", Color("ffc5c0"))
 	reset_button.button_down.connect(func(): begin_hold(-1))
 	reset_button.button_up.connect(cancel_hold)
 	reset_button.mouse_exited.connect(func(): if hold_pointer == -1: cancel_hold())
@@ -461,10 +472,17 @@ func move_slider(at: Vector2) -> void:
 
 func section_box(color: Color) -> VBoxContainer:
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", hud.style(color))
+	var appearance := hud.style(color)
+	appearance.set_border_width_all(1)
+	appearance.border_color = SlimerotPresentation.BORDER
+	appearance.content_margin_left = 18
+	appearance.content_margin_right = 18
+	appearance.content_margin_top = 16
+	appearance.content_margin_bottom = 16
+	panel.add_theme_stylebox_override("panel", appearance)
 	hud.menu_body.add_child(panel)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", 12)
 	panel.add_child(column)
 	return column
 
@@ -476,6 +494,7 @@ func label_in(parent: Node, value: String, font_size: int = 22, color: Color = I
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
+	label.add_theme_constant_override("line_spacing", 3)
 	parent.add_child(label)
 	return label
 
@@ -496,31 +515,65 @@ func set_icon(button: Button, id: String) -> void:
 	button.expand_icon = true
 	button.add_theme_constant_override("icon_max_width", 26)
 
+func style_selection(button: Button, selected: bool) -> void:
+	if not selected: return
+	var selected_style := hud.style(SlimerotPresentation.MINT)
+	selected_style.border_color = SlimerotPresentation.MINT.lightened(0.12)
+	for state in ["normal", "disabled", "hover"]:
+		button.add_theme_stylebox_override(state, selected_style)
+	for color in ["font_color", "font_disabled_color", "font_hover_color", "font_pressed_color"]:
+		button.add_theme_color_override(color, SlimerotPresentation.INK)
+	button.add_theme_stylebox_override("pressed", hud.style(SlimerotPresentation.MINT.darkened(0.12)))
+
 func compact_style(color: Color) -> StyleBoxFlat:
 	var result := hud.style(color)
 	result.content_margin_left = 5
 	result.content_margin_right = 5
+	result.set_border_width_all(1)
+	result.border_color = SlimerotPresentation.BORDER
 	return result
 
 func card(title: String, subtitle: String, slime_id: String, variant: String, silhouette: bool = false) -> PanelContainer:
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", hud.style(PAPER))
+	var accent: Color = {"normal": SlimerotPresentation.MINT, "shiny": Color("8febeb"), "glitched": Color("e5a2ed"), "golden": SlimerotPresentation.GOLD}.get(variant, SlimerotPresentation.MINT)
+	if silhouette: accent = SlimerotPresentation.BORDER
+	var appearance := hud.style(PAPER)
+	appearance.set_border_width_all(1)
+	appearance.border_width_top = 3
+	appearance.border_color = accent.darkened(0.24) if not silhouette else accent
+	appearance.content_margin_left = 18
+	appearance.content_margin_right = 18
+	appearance.content_margin_top = 18
+	appearance.content_margin_bottom = 16
+	panel.add_theme_stylebox_override("panel", appearance)
 	hud.menu_body.add_child(panel)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", 16)
 	panel.add_child(column)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", 18)
 	column.add_child(row)
+	var preview := PanelContainer.new()
+	var preview_style := hud.style(Color("132237"))
+	preview_style.set_border_width_all(1)
+	preview_style.border_color = accent.darkened(0.55) if not silhouette else accent
+	preview_style.set_corner_radius_all(14)
+	preview_style.set_content_margin_all(6)
+	preview.add_theme_stylebox_override("panel", preview_style)
+	preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(preview)
 	var portrait := SlimerotPortrait.new()
 	portrait.slime_id = slime_id
 	portrait.variant = variant
 	portrait.silhouette = silhouette
-	row.add_child(portrait)
-	portrait.custom_minimum_size = Vector2(104, 118)
+	preview.add_child(portrait)
+	portrait.custom_minimum_size = Vector2(120, 124)
 	var detail := VBoxContainer.new()
+	detail.add_theme_constant_override("separation", 8)
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(detail)
-	label_in(detail, title, 22)
+	label_in(detail, title, 23, MUTED if silhouette else INK)
 	label_in(detail, subtitle, 18, MUTED)
 	return panel

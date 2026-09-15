@@ -51,8 +51,12 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	root.theme = create_theme()
+	layout_items.control_dock = panel(Rect2())
+	layout_items.control_dock.add_theme_stylebox_override("panel", style(Color("101c2df5")))
 	layout_items.health_panel = panel(Rect2())
 	layout_items.wallet_panel = panel(Rect2())
+	layout_items.brand = text("SLIMEROT", Rect2(), 13, SlimerotPresentation.MINT)
+	layout_items.wallet_heading = text("YOUR WALLET", Rect2(), 13, SlimerotPresentation.MUTED)
 	wallet = text("", Rect2(), 21, SlimerotPresentation.CREAM)
 	for key in ["coins", "rolls", "luck"]:
 		var icon := TextureRect.new()
@@ -65,20 +69,20 @@ func _ready() -> void:
 	hp_bar = ProgressBar.new()
 	hp_bar.show_percentage = false
 	hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hp_bar.add_theme_stylebox_override("background", style(Color("193944")))
-	hp_bar.add_theme_stylebox_override("fill", style(Color("b9f578")))
+	hp_bar.add_theme_stylebox_override("background", meter_style(SlimerotPresentation.INK))
+	hp_bar.add_theme_stylebox_override("fill", meter_style(SlimerotPresentation.MINT))
 	root.add_child(hp_bar)
 	hp_label = text("", Rect2(), 18)
-	location_label = text("", Rect2(), 20)
+	location_label = text("", Rect2(), 19)
 	location_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout_items.settings = button("Pause", Rect2(), func(): open_menu("Settings"))
 	map_button = button("Fast Travel", Rect2(), func(): open_menu("Map"))
 	map_button.add_theme_font_size_override("font_size", 18)
 	layout_items.potions = button("Potions", Rect2(), func(): open_menu("Potions"))
-	tutorial = text("", Rect2(), 19, Color("ffffff"))
+	tutorial = text("", Rect2(), 19, SlimerotPresentation.CREAM)
 	tutorial.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tutorial.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tutorial.add_theme_color_override("font_shadow_color", Color("183b47"))
+	tutorial.add_theme_color_override("font_shadow_color", SlimerotPresentation.INK)
 	tutorial.add_theme_constant_override("shadow_outline_size", 5)
 	boss_label = text("", Rect2(), 23)
 	boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -90,27 +94,35 @@ func _ready() -> void:
 	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	interaction_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	interact_button = button("INTERACT", Rect2(), func(): interact_requested.emit())
+	interact_button.add_theme_stylebox_override("normal", style(Color("304c44")))
 	interact_button.hide()
 	joystick = SlimerotJoystick.new()
 	joystick.size = Vector2(224, 224)
 	root.add_child(joystick)
 	roll_button = button("ROLL", Rect2(), func(): RollManager.request_roll())
 	roll_button.add_theme_stylebox_override("normal", style(SlimerotPresentation.MINT))
-	roll_button.add_theme_stylebox_override("pressed", style(Color("8ddd64")))
+	roll_button.add_theme_stylebox_override("hover", style(Color("dcffac")))
+	roll_button.add_theme_stylebox_override("pressed", style(Color("a9dc62")))
+	roll_button.add_theme_stylebox_override("disabled", style(Color("344a3e")))
 	roll_button.add_theme_color_override("font_color", SlimerotPresentation.INK)
-	roll_button.add_theme_font_size_override("font_size", 30)
+	roll_button.add_theme_color_override("font_hover_color", SlimerotPresentation.INK)
+	roll_button.add_theme_color_override("font_pressed_color", SlimerotPresentation.INK)
+	roll_button.add_theme_color_override("font_disabled_color", Color("d1e4bd"))
+	roll_button.add_theme_font_size_override("font_size", 32)
 	auto_button = button("Auto · Locked", Rect2(), toggle_auto)
 	auto_button.add_theme_font_size_override("font_size", 20)
 	layout_items.inventory = button("Inventory", Rect2(), func(): open_menu("Inventory"))
 	layout_items.inventory.add_theme_font_size_override("font_size", 19)
 	skills_button = button("Skills", Rect2(), func(): open_menu("Skills"))
 	skills_button.add_theme_font_size_override("font_size", 19)
+	layout_items.team_panel = panel(Rect2())
+	layout_items.team_panel.add_theme_stylebox_override("panel", style(SlimerotPresentation.SURFACE))
 	portraits = HBoxContainer.new()
 	portraits.alignment = BoxContainer.ALIGNMENT_CENTER
 	portraits.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	portraits.add_theme_constant_override("separation", 2)
 	root.add_child(portraits)
-	team_label = text("", Rect2(), 17)
+	team_label = text("", Rect2(), 16)
 	team_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	super_label = text("", Rect2(), 18, Color("ffdc77"))
 	super_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -164,18 +176,21 @@ func apply_layout(override_safe: Rect2 = Rect2()) -> void:
 	root.size = safe_rect.size / root.scale
 	var w := root.size.x
 	var h := root.size.y
-	place(layout_items.health_panel, Rect2(16, 16, 230, 160))
-	place(layout_items.wallet_panel, Rect2(256, 16, w - 432, 132))
-	place(hp_bar, Rect2(32, 34, 198, 16))
-	place(hp_label, Rect2(32, 56, 200, 28))
-	place(location_label, Rect2(32, 90, 198, 74))
-	place(wallet, Rect2(304, 28, w - 496, 112))
+	place(layout_items.control_dock, Rect2(16, h - 302, w - 32, 286))
+	place(layout_items.health_panel, Rect2(16, 16, 230, 166))
+	place(layout_items.wallet_panel, Rect2(256, 16, w - 432, 166))
+	place(layout_items.brand, Rect2(32, 28, 198, 22))
+	place(layout_items.wallet_heading, Rect2(274, 28, w - 468, 22))
+	place(hp_bar, Rect2(32, 57, 198, 10))
+	place(hp_label, Rect2(32, 72, 200, 26))
+	place(location_label, Rect2(32, 104, 198, 70))
+	place(wallet, Rect2(306, 55, w - 498, 110))
 	for index in 3:
-		place(layout_items[["coins_icon", "rolls_icon", "luck_icon"][index]], Rect2(272, 32 + index * 30, 24, 24))
+		place(layout_items[["coins_icon", "rolls_icon", "luck_icon"][index]], Rect2(274, 60 + index * 30, 22, 22))
 	place(layout_items.settings, Rect2(w - 166, 16, 150, 62))
 	place(map_button, Rect2(w - 166, 86, 150, 62))
 	place(layout_items.potions, Rect2(w - 166, 156, 150, 62))
-	place(tutorial, Rect2(24, 190, w - 204, 58))
+	place(tutorial, Rect2(24, 200, w - 204, 58))
 	place(boss_label, Rect2(32, 266, w - 64, 104))
 	place(notice, Rect2(42, h - 460, w - 84, 82))
 	place(interaction_label, Rect2(42, h - 424, w - 84, 64))
@@ -185,38 +200,86 @@ func apply_layout(override_safe: Rect2 = Rect2()) -> void:
 	place(auto_button, Rect2(w - 286, h - 278, 250, 62))
 	place(layout_items.inventory, Rect2(266, h - 278, w - 564, 62))
 	place(skills_button, Rect2(266, h - 208, w - 564, 62))
+	place(layout_items.team_panel, Rect2(254, h - 138, w - 546, 116))
 	place(portraits, Rect2(260, h - 132, w - 558, 46))
 	place(team_label, Rect2(260, h - 77, w - 558, 55))
 	place(super_label, Rect2(w - 286, h - 94, 250, 65))
 	place(breakthrough_banner, Rect2(20, 370, w - 40, 156))
 	place(death_fade, Rect2(Vector2.ZERO, root.size))
 	place(reveal, Rect2(Vector2.ZERO, root.size))
-	if is_instance_valid(menu): place(menu, Rect2(20, 252, w - 40, h - 546))
+	if is_instance_valid(menu): place(menu, Rect2(20, 232, w - 40, h - 526))
 
 func style(color: Color) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
 	box.bg_color = color
-	box.set_corner_radius_all(18)
-	box.border_color = color.lightened(0.17)
-	box.set_border_width_all(2)
+	box.set_corner_radius_all(20)
+	box.border_color = color.lightened(0.10)
+	box.set_border_width_all(1)
+	box.shadow_color = Color(0.015, 0.035, 0.07, 0.24)
+	box.shadow_size = 5
+	box.shadow_offset = Vector2(0, 4)
 	box.content_margin_left = 14
 	box.content_margin_right = 14
 	box.content_margin_top = 10
 	box.content_margin_bottom = 10
 	return box
 
+func meter_style(color: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = color
+	box.set_corner_radius_all(5)
+	return box
+
+func selected_style() -> StyleBoxFlat:
+	var box := style(Color("304639"))
+	box.border_color = SlimerotPresentation.MINT
+	return box
+
+func slider_style(color: Color) -> StyleBoxFlat:
+	var box := meter_style(color)
+	box.content_margin_top = 3
+	box.content_margin_bottom = 3
+	return box
+
+func slider_knob(color: Color) -> GradientTexture2D:
+	var texture := GradientTexture2D.new()
+	texture.width = 26
+	texture.height = 26
+	texture.fill = GradientTexture2D.FILL_RADIAL
+	texture.fill_from = Vector2(0.5, 0.5)
+	texture.fill_to = Vector2(1.0, 0.5)
+	texture.gradient = Gradient.new()
+	texture.gradient.offsets = PackedFloat32Array([0.0, 0.72, 0.84, 0.96, 1.0])
+	texture.gradient.colors = PackedColorArray([color.lightened(0.12), color, color.darkened(0.18), color.darkened(0.18), Color(color, 0.0)])
+	return texture
+
 func create_theme() -> Theme:
 	var theme := Theme.new()
 	theme.default_font_size = 22
 	theme.set_stylebox("normal", "Button", style(SlimerotPresentation.TEAL))
-	theme.set_stylebox("hover", "Button", style(Color("397580")))
-	theme.set_stylebox("pressed", "Button", style(Color("507f66")))
-	theme.set_stylebox("disabled", "Button", style(Color("314850")))
-	theme.set_stylebox("panel", "PanelContainer", style(Color("21434d")))
+	theme.set_stylebox("hover", "Button", style(Color("30465e")))
+	theme.set_stylebox("pressed", "Button", style(Color("344d42")))
+	theme.set_stylebox("disabled", "Button", style(Color("1b293a")))
+	theme.set_stylebox("panel", "PanelContainer", style(SlimerotPresentation.SURFACE))
 	theme.set_color("font_color", "Label", SlimerotPresentation.CREAM)
 	theme.set_color("font_color", "Button", SlimerotPresentation.CREAM)
-	theme.set_color("font_disabled_color", "Button", Color("a8bbad"))
+	theme.set_color("font_hover_color", "Button", Color.WHITE)
+	theme.set_color("font_pressed_color", "Button", SlimerotPresentation.MINT)
+	theme.set_color("font_disabled_color", "Button", Color("7e91a3"))
 	theme.set_constant("icon_max_width", "Button", 25)
+	theme.set_constant("h_separation", "Button", 9)
+	theme.set_stylebox("background", "ProgressBar", meter_style(SlimerotPresentation.INK))
+	theme.set_stylebox("fill", "ProgressBar", meter_style(SlimerotPresentation.MINT))
+	theme.set_stylebox("slider", "HSlider", slider_style(SlimerotPresentation.BORDER))
+	theme.set_stylebox("grabber_area", "HSlider", slider_style(Color("668b60")))
+	theme.set_stylebox("grabber_area_highlight", "HSlider", slider_style(SlimerotPresentation.MINT))
+	theme.set_icon("grabber", "HSlider", slider_knob(SlimerotPresentation.CREAM))
+	theme.set_icon("grabber_highlight", "HSlider", slider_knob(SlimerotPresentation.MINT))
+	theme.set_stylebox("scroll", "VScrollBar", meter_style(SlimerotPresentation.INK))
+	var scrollbar := meter_style(SlimerotPresentation.BORDER)
+	scrollbar.content_margin_left = 4
+	scrollbar.content_margin_right = 4
+	theme.set_stylebox("grabber", "VScrollBar", scrollbar)
 	return theme
 
 func panel(rect: Rect2) -> PanelContainer:
@@ -226,7 +289,7 @@ func panel(rect: Rect2) -> PanelContainer:
 	root.add_child(result)
 	return result
 
-func text(value: String, rect: Rect2, font_size: int = 23, color: Color = Color("f3ffe3")) -> Label:
+func text(value: String, rect: Rect2, font_size: int = 23, color: Color = SlimerotPresentation.CREAM) -> Label:
 	var label := Label.new()
 	label.text = value
 	place(label, rect)
@@ -484,14 +547,35 @@ func open_menu(title: String) -> void:
 	menu_title = title
 	GameState.menu_paused = title == "Settings"
 	if GameState.menu_paused: joystick.reset()
-	menu = panel(Rect2(20, 252, root.size.x - 40, root.size.y - 546))
+	menu = panel(Rect2(20, 232, root.size.x - 40, root.size.y - 526))
+	var menu_style := style(SlimerotPresentation.INK)
+	menu_style.border_color = SlimerotPresentation.BORDER
+	menu_style.content_margin_left = 20
+	menu_style.content_margin_right = 20
+	menu_style.content_margin_top = 18
+	menu_style.content_margin_bottom = 18
+	menu.add_theme_stylebox_override("panel", menu_style)
 	menu.z_index = 20
 	menu.mouse_filter = Control.MOUSE_FILTER_STOP
 	var layout := VBoxContainer.new()
-	layout.add_theme_constant_override("separation", 10)
+	layout.add_theme_constant_override("separation", 16)
 	menu.add_child(layout)
+	var header := HBoxContainer.new()
+	layout.add_child(header)
+	var heading := Label.new()
+	heading.text = "Owned copies" if title.begins_with("Copies:") else title
+	heading.add_theme_font_size_override("font_size", 30)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(heading)
+	var brand := Label.new()
+	brand.text = "SLIMEROT"
+	brand.add_theme_font_size_override("font_size", 13)
+	brand.add_theme_color_override("font_color", SlimerotPresentation.MINT)
+	header.add_child(brand)
 	var navigation := GridContainer.new()
 	navigation.columns = 4
+	navigation.add_theme_constant_override("h_separation", 8)
+	navigation.add_theme_constant_override("v_separation", 8)
 	layout.add_child(navigation)
 	for entry in ["Inventory", "Team", "Collection", "Skills", "Roll Settings", "Stats", "Settings", "Close"]:
 		var tab := Button.new()
@@ -506,6 +590,11 @@ func open_menu(title: String) -> void:
 			tab.add_theme_constant_override("icon_max_width", 22)
 		tab.focus_mode = Control.FOCUS_NONE
 		tab.disabled = (entry == "Skills" and not GameState.structure_unlocked_flags.get("skill_tree_shrine", false)) or entry == title
+		if entry == title:
+			tab.add_theme_stylebox_override("disabled", selected_style())
+			tab.add_theme_color_override("font_disabled_color", SlimerotPresentation.MINT)
+		if entry == "Close":
+			tab.add_theme_color_override("font_color", SlimerotPresentation.MUTED)
 		tab.pressed.connect(close_menu if entry == "Close" else func(): open_menu(entry))
 		navigation.add_child(tab)
 	menu_scroll = ScrollContainer.new()
@@ -517,7 +606,6 @@ func open_menu(title: String) -> void:
 	menu_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	menu_body.add_theme_constant_override("separation", 14)
 	menu_scroll.add_child(menu_body)
-	menu_label("Slimerot / " + (title if not title.begins_with("Copies:") else "Owned copies"), 28)
 	menus.build(self, title)
 	if previous_scroll > 0: menu_scroll.set_deferred("scroll_vertical", previous_scroll)
 	menu_dirty = false
