@@ -13,6 +13,11 @@ func check(condition: bool, description: String) -> void:
 
 func run(world: Node2D) -> void:
 	print("Slimerot USER DATA: ", OS.get_user_data_dir())
+	if "--slimerot-stability-only" in OS.get_cmdline_user_args():
+		await run_stability(world)
+		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
+		get_tree().quit(0 if failures == 0 else 1)
+		return
 	if "--slimerot-balance-only" in OS.get_cmdline_user_args():
 		var balance_probe := preload("res://tests/SlimerotBalanceTests.gd").new()
 		add_child(balance_probe)
@@ -74,6 +79,7 @@ func run(world: Node2D) -> void:
 	await get_tree().process_frame
 	check(world.hud.joystick.direction.x > 0.5, "mobile joystick touch capture")
 	RollManager.cooldown_remaining = 0.0
+	world.hud._process(0.0) # Synchronize the button with the injected ready cooldown.
 	var mobile_roll := InputEventScreenTouch.new()
 	mobile_roll.index = 1
 	mobile_roll.position = world.hud.roll_button.get_global_rect().get_center()
@@ -182,10 +188,17 @@ func run(world: Node2D) -> void:
 	var endurance_tests := preload("res://tests/SlimerotEnduranceTests.gd").new()
 	add_child(endurance_tests)
 	await endurance_tests.run(world, self)
+	await run_stability(world)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
 	get_tree().quit(0 if failures == 0 else 1)
+
+func run_stability(world: Node2D) -> void:
+	for script in [preload("res://tests/SlimerotStabilityInputTests.gd"), preload("res://tests/SlimerotInventoryStressTests.gd"), preload("res://tests/SlimerotOfflineTests.gd")]:
+		var probe: Node = script.new()
+		add_child(probe)
+		await probe.run(world, self)
 
 func capture(label: String) -> void:
 	if "--slimerot-capture" not in OS.get_cmdline_user_args():

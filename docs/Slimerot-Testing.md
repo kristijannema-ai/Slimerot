@@ -1,8 +1,10 @@
-# Slimerot validation — prompts 1–10
+# Slimerot validation — prompts 1–11
 
 Engine: official Godot 4.5.1 stable on Windows. The project runs headlessly and with the OpenGL compatibility renderer. Tests use isolated per-process files under `.godot/`, preserving player saves.
 
-Result: **1,383 checks passed, 0 failures** in both the final combined headless and rendered suites using the unchanged Prompt 9 balance tables. An actual forced-termination/reopen probe passed **11 additional checks** on the final source, with the writer killed after its durable save completed. An isolated exported-resource audit passed **148 checks** and the packed main scene launched successfully. No Slimerot script errors or leaked-object warnings remain in the final runs. The combined suite retains the 1,165-check merged Prompt 9 baseline and its earlier save/UI coverage.
+Current Prompt 11 validation: **1,505 headless checks passed, zero failures**; **1,504 rendered checks passed** before one additional fragmented-range assertion, followed by **118 focused rendered checks**. Two independent post-force-kill launches each passed **11 checks**, proving one offline batch is not claimed twice. Import validation is clean apart from existing machine certificate/Android SDK warnings. See the [Prompt 11 report](Slimerot-Prompt-11.md) for issue mapping, schema 9, measured inventory/save performance and the Android procedure. The following Prompt 10 results are retained as historical baseline evidence.
+
+Historical Prompt 10 result: **1,383 checks passed, 0 failures** in both the final combined headless and rendered suites using the unchanged Prompt 9 balance tables. An actual forced-termination/reopen probe passed **11 additional checks** on the final source, with the writer killed after its durable save completed. An isolated exported-resource audit passed **148 checks** and the packed main scene launched successfully. No Slimerot script errors or leaked-object warnings remain in the final runs. The combined suite retains the 1,165-check merged Prompt 9 baseline and its earlier save/UI coverage.
 
 ## Prompt 10 final integration results
 
@@ -80,7 +82,7 @@ The sandbox emits an engine certificate-store diagnostic at startup and the edit
 5. Repair the Shrine, buy C01 for 100 Coins and Slot 2 for 350 Coins, own multiple copies, and use Auto Equip Strongest. Verify two strongest copies equip, including duplicate bases. Later slots require their listed Bond and boss gates.
 6. Repair the Bedroom Shrine and open Skills. R01 costs 25 Rolls; follow R01/R02/R03 and enable Auto Roll while walking/fighting. Confirm purchases lower Rolls without lowering Lifetime Rolls. Optional branches must never block the mainline.
 7. Inspect Shiny outline/sparkles, Glitched jitter/chromatic offset, Golden aura, each reveal tier, and sound/shake settings. A first jackpot cannot be skipped; repeats can. Continue holding movement and rolling during feedback.
-8. Pause, background/resume, and restart. Verify no offline progress; balances, favorites, discovery, equipment, selected cap and statistics restore. A stage-one save should migrate without resetting the starter or currencies.
+8. Pause, background/resume, and restart. Verify enabled Auto Roll catches up exactly once, disabled Auto Roll earns nothing, and active timers remain frozen; balances, favorites, discovery, equipment, selected cap and statistics restore. A stage-one save should migrate without resetting the starter or currencies.
 9. Hold Reset for less than three seconds and release: nothing changes. On a disposable save, hold for the full duration: all currencies, inventory/discovery, upgrades, caps and location reset.
 10. On Android hardware: verify simultaneous touch, portrait fit, gesture insets, audio, background/OS-kill save recovery and offline use. SDK/export-template installation and signing are required for this pass.
 11. In a disposable progressed save, purchase R08/R13/R18: each banner and uncapped Luck value jumps exactly x20. R08 defaults to MAX. Test x20-era/x1 caps and unchanged Team DPS; Super Roll applies x5 after the selected cap.

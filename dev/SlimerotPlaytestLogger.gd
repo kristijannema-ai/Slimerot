@@ -187,7 +187,7 @@ func strongest(equipped_only: bool = false) -> Dictionary:
 			best = _pick_stronger(best, pair)
 	else:
 		for pair in InventoryManager.inventory.values():
-			if int(pair.get("quantity", 0)) <= 0 or pair.get("copy_ids", []).is_empty(): continue
+			if int(pair.get("quantity", 0)) <= 0: continue
 			best = _pick_stronger(best, pair)
 	return best
 

@@ -86,7 +86,7 @@ func mutation() -> void:
 	for pair in InventoryManager.sorted_pairs("Name"):
 		if pair.variant != "normal": continue
 		var slime := SlimeDatabase.get_slime(pair.slime_id)
-		var count := InventoryManager.mutation_candidates(slime.id).size()
+		var count := InventoryManager.mutation_candidate_count(slime.id)
 		var fee := slime.base_sell * SlimerotEncounters.MUTATION_FEE_MULTIPLIER
 		var section := section_box(PAPER)
 		label_in(section, "%s · %d eligible" % [slime.display_name,count],23)
@@ -132,12 +132,12 @@ func copies(key: String) -> void:
 		return
 	var pair: Dictionary = InventoryManager.inventory[key]
 	card(SlimeDatabase.get_slime(pair.slime_id).display_name + " · " + pair.variant.capitalize(), "Equipped and favorite copies are protected from selling.", pair.slime_id, pair.variant)
-	var pages := maxi(1, ceili(pair.copy_ids.size() / 12.0))
+	var pages := maxi(1, ceili(pair.quantity / 12.0))
 	copy_page = clampi(copy_page, 0, pages - 1)
 	hud.menu_label("Page %d / %d · %d owned" % [copy_page + 1, pages, pair.quantity], 18)
-	for copy_id in pair.copy_ids.slice(copy_page * 12, (copy_page + 1) * 12):
+	for copy_id in InventoryManager.copies_page(pair, copy_page * 12, 12):
 		var equipped: bool = copy_id in InventoryManager.equipped_copy_ids
-		var favorite: bool = pair.favorite or copy_id in pair.favorite_copy_ids
+		var favorite: bool = InventoryManager.copy_is_favorite(pair, copy_id)
 		var section := section_box(MINT if equipped else PAPER)
 		label_in(section, copy_id.trim_prefix("slimerot_").replace("_", " ").capitalize() + (" · Equipped" if equipped else "") + (" · Favorite" if favorite else ""), 19)
 		var actions := HBoxContainer.new()
@@ -194,7 +194,8 @@ func team() -> void:
 		var state := label_in(column, "Locked" if locked else ("Empty" if portrait.empty_slot else "Ready"), 15)
 		state.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		state.add_theme_color_override("font_color", MUTED if locked or portrait.empty_slot else SlimerotPresentation.MINT)
-	hud.menu_button("Auto Equip Strongest", func(): InventoryManager.auto_equip_strongest(); hud.open_menu("Team"))
+	hud.menu_button("Auto Equip Strongest", func():
+		if InventoryManager.auto_equip_strongest(): hud.open_menu("Team"))
 	for copy_id in InventoryManager.equipped_copy_ids:
 		var pair := InventoryManager.pair_for_copy(copy_id)
 		var box := card(SlimeDatabase.get_slime(pair.slime_id).display_name + " · " + pair.variant.capitalize(), "%s damage / hit · every %.2fs" % [SlimeDatabase.format_number(int(InventoryManager.damage_for_copy(copy_id))), SkillTreeManager.derived_stats().attack_interval], pair.slime_id, pair.variant)

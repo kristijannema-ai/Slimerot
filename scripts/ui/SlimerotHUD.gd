@@ -43,6 +43,11 @@ var scroll_dragging := false
 var scroll_offset := 0.0
 var active_touches: Dictionary = {}
 var scroll_button: Button
+var pointer_buttons: Dictionary = {}
+var managed_touches: Dictionary = {}
+var modal_stack: Array[Dictionary] = []
+var modal_generation := 0
+var offline_summary: Dictionary = {}
 
 func _ready() -> void:
 	layer = 10
@@ -148,6 +153,7 @@ func _ready() -> void:
 	GameState.changed.connect(refresh)
 	GameState.changed.connect(func(): menu_dirty = true)
 	SaveManager.save_failed.connect(show_notice)
+	SaveManager.offline_summary_ready.connect(show_offline_summary)
 	get_viewport().size_changed.connect(apply_layout)
 	for entry in [[layout_items.settings, "settings"], [layout_items.inventory, "inventory"], [skills_button, "skills"], [auto_button, "auto"], [roll_button, "rolls"]]:
 		entry[0].icon = SlimerotAssets.icon(entry[1])
@@ -155,6 +161,7 @@ func _ready() -> void:
 	apply_layout()
 	refresh()
 	if not SaveManager.last_error.is_empty(): show_notice(SaveManager.last_error)
+	if not SaveManager.last_offline_summary.is_empty(): show_offline_summary(SaveManager.last_offline_summary)
 
 func place(control: Control, rect: Rect2) -> void:
 	control.position = rect.position
@@ -381,9 +388,7 @@ func _process(delta: float) -> void:
 		if menu_refresh_seconds >= 0.4:
 			menu_refresh_seconds = 0.0
 			if menu_title not in ["Stats", "Settings", "Potions"]:
-				var scroll_value := menu_scroll.scroll_vertical
-				open_menu(menu_title)
-				menu_scroll.set_deferred("scroll_vertical", scroll_value)
+				refresh_menu_body()
 			menu_dirty = false
 	menus.tick(delta)
 
@@ -404,13 +409,35 @@ func show_notice(message: String) -> void:
 	notice.text = message
 	notice_seconds = 5.0
 
+func show_offline_summary(summary: Dictionary) -> void:
+	offline_summary = summary.duplicate(true)
+	open_modal("AFK Summary")
+
 func toggle_auto() -> void:
 	if not SkillTreeManager.derived_stats().auto_roll or GameState.is_paused(): return
 	GameState.settings.auto_roll_state = not GameState.settings.auto_roll_state
 	GameState.changed.emit()
 	GameState.critical_change.emit("settings")
 
+func offline_input_locked() -> bool:
+	# Catch-up samples a fixed snapshot, then durably commits its rewards. Keep all
+	# player edits out of that transaction, including menu actions while suspended.
+	return SaveManager.offline_processing or SaveManager.offline_commit_pending
+
 func _input(event: InputEvent) -> void:
+	# Godot can synthesize mouse events from touch, and touch from a desktop mouse.
+	# Real mouse clicks use native Button.pressed; real touch uses the capture below.
+	# Never deliver both representations of the same pointer to a gameplay button.
+	if event.device == InputEvent.DEVICE_ID_EMULATION:
+		if event is InputEventMouse: get_viewport().set_input_as_handled()
+		return
+	if offline_input_locked():
+		active_touches.clear()
+		cancel_pointer_buttons()
+		pointer_buttons.clear()
+		managed_touches.clear()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		handle_back()
 		get_viewport().set_input_as_handled()
@@ -419,33 +446,56 @@ func _input(event: InputEvent) -> void:
 		if event.pressed: active_touches[event.index] = true
 		else: active_touches.erase(event.index)
 	if menus.handle_input(event):
+		if event is InputEventScreenTouch:
+			if event.pressed: managed_touches[event.index] = true
+			else: managed_touches.erase(event.index)
 		get_viewport().set_input_as_handled()
 		return
 	if handle_scroll(event): return
-	if event is InputEventScreenTouch and event.pressed:
-		# Only consume the second-finger controls outside the menu surface.
-		if is_instance_valid(menu) and menu.get_global_rect().has_point(event.position):
-			var target := touch_target(menu, event.position)
-			if target is OptionButton:
-				target.show_popup()
-				get_viewport().set_input_as_handled()
-			elif target is Button and not target.disabled:
-				target.pressed.emit()
-				get_viewport().set_input_as_handled()
-			return
-		if GameState.is_paused(): return
-		if roll_button.get_global_rect().has_point(event.position):
-			RollManager.request_roll()
+	if event is InputEventScreenDrag and pointer_buttons.has(event.index):
+		var capture: Dictionary = pointer_buttons[event.index]
+		var target: Button = capture.target.get_ref()
+		if not is_instance_valid(target) or not target.get_global_rect().has_point(event.position):
+			capture.canceled = true
+			if is_instance_valid(target): target.set_pressed_no_signal(false)
+		get_viewport().set_input_as_handled()
+		return
+	if event is not InputEventScreenTouch: return
+	if not event.pressed:
+		if pointer_buttons.has(event.index):
+			var capture: Dictionary = pointer_buttons[event.index]
+			pointer_buttons.erase(event.index)
+			var target: Button = capture.target.get_ref()
 			get_viewport().set_input_as_handled()
-		elif auto_button.get_global_rect().has_point(event.position):
-			toggle_auto()
+			if is_instance_valid(target):
+				target.set_pressed_no_signal(false)
+				if not capture.canceled and capture.generation == modal_generation and target.get_global_rect().has_point(event.position):
+					activate_button(target)
+		elif managed_touches.has(event.index):
+			managed_touches.erase(event.index)
 			get_viewport().set_input_as_handled()
-		else:
-			for control in [interact_button, layout_items.settings, layout_items.potions, layout_items.inventory, skills_button, map_button]:
-				if control.visible and not control.disabled and control.get_global_rect().has_point(event.position):
-					control.pressed.emit()
-					get_viewport().set_input_as_handled()
-					return
+		return
+	var target: Control
+	if is_instance_valid(menu) and menu.get_global_rect().has_point(event.position):
+		target = touch_target(menu, event.position)
+		managed_touches[event.index] = true
+		get_viewport().set_input_as_handled()
+	elif not GameState.is_paused():
+		for control in [roll_button, auto_button, interact_button, layout_items.settings, layout_items.potions, layout_items.inventory, skills_button, map_button]:
+			if control.is_visible_in_tree() and control.get_global_rect().has_point(event.position):
+				target = control
+				break
+	if target is Button:
+		managed_touches.erase(event.index)
+		pointer_buttons[event.index] = {"target": weakref(target), "generation": modal_generation, "canceled": target.disabled}
+		if not target.disabled: target.set_pressed_no_signal(true)
+		get_viewport().set_input_as_handled()
+
+func activate_button(target: Button) -> void:
+	# All regular touch buttons terminate at the same signal as native mouse input.
+	if offline_input_locked() or not is_instance_valid(target) or not target.is_visible_in_tree() or target.disabled: return
+	if target is OptionButton: target.show_popup()
+	else: target.pressed.emit()
 
 func handle_scroll(event: InputEvent) -> bool:
 	if not is_instance_valid(menu_scroll): return false
@@ -470,7 +520,7 @@ func handle_scroll(event: InputEvent) -> bool:
 			scroll_button = null
 			get_viewport().set_input_as_handled()
 			if tapped and is_instance_valid(target) and not target.disabled and target.get_global_rect().has_point(event.position):
-				target.pressed.emit()
+				activate_button(target)
 			return true
 	elif event is InputEventScreenDrag and event.index == scroll_touch:
 		if event.position.distance_to(scroll_start) >= SlimerotPresentation.SCROLL_DEADZONE: scroll_dragging = true
@@ -491,12 +541,11 @@ func touch_target(node: Node, at: Vector2) -> Control:
 	return null
 
 func handle_back() -> void:
+	if offline_input_locked(): return
 	menus.cancel_hold()
 	joystick.reset()
-	if menu_title.begins_with("Copies:") or menu_title == "Sell Duplicates":
-		open_menu("Inventory")
-	elif is_instance_valid(menu):
-		close_menu()
+	if not modal_stack.is_empty():
+		close_top_modal()
 	else:
 		open_menu("Settings")
 
@@ -505,19 +554,75 @@ func _notification(what: int) -> void:
 	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED]:
 		menus.cancel_hold()
 		active_touches.clear()
+		cancel_pointer_buttons()
+		pointer_buttons.clear()
+		managed_touches.clear()
 		scroll_touch = -1
 		if is_instance_valid(joystick): joystick.reset()
 
 func close_menu() -> void:
+	modal_stack.clear()
+	dispose_menu()
 	GameState.menu_paused = false
+
+func cancel_pointer_buttons() -> void:
+	for capture in pointer_buttons.values():
+		var target: Button = capture.target.get_ref()
+		if is_instance_valid(target): target.set_pressed_no_signal(false)
+		capture.canceled = true
+
+func dispose_menu() -> void:
+	modal_generation += 1
 	menus.cancel_hold()
+	cancel_pointer_buttons()
 	scroll_touch = -1
 	scroll_dragging = false
+	scroll_button = null
 	if is_instance_valid(menu):
 		root.remove_child(menu)
 		menu.queue_free()
 		menu = null
+	menu_scroll = null
+	menu_body = null
 	menu_title = ""
+
+func remember_modal_scroll() -> void:
+	if not modal_stack.is_empty() and is_instance_valid(menu_scroll):
+		modal_stack[-1].scroll = menu_scroll.scroll_vertical
+
+func open_modal(id: String) -> void:
+	if offline_input_locked() and id != "AFK Summary": return
+	if id == "Skills" and not GameState.structure_unlocked_flags.get("skill_tree_shrine", false):
+		show_notice("Repair the Skill Tree Shrine in the Bedroom Hub.")
+		return
+	remember_modal_scroll()
+	for index in modal_stack.size():
+		if modal_stack[index].id == id:
+			modal_stack.resize(index + 1)
+			build_modal(id, int(modal_stack[-1].scroll))
+			return
+	modal_stack.append({"id": id, "scroll": 0})
+	build_modal(id)
+
+func close_top_modal() -> void:
+	if offline_input_locked() or modal_stack.is_empty(): return
+	modal_stack.pop_back()
+	dispose_menu()
+	if modal_stack.is_empty(): GameState.menu_paused = false
+	else: build_modal(modal_stack[-1].id, int(modal_stack[-1].scroll))
+
+func close_modal(id: String) -> void:
+	for index in modal_stack.size():
+		if modal_stack[index].id != id: continue
+		if index == modal_stack.size() - 1: close_top_modal()
+		else:
+			modal_stack.remove_at(index)
+			update_modal_pause()
+		return
+
+func update_modal_pause() -> void:
+	GameState.menu_paused = modal_stack.any(func(entry: Dictionary): return entry.id == "Settings")
+	if GameState.menu_paused: joystick.reset()
 
 func menu_label(value: String, font_size: int = 22) -> void:
 	var label := Label.new()
@@ -539,14 +644,27 @@ func menu_button(value: String, action: Callable, disabled: bool = false) -> But
 	return control
 
 func open_menu(title: String) -> void:
+	if offline_input_locked(): return
 	if title == "Skills" and not GameState.structure_unlocked_flags.get("skill_tree_shrine", false):
 		show_notice("Repair the Skill Tree Shrine in the Bedroom Hub.")
 		return
-	var previous_scroll := menu_scroll.scroll_vertical if is_instance_valid(menu_scroll) and menu_title == title else 0
-	close_menu()
+	if menu_title == title and is_instance_valid(menu):
+		refresh_menu_body()
+		return
+	if title.begins_with("Copies:") or title == "Sell Duplicates":
+		if modal_stack.is_empty() or modal_stack[0].id != "Inventory":
+			modal_stack.assign([{"id": "Inventory", "scroll": 0}])
+		open_modal(title)
+		return
+	# Navigation tabs replace the root screen; only explicit subviews/modal calls
+	# push a layer. Reopening a screen never adds duplicate close connections.
+	modal_stack.clear()
+	open_modal(title)
+
+func build_modal(title: String, previous_scroll: int = 0) -> void:
+	dispose_menu()
 	menu_title = title
-	GameState.menu_paused = title == "Settings"
-	if GameState.menu_paused: joystick.reset()
+	update_modal_pause()
 	menu = panel(Rect2(20, 232, root.size.x - 40, root.size.y - 526))
 	var menu_style := style(SlimerotPresentation.INK)
 	menu_style.border_color = SlimerotPresentation.BORDER
@@ -593,9 +711,10 @@ func open_menu(title: String) -> void:
 		if entry == title:
 			tab.add_theme_stylebox_override("disabled", selected_style())
 			tab.add_theme_color_override("font_disabled_color", SlimerotPresentation.MINT)
+		if offline_input_locked(): tab.disabled = true
 		if entry == "Close":
 			tab.add_theme_color_override("font_color", SlimerotPresentation.MUTED)
-		tab.pressed.connect(close_menu if entry == "Close" else func(): open_menu(entry))
+		tab.pressed.connect(close_top_modal if entry == "Close" else func(): open_menu(entry))
 		navigation.add_child(tab)
 	menu_scroll = ScrollContainer.new()
 	menu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -606,6 +725,31 @@ func open_menu(title: String) -> void:
 	menu_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	menu_body.add_theme_constant_override("separation", 14)
 	menu_scroll.add_child(menu_body)
-	menus.build(self, title)
+	build_menu_content(title)
 	if previous_scroll > 0: menu_scroll.set_deferred("scroll_vertical", previous_scroll)
 	menu_dirty = false
+
+func refresh_menu_body() -> void:
+	if not is_instance_valid(menu_body): return
+	var previous_scroll := menu_scroll.scroll_vertical
+	for child in menu_body.get_children():
+		menu_body.remove_child(child)
+		child.queue_free()
+	build_menu_content(menu_title)
+	if previous_scroll > 0: menu_scroll.set_deferred("scroll_vertical", previous_scroll)
+	menu_dirty = false
+
+func build_menu_content(title: String) -> void:
+	menus.build(self, title)
+	if title != "AFK Summary": return
+	var seconds := maxi(0, int(offline_summary.get("seconds_away", 0)))
+	menu_label("Welcome back!", 28)
+	menu_label("Time away: %dh %02dm %02ds\nOffline rolls: %s\nRolls earned: +%s" % [seconds / 3600, (seconds / 60) % 60, seconds % 60, compact(offline_summary.get("rolls", 0)), compact(offline_summary.get("rolls_earned", 0))])
+	var discoveries: Array = offline_summary.get("new_discoveries", [])
+	menu_label("New discoveries: %d" % discoveries.size())
+	var best: Dictionary = offline_summary.get("best_drop", {})
+	if not best.is_empty():
+		var slime := SlimeDatabase.get_slime(best.get("slime_id", ""))
+		if slime != null: menu_label("Best drop: %s %s\n%s" % [str(best.get("variant", "normal")).capitalize(), slime.display_name, SlimeDatabase.threshold_label(slime.id)])
+	if offline_summary.get("pending", false): menu_label("Catching up remaining rolls…", 19)
+	menu_button("Continue exploring", close_top_modal, offline_input_locked())

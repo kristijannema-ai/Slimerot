@@ -3,6 +3,7 @@ extends CharacterBody2D
 
 var joystick: Control
 var facing := Vector2.DOWN
+var facing_left := false
 var sprite: Texture2D
 var animation_time := 0.0
 var attack_remaining: Dictionary = {}
@@ -26,6 +27,8 @@ func _ready() -> void:
 	add_child(camera)
 
 func _physics_process(delta: float) -> void:
+	# Slimerot's body, collider and following camera remain upright in every direction.
+	global_rotation = 0.0
 	var direction := Vector2.ZERO
 	if not GameState.is_paused() and not GameState.player_dead:
 		direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -33,8 +36,10 @@ func _physics_process(delta: float) -> void:
 			direction = joystick.direction
 	if direction.length() > 0.05:
 		facing = direction
+		if not is_zero_approx(direction.x): facing_left = direction.x < 0.0
 	velocity = direction.limit_length() * SkillTreeManager.derived_stats().move_speed
 	move_and_slide()
+	assert(is_zero_approx(global_rotation), "Slimerot player world rotation must stay zero")
 	if not GameState.is_paused():
 		animation_time += delta
 		for slot in attack_remaining.keys():
@@ -58,11 +63,9 @@ func _draw() -> void:
 	if sprite != null:
 		var moving := velocity.length() > 1.0
 		var bob := sin(animation_time * (10.0 if moving else 3.0)) * (2.5 if moving else 1.0)
-		var rotation := 0.0
-		if absf(facing.x) > absf(facing.y): rotation = -PI * 0.5 if facing.x > 0.0 else PI * 0.5
-		elif facing.y < 0.0: rotation = PI
-		if moving: rotation += sin(animation_time * 10.0) * 0.055
-		draw_set_transform(Vector2(0, bob - 4), rotation)
+		# Flip only the drawing, never the physics body or camera. Vertical travel
+		# retains an upright portrait while the facing state still records direction.
+		draw_set_transform(Vector2(0, bob - 4), 0.0, Vector2(-1.0 if facing_left else 1.0, 1.0))
 		draw_texture_rect(sprite, Rect2(-33, -33, 66, 66), false)
 		draw_set_transform(Vector2.ZERO)
 	else:

@@ -11,6 +11,7 @@ var reveal_remaining := 0.0
 var reveal_queue: Array[Dictionary] = []
 var active_reveal: Dictionary = {}
 var last_result: Dictionary = {}
+var offline_completed_count := 0
 
 func _ready() -> void:
 	rng.randomize()
@@ -96,9 +97,8 @@ func request_roll() -> bool:
 	if copy_id.is_empty():
 		completing = false
 		return false
-	# This is the sole Rolls minting path. UI skipping never repeats the transaction.
-	GameState.rolls_balance += 1
-	GameState.lifetime_rolls += 1
+	# Manual and offline completions share exactly the same currency grant.
+	grant_completed_rolls(1)
 	cooldown_remaining = SkillTreeManager.derived_stats().roll_cooldown
 	if first:
 		InventoryManager.equipped_copy_ids.assign([copy_id])
@@ -118,6 +118,77 @@ func request_roll() -> bool:
 		GameState.critical_change.emit("first_or_rare_roll")
 	completing = false
 	return true
+
+func grant_completed_rolls(count: int) -> void:
+	GameState.rolls_balance += count
+	GameState.lifetime_rolls += count
+
+func process_offline_rolls(count: int) -> Dictionary:
+	var summary := {"rolls": 0, "rolls_earned": 0, "new_discoveries": [], "best_drop": {}, "auto_sold_coins": 0}
+	if count <= 0 or completing or count > SlimerotSaveFormat.MAX_EXACT_INTEGER - GameState.lifetime_rolls or count > SlimerotSaveFormat.MAX_EXACT_INTEGER - InventoryManager.next_copy_id:
+		return summary
+	completing = true
+	offline_completed_count = 0
+	var stats := SkillTreeManager.derived_stats()
+	var luck := rolling_luck()
+	var uncapped_luck := effective_luck()
+	var pool := SlimeDatabase.eligible(GameState.highest_zone_unlocked)
+	var stacks: Dictionary = {}
+	var discovered: Dictionary = {}
+	var best_power := -1.0
+	var strongest_luck := uncapped_luck
+	var first_result: Dictionary = {}
+	var starting_rolls := GameState.lifetime_rolls
+	var slice_started := Time.get_ticks_usec()
+	# Sampling is data-only. Inventory, currency and discovery commit together below;
+	# a process kill during sampling leaves the previous checkpoint authoritative.
+	for index in count:
+		var multiplier: float = SlimerotRollTree.SUPER_ROLL_MULTIPLIER if stats.super_roll and (starting_rolls + index + 1) % SlimerotRollTree.SUPER_ROLL_INTERVAL == 0 else 1.0
+		var uniform := (float(rng.randi()) + 1.0) / 4294967296.0
+		var score := luck * multiplier / uniform
+		var selected := SlimerotBalance.FIRST_SLIME
+		if starting_rolls + index > 0:
+			for slime in pool:
+				if slime.rarity_threshold <= score: selected = slime.id
+		var variant := select_variant(float(variant_rng.randi()) / 4294967296.0, stats.variant_sense)
+		var key := selected + ":" + variant
+		if not stacks.has(key): stacks[key] = {"slime_id": selected, "variant": variant, "quantity": 0}
+		stacks[key].quantity += 1
+		if not InventoryManager.discoveries.has(selected): discovered[selected] = true
+		var data := SlimeDatabase.get_slime(selected)
+		var power: float = data.base_damage * SlimerotBalance.VARIANT_DATA[variant].damage
+		if power > best_power:
+			best_power = power
+			summary.best_drop = {"slime_id": selected, "variant": variant, "threshold": data.rarity_threshold}
+		strongest_luck = maxf(strongest_luck, uncapped_luck * multiplier)
+		if starting_rolls == 0 and index == 0: first_result = {"slime_id": selected, "variant": variant, "key": key}
+		offline_completed_count = index + 1
+		if (index + 1) % SlimerotBalance.OFFLINE_SLICE_ROLLS == 0 and Time.get_ticks_usec() - slice_started >= SlimerotBalance.OFFLINE_SLICE_MICROSECONDS:
+			await get_tree().process_frame
+			slice_started = Time.get_ticks_usec()
+	# Discover all sampled bases before applying discovered-threshold sale filters.
+	for stack in stacks.values():
+		if not InventoryManager.discoveries.has(stack.slime_id): InventoryManager.discoveries[stack.slime_id] = []
+		if stack.variant not in InventoryManager.discoveries[stack.slime_id]: InventoryManager.discoveries[stack.slime_id].append(stack.variant)
+	if not first_result.is_empty():
+		var starter := InventoryManager.add_copy(first_result.slime_id, first_result.variant, false)
+		InventoryManager.equipped_copy_ids.assign([starter])
+		stacks[first_result.key].quantity -= 1
+	for stack in stacks.values():
+		if stack.quantity <= 0: continue
+		var added: Dictionary = InventoryManager.add_copies(stack.slime_id, stack.variant, stack.quantity, false, true)
+		summary.auto_sold_coins += int(added.coins)
+		GameState.rarest_threshold_reached = maxi(GameState.rarest_threshold_reached, SlimeDatabase.get_slime(stack.slime_id).rarity_threshold)
+	grant_completed_rolls(count)
+	GameState.highest_luck = maxf(GameState.highest_luck, strongest_luck)
+	GameState.rarest_threshold_reached = maxi(GameState.rarest_threshold_reached, int(summary.best_drop.get("threshold", 0)))
+	GameState.best_team_dps = maxf(GameState.best_team_dps, InventoryManager.team_dps())
+	summary.rolls = count
+	summary.rolls_earned = count
+	summary.new_discoveries.assign(discovered.keys())
+	# No reveal queue, per-copy signals, projectiles or active potion clock updates.
+	completing = false
+	return summary
 
 func reveal_duration(threshold: int, first_discovery: bool) -> float:
 	return SlimerotPresentation.reveal_duration(threshold, first_discovery, SkillTreeManager.derived_stats().skip_common)
