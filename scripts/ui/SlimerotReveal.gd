@@ -59,7 +59,7 @@ func _ready() -> void:
 
 func show_result(slime_id: String, variant: String, first: bool) -> void:
 	var data := SlimeDatabase.get_slime(slime_id)
-	tier = SlimerotPresentation.reveal_tier(data.rarity_threshold)
+	tier = int(RollManager.active_reveal.get("tier", SlimerotPresentation.adaptive_tier(RollManager.active_reveal)))
 	duration = RollManager.reveal_remaining
 	time = 0.0
 	active = true
@@ -70,7 +70,7 @@ func show_result(slime_id: String, variant: String, first: bool) -> void:
 	portrait.visible = tier > 0
 	heading.visible = tier >= 2
 	heading.text = ["", "", "RARE FIND!", "SLIME SENSATION!", "JACKPOT!"][tier]
-	label.text = data.display_name + " · " + variant.capitalize()
+	label.text = data.display_name + " · " + SlimerotVariants.label(variant)
 	details.visible = tier > 0
 	if tier == 0:
 		if first: label.text = "FIRST SLIME · EQUIPPED\n" + label.text
@@ -78,7 +78,7 @@ func show_result(slime_id: String, variant: String, first: bool) -> void:
 			label.text += " · +%d Coins" % RollManager.active_reveal.auto_sold_coins
 	else:
 		label.text = data.display_name
-		details.text = ("NEW DISCOVERY · " if first_discovery else "") + variant.to_upper() + "\n" + SlimeDatabase.threshold_label(slime_id)
+		details.text = ("NEW DISCOVERY · " if first_discovery else "") + SlimerotVariants.label(variant).to_upper() + "\nEffective rarity: 1 in " + SlimeDatabase.format_number(SlimeDatabase.get_effective_rarity(slime_id, variant)) + "\nDamage " + SlimeDatabase.format_number(SlimeDatabase.get_base_combat_damage(slime_id, variant))
 		if RollManager.active_reveal.get("super_roll", false): details.text += "\nSUPER ROLL · LUCK ×5"
 		if RollManager.active_reveal.get("auto_sold_coins", 0) > 0: details.text += "\nAuto-sold duplicate · +%d Coins" % RollManager.active_reveal.auto_sold_coins
 	label.add_theme_font_size_override("font_size", 19 if tier == 0 else 24)
@@ -117,6 +117,8 @@ func layout_card() -> void:
 	card.position = Vector2((size.x - width) * 0.5, 250 if tier == 0 else maxf(270, (size.y - height) * 0.42))
 
 func hide_result() -> void:
+	var camera := get_viewport().get_camera_2d()
+	if camera != null: camera.offset = Vector2.ZERO
 	active = false
 	hide()
 	queue_redraw()
@@ -124,6 +126,10 @@ func hide_result() -> void:
 func _process(delta: float) -> void:
 	if not active or GameState.is_paused(): return
 	time += delta
+	var camera := get_viewport().get_camera_2d()
+	if camera != null:
+		var strength := 5.0 * maxf(0.0, 1.0 - time / 0.75) if tier >= 2 and GameState.settings.screen_shake else 0.0
+		camera.offset = Vector2(sin(time * 67.0), cos(time * 53.0)) * strength
 	if tier > 0:
 		card.pivot_offset = card.size * 0.5
 		var bounce := 1.0 + sin(minf(time / 0.2, 1.0) * PI) * 0.04
@@ -147,7 +153,8 @@ func _draw() -> void:
 			var points := PackedVector2Array([center, center + Vector2.from_angle(angle) * size.length(), center + Vector2.from_angle(angle + 0.12) * size.length()])
 			draw_colored_polygon(points, Color(1, 0.83, 0.49, 0.075))
 	elif tier >= 2:
-		draw_rect(Rect2(Vector2.ZERO, size), Color(1, 0.9, 0.6, maxf(0.0, 0.12 * (1.0 - time / 0.3))))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.015, 0.025, 0.05, 0.65))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(1, 0.9, 0.6, maxf(0.0, 0.22 * (1.0 - time / 0.3))))
 	if tier >= 1:
 		for index in (10 if tier == 1 else 26):
 			var angle := float(index) * 2.4

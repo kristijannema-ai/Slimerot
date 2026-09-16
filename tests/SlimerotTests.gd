@@ -12,6 +12,11 @@ func check(condition: bool, description: String) -> void:
 		push_error("Slimerot FAIL: " + description)
 
 func run(world: Node2D) -> void:
+	if "--slimerot-rng-only" in OS.get_cmdline_user_args():
+		await run_rng(world)
+		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
+		get_tree().quit(0 if failures == 0 else 1)
+		return
 	print("Slimerot USER DATA: ", OS.get_user_data_dir())
 	if "--slimerot-stability-only" in OS.get_cmdline_user_args():
 		await run_stability(world)
@@ -189,10 +194,17 @@ func run(world: Node2D) -> void:
 	add_child(endurance_tests)
 	await endurance_tests.run(world, self)
 	await run_stability(world)
+	await run_rng(world)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
 	get_tree().quit(0 if failures == 0 else 1)
+
+func run_rng(world: Node2D) -> void:
+	for script in [preload("res://tests/SlimerotRngTests.gd"), preload("res://tests/SlimerotRngSaveTests.gd")]:
+		var probe: Node = script.new()
+		add_child(probe)
+		await probe.run(world, self)
 
 func run_stability(world: Node2D) -> void:
 	for script in [preload("res://tests/SlimerotStabilityInputTests.gd"), preload("res://tests/SlimerotInventoryStressTests.gd"), preload("res://tests/SlimerotOfflineTests.gd")]:

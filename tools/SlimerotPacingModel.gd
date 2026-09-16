@@ -2,7 +2,7 @@ extends RefCounted
 
 # Slimerot decision-event estimate, deliberately independent of gameplay managers.
 # A result is an assumption-sensitive model, never evidence of a full playthrough.
-const MODEL_VERSION := "Slimerot pacing decision-event model 1"
+const MODEL_VERSION := "Slimerot pacing decision-event model 2 (Prompt 12 RNG)"
 const DEFAULTS := {"seeds": 12, "first_seed": 9001, "horizon_minutes": 360.0,
 	"frame_hz": 60.0, "travel_seconds": 2.0, "combat_utilisation": 0.70,
 	"boss_utilisation": 0.70, "sale_interval_seconds": 300.0}
@@ -13,6 +13,7 @@ const TARGETS := {"Z2": [8, 12], "R08": [55, 65], "Z5": [70, 90], "R13": [115, 1
 	"Z7": [135, 155], "R18": [170, 190], "final_boss": [200, 230]}
 var options: Dictionary = {}
 var roster: Array[Dictionary] = []
+var pity_pool: Array = []
 var pair_order: Array[Dictionary] = []
 var roll_rows: Dictionary = {}
 var coin_rows: Dictionary = {}
@@ -24,9 +25,13 @@ func _init() -> void:
 			"damage": SlimerotRoster.damage(row[3]), "sell": SlimerotRoster.sell_value(row[3])})
 	roster.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.threshold < b.threshold)
 	for slime in roster:
+		var data := SlimerotData.SlimeData.new()
+		data.id = slime.id
+		data.rarity_threshold = slime.threshold
+		pity_pool.append(data)
 		for variant in SlimerotBalance.VARIANTS:
 			pair_order.append({"key": str(slime.id) + ":" + str(variant), "slime": slime, "variant": variant,
-				"raw_damage": float(slime.damage) * float(SlimerotBalance.VARIANT_DATA[variant].damage)})
+				"raw_damage": SlimerotRoster.damage(int(slime.threshold) * SlimerotVariants.rarity_multiplier(variant))})
 	pair_order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return a.key < b.key if a.raw_damage == b.raw_damage else a.raw_damage > b.raw_damage)
 	for row in SlimerotRollTree.MAINLINE + SlimerotRollTree.OPTIONAL: roll_rows[row[0]] = row
@@ -77,8 +82,8 @@ func _assumptions() -> Array[String]:
 	return ["Decision events and continuous expected damage; no physics, deaths, dodging, projectile misses, or player skill are simulated.",
 		"Start in Z1 with the first guaranteed starter roll at active second zero. Manual rolls before Auto Roll follow the stated uptime.",
 		"Auto Roll is independent of combat and movement. Settings pauses active time; other menus can remain live. No menu interaction time is simulated or added to fill target windows.",
-		"Every ordinary roll uses the live score=luck/U sampler, separate variant RNG, and immediately equips the strongest owned copies.",
-		"No potions, mutations, offline rewards, specific-slime gate requirements, or free currency are assumed.",
+		"Every ordinary roll uses the live score=luck/U sampler, three independent variant draws, zone luck and hidden pity, and immediately equips the strongest owned copies.",
+		"No potions, Variant Shrine offerings, offline rewards, specific-slime gate requirements, or free currency are assumed.",
 		"Safe Chasers are farmed with the stated travel and damage utilisation. Six spawn positions rotate with the live respawn time.",
 		"Coin nodes are bought in the stated priority when eligible and affordable; gates are attempted first. Shrine and terminal are repaired as soon as affordable.",
 		"Duplicate sales occur at the stated interval. Trips are approximated from zone entrance/exit distance and movement speed; rolls continue during trips.",
@@ -140,20 +145,16 @@ func _stats(owned: Dictionary) -> Dictionary:
 	stats.slots = mini(stats.slots, SlimerotBalance.MAX_SLOTS)
 	return stats
 
-func _sample(luck: float, zone: int, rng: RandomNumberGenerator, variants: RandomNumberGenerator, sense: bool) -> Dictionary:
+func _sample(luck: float, _zone: int, rng: RandomNumberGenerator, variants: RandomNumberGenerator, sense: bool) -> Dictionary:
 	var score := luck / ((float(rng.randi()) + 1.0) / 4294967296.0)
 	var selected: Dictionary = roster[0]
 	for slime in roster:
-		if slime.zone <= zone and slime.threshold <= score: selected = slime
-	var variant := "normal"
-	var uniform := float(variants.randi()) / 4294967296.0
-	var cumulative := 0.0
-	for id in ["golden", "glitched", "shiny"]:
-		cumulative += float(SlimerotBalance.VARIANT_DATA[id].chance) * (SlimerotBalance.VARIANT_SENSE_MULTIPLIER if sense else 1.0)
-		if uniform < cumulative:
-			variant = id
-			break
-	return {"slime": selected, "variant": variant}
+		if slime.threshold <= score: selected = slime
+	var flags := 0
+	for flag in SlimerotVariants.FLAGS:
+		var uniform := float(variants.randi()) / SlimerotPity.UNIFORM_STEPS
+		if uniform < SlimerotVariants.probability(flag, 0, SlimerotBalance.VARIANT_SENSE_MULTIPLIER if sense else 1.0): flags |= flag
+	return {"slime": selected, "variant": SlimerotVariants.key(flags)}
 
 func _team(inventory: Dictionary, stats: Dictionary) -> Dictionary:
 	var result := {"dps": 0.0, "boss_dps": 0.0, "strongest_damage": 0.0, "strongest_id": "", "equipped": {}}
@@ -187,6 +188,10 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 	var sequence := _roll_sequence(policy.optional)
 	var node_index := 0
 	var rolls := 0
+	var best_ever := 0
+	var misses := 0
+	var pity_key: Array = []
+	var pity_data: Dictionary = {}
 	var balance := 0
 	var coins := 0
 	var coin_earned := 0
@@ -212,8 +217,30 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 	while t < horizon:
 		if t >= next_roll - 0.000001:
 			var multiplier := SlimerotRollTree.SUPER_ROLL_MULTIPLIER if stats.super_roll and (rolls + 1) % SlimerotRollTree.SUPER_ROLL_INTERVAL == 0 else 1.0
-			var result := _sample(float(stats.luck) * multiplier, zone, rng, variants, stats.variant_sense)
+			var luck: float = float(stats.luck) * maxi(1, zone) * multiplier
+			var result := _sample(luck, zone, rng, variants, stats.variant_sense)
 			if rolls == 0: result.slime = roster[0]
+			var rarity: int = int(result.slime.threshold) * SlimerotVariants.rarity_multiplier(result.variant)
+			if rolls > 0 and rarity <= best_ever:
+				var new_key: Array = [luck, best_ever, stats.variant_sense]
+				if new_key != pity_key:
+					pity_key = new_key
+					var chances: Array[float] = []
+					for flag in SlimerotVariants.FLAGS: chances.append(SlimerotVariants.probability(flag, 0, SlimerotBalance.VARIANT_SENSE_MULTIPLIER if stats.variant_sense else 1.0))
+					pity_data = SlimerotPity.distribution(pity_pool, luck, chances, best_ever)
+				if pity_data.p_better > 0.0:
+					var forced: bool = misses + 1 >= int(pity_data.guarantee_roll)
+					var chance := SlimerotPity.assist_chance(misses + 1, pity_data.expected_rolls)
+					if forced or (chance > 0.0 and float(rng.randi()) / SlimerotPity.UNIFORM_STEPS < chance):
+						var outcome := SlimerotPity.select_stronger(pity_data, float(rng.randi()) / SlimerotPity.UNIFORM_STEPS)
+						for slime in roster:
+							if slime.id == outcome.slime_id: result.slime = slime; break
+						result.variant = SlimerotVariants.key(outcome.variant_flags)
+						rarity = int(result.slime.threshold) * SlimerotVariants.rarity_multiplier(result.variant)
+			if rarity > best_ever:
+				best_ever = rarity
+				misses = 0
+			else: misses += 1
 			var key: String = str(result.slime.id) + ":" + str(result.variant)
 			if not inventory.has(key): inventory[key] = {"slime": result.slime, "variant": result.variant, "count": 0}
 			inventory[key].count += 1
@@ -355,7 +382,7 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 func _snapshot(t: float, zone: int, rolls: int, balance: int, coins: int, stats: Dictionary, team: Dictionary, reason: String) -> Dictionary:
 	return {"reason": reason, "active_seconds": t, "zone": zone, "lifetime_rolls": rolls,
 		"spendable_rolls": balance, "coins": coins, "team_dps": team.dps, "slots": stats.slots,
-		"effective_luck": stats.luck, "strongest_owned": team.strongest_id, "strongest_equipped": team.strongest_id}
+		"effective_luck": stats.luck * maxi(1, zone), "strongest_owned": team.strongest_id, "strongest_equipped": team.strongest_id}
 
 func _farm_comparison(zone: int, stats: Dictionary, team: Dictionary, zones_back: int = 1) -> Dictionary:
 	if zone <= zones_back: return {}
@@ -398,7 +425,7 @@ func _summary(runs: Array[Dictionary]) -> Dictionary:
 		breakthroughs[id] = {"purchased_runs": total, "complete_10m_windows": complete,
 			"stronger_runs": improved, "stronger_fraction": float(improved) / complete if complete > 0 else null,
 			"median_zones_cleared_10m": _quantile(clear_counts, 0.5),
-			"noticeably_stronger_definition": "one owned copy has at least 25% more base-times-variant damage than the strongest owned at purchase"}
+			"noticeably_stronger_definition": "one owned copy has at least 25% more canonical effective-rarity damage than the strongest owned at purchase"}
 	return {"milestones": milestones, "breakthroughs": breakthroughs}
 
 func _quantile(values: Array[float], fraction: float) -> Variant:
@@ -453,7 +480,7 @@ func _breakthrough_probability() -> Array[Dictionary]:
 			var target: Dictionary = roster[0]
 			for slime in roster:
 				if slime.zone == target_zone: target = slime
-			var p := minf(1.0, float(stats.luck) / float(target.threshold))
+			var p := minf(1.0, float(stats.luck) * zone / float(target.threshold))
 			var before := minf(1.0, p / float(row[5]))
 			var cooldown := _quantised_cooldown(stats.cooldown)
 			var rolls_10m := floori(600.0 / cooldown)
@@ -470,8 +497,8 @@ func _breakthrough_probability() -> Array[Dictionary]:
 					hit_after = hit_after or uniform <= p
 				if hit_before: seeded_before += 1
 				if hit_after: seeded_after += 1
-			result.append({"breakthrough": row[0], "slime": target.id, "eligible_zone": target_zone,
-				"threshold": target.threshold, "luck_after": stats.luck, "cooldown": cooldown,
+			result.append({"breakthrough": row[0], "slime": target.id, "origin_zone": target_zone,
+				"threshold": target.threshold, "luck_after": stats.luck * zone, "cooldown": cooldown,
 				"mean_minutes_after": cooldown / p / 60.0,
 				"median_minutes_after": ceil(log(0.5) / log(1.0 - p)) * cooldown / 60.0 if p < 1.0 else cooldown / 60.0,
 				"p90_minutes_after": ceil(log(0.1) / log(1.0 - p)) * cooldown / 60.0 if p < 1.0 else cooldown / 60.0,

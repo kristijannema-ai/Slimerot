@@ -85,13 +85,13 @@ func _state_changed() -> void:
 func _critical_change(reason: String) -> void:
 	if reason == "settings": apply_settings()
 	elif reason in ["gate_purchase", "completion_portal"]: play_cue("gate")
-	elif reason in ["structure_purchase", "potion_craft", "mutation"]: play_cue("purchase")
+	elif reason in ["structure_purchase", "potion_craft", "variant_sacrifice"]: play_cue("purchase")
 	elif reason == "boss_defeat": play_cue("enemy_death")
 
 func _revealed(_slime_id: String, _variant: String, _first: bool) -> void:
-	var threshold := int(RollManager.active_reveal.get("threshold", 0))
-	if threshold >= 1000000: play_cue("jackpot")
-	elif threshold >= 100: play_cue("rare")
+	var tier := int(RollManager.active_reveal.get("tier", 0))
+	if tier >= 4: play_cue("jackpot")
+	elif tier >= 2: play_cue("rare")
 
 func _purchased(id: String, _before: float, _after: float) -> void:
 	var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes.get(id)

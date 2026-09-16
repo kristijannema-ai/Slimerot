@@ -15,8 +15,9 @@ func _ready() -> void:
 		slime.aura_tier = SlimerotPresentation.reveal_tier(slime.rarity_threshold)
 		slimes[slime.id] = slime
 
-func eligible(zone_id: int) -> Array:
-	var pool := slimes.values().filter(func(data): return data.zone_unlock <= zone_id)
+func eligible(_zone_id: int = 1) -> Array:
+	# Zone is origin metadata only; every base is rollable from the start.
+	var pool := slimes.values()
 	pool.sort_custom(func(a, b): return a.rarity_threshold < b.rarity_threshold)
 	return pool
 
@@ -34,3 +35,11 @@ func format_number(value: int) -> String:
 			result += ","
 		result += digits[index]
 	return result
+
+func get_effective_rarity(base_id: String, variant_flags: Variant = 0) -> int:
+	var data := get_slime(base_id)
+	return 0 if data == null else data.rarity_threshold * SlimerotVariants.rarity_multiplier(variant_flags)
+
+func get_base_combat_damage(base_id: String, variant_flags: Variant = 0) -> int:
+	var rarity := get_effective_rarity(base_id, variant_flags)
+	return roundi(6.0 * pow(float(rarity), 0.32)) if rarity > 0 else 0

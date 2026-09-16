@@ -54,7 +54,7 @@ func build(owner_hud: SlimerotHUD, title: String) -> void:
 		"Settings": settings()
 		"Potions": potions()
 		"Map": map_menu()
-		"Mutation": mutation()
+		"Variant Shrine", "Mutation": mutation()
 		"Completion":
 			hud.menu_label("Slimerot completed!\nThe Singularity Admin is defeated.")
 			hud.menu_label("Your collection, team and upgrades are saved. Keep exploring and rolling.")
@@ -82,15 +82,30 @@ func map_menu() -> void:
 			if WorldManager.fast_travel(zone): hud.close_menu(), not GameState.structure_unlocked_flags.get("fast_travel_pillar",false) or zone > GameState.highest_zone_unlocked or WorldManager.boss_active)
 
 func mutation() -> void:
-	hud.menu_label("5 unprotected Normal copies → 1 Shiny. Favorites and equipped copies cannot be consumed.",20)
+	hud.menu_label("VARIANT SHRINE", 28)
+	hud.menu_label("Sacrifice one unprotected variant copy toward ONE of its active categories. Each unique base gives that category ×1.05 odds permanently. A base counts once per category. No Coins are charged.", 19)
+	for flag in SlimerotVariants.FLAGS:
+		var category := SlimerotVariants.key(flag)
+		var chance := SlimerotVariants.probability(flag, InventoryManager.shrine_count(flag), SlimerotBalance.VARIANT_SENSE_MULTIPLIER if SkillTreeManager.derived_stats().variant_sense else 1.0)
+		hud.menu_label("%s · %d/24 bases · ×%.3f · %.4f%% chance" % [SlimerotVariants.label(flag), InventoryManager.shrine_count(flag), InventoryManager.shrine_multiplier(flag), chance * 100.0], 19)
+	var available := false
 	for pair in InventoryManager.sorted_pairs("Name"):
-		if pair.variant != "normal": continue
-		var slime := SlimeDatabase.get_slime(pair.slime_id)
-		var count := InventoryManager.mutation_candidate_count(slime.id)
-		var fee := slime.base_sell * SlimerotEncounters.MUTATION_FEE_MULTIPLIER
+		var flags := SlimerotVariants.mask(pair.variant)
+		if flags == 0: continue
+		var spans := InventoryManager.available_intervals(pair)
+		if spans.is_empty(): continue
+		var copy_id := InventoryManager.copy_name(int(spans[0][0]))
 		var section := section_box(PAPER)
-		label_in(section, "%s · %d eligible" % [slime.display_name,count],23)
-		action_in(section, "Mutate · %s Coins" % SlimeDatabase.format_number(fee),func(): InventoryManager.mutate(slime.id); hud.open_menu("Mutation"),count < 5 or GameState.coins < fee or GameState.current_zone != 6 or not GameState.structure_unlocked_flags.get("mutation_lab",false) or WorldManager.boss_active)
+		label_in(section, SlimeDatabase.get_slime(pair.slime_id).display_name + " · " + SlimerotVariants.label(flags), 22)
+		label_in(section, "Consumes one copy: " + copy_id, 16)
+		for flag in SlimerotVariants.FLAGS:
+			if not (flags & flag): continue
+			var category := SlimerotVariants.key(flag)
+			var counted: bool = pair.slime_id in GameState.shrine_sacrifices[category]
+			action_in(section, "Already offered to " + category.capitalize() if counted else "Sacrifice one → " + category.capitalize(), func(): InventoryManager.sacrifice(copy_id, flag); hud.open_menu("Variant Shrine"), counted or GameState.current_zone != 6 or not GameState.structure_unlocked_flags.get("mutation_lab", false) or WorldManager.boss_active)
+		available = true
+	if not available: hud.menu_label("No eligible variant copies. Equipped and favorite copies are protected.", 19)
+	hud.menu_label("Offer copies at the repaired Variant Shrine in Backrooms. Normal copies cannot be sacrificed.", 18)
 
 func inventory() -> void:
 	var pairs := InventoryManager.sorted_pairs(sort_order)
@@ -115,7 +130,7 @@ func inventory() -> void:
 	for pair in pairs:
 		var key: String = pair.slime_id + ":" + pair.variant
 		var data := SlimeDatabase.get_slime(pair.slime_id)
-		var box := card(data.display_name + " · " + pair.variant.capitalize(), SlimeDatabase.threshold_label(data.id) + "\nOwned %d · DPS %.1f · Sell %s Coins" % [pair.quantity, InventoryManager.damage_for_pair(pair) / SkillTreeManager.derived_stats().attack_interval, SlimeDatabase.format_number(InventoryManager.sell_value(key))], pair.slime_id, pair.variant)
+		var box := card(data.display_name + " · " + SlimerotVariants.label(pair.variant), "Effective rarity: 1 in " + SlimeDatabase.format_number(SlimeDatabase.get_effective_rarity(pair.slime_id, pair.variant)) + "\nOwned %d · DPS %.1f · Sell %s Coins" % [pair.quantity, InventoryManager.damage_for_pair(pair) / SkillTreeManager.derived_stats().attack_interval, SlimeDatabase.format_number(InventoryManager.sell_value(key))], pair.slime_id, pair.variant)
 		var actions := HBoxContainer.new()
 		actions.add_theme_constant_override("separation", 8)
 		box.get_child(0).add_child(actions)
@@ -131,7 +146,7 @@ func copies(key: String) -> void:
 		hud.menu_label("This group has no owned copies.")
 		return
 	var pair: Dictionary = InventoryManager.inventory[key]
-	card(SlimeDatabase.get_slime(pair.slime_id).display_name + " · " + pair.variant.capitalize(), "Equipped and favorite copies are protected from selling.", pair.slime_id, pair.variant)
+	card(SlimeDatabase.get_slime(pair.slime_id).display_name + " · " + SlimerotVariants.label(pair.variant), "Equipped and favorite copies are protected from selling.", pair.slime_id, pair.variant)
 	var pages := maxi(1, ceili(pair.quantity / 12.0))
 	copy_page = clampi(copy_page, 0, pages - 1)
 	hud.menu_label("Page %d / %d · %d owned" % [copy_page + 1, pages, pair.quantity], 18)
@@ -159,8 +174,8 @@ func collection() -> void:
 	for entry in InventoryManager.collection():
 		var data: SlimerotData.SlimeData = entry.slime
 		var subtitle := ("DISCOVERED" if entry.discovered else "UNDISCOVERED") + "\nBase Rarity Threshold: 1 in " + SlimeDatabase.format_number(data.rarity_threshold)
-		subtitle += "\nZone %d · Base damage %.0f" % [data.zone_unlock, data.base_damage]
-		subtitle += "\nBest owned: " + (entry.best_variant.capitalize() if not entry.best_variant.is_empty() else "None")
+		subtitle += "\nOrigin Z%d · Normal damage %.0f" % [data.zone_unlock, data.base_damage]
+		subtitle += "\nBest owned: " + (SlimerotVariants.label(entry.best_variant) if not entry.best_variant.is_empty() else "None")
 		var panel := card(data.display_name if entry.discovered else "Undiscovered", subtitle, data.id, entry.best_variant if not entry.best_variant.is_empty() else "normal", not entry.discovered)
 		panel.add_to_group("slimerot_collection_entry")
 
@@ -198,7 +213,7 @@ func team() -> void:
 		if InventoryManager.auto_equip_strongest(): hud.open_menu("Team"))
 	for copy_id in InventoryManager.equipped_copy_ids:
 		var pair := InventoryManager.pair_for_copy(copy_id)
-		var box := card(SlimeDatabase.get_slime(pair.slime_id).display_name + " · " + pair.variant.capitalize(), "%s damage / hit · every %.2fs" % [SlimeDatabase.format_number(int(InventoryManager.damage_for_copy(copy_id))), SkillTreeManager.derived_stats().attack_interval], pair.slime_id, pair.variant)
+		var box := card(SlimeDatabase.get_slime(pair.slime_id).display_name + " · " + SlimerotVariants.label(pair.variant), "%s damage / hit · every %.2fs" % [SlimeDatabase.format_number(int(InventoryManager.damage_for_copy(copy_id))), SkillTreeManager.derived_stats().attack_interval], pair.slime_id, pair.variant)
 		action_in(box.get_child(0), "Unequip", func(): InventoryManager.unequip(copy_id); hud.open_menu("Team"))
 	hud.menu_label("Grow the gang", 23)
 	for id in SkillTreeManager.nodes:
@@ -323,7 +338,10 @@ func roll_settings() -> void:
 		hud.menu_label("Filter II: discovered thresholds available." if stats.filter_2 else ("Filter I: 20 / 100 / 1,000." if stats.filter_1 else "Default: 100. Unlock Filter I or II for more choices."), 18)
 	else:
 		hud.menu_label("Auto-sell unlocks with RO2 after Breakthrough I.", 18)
-	hud.menu_label("Normal Luck never changes variant chances.\nNormal: otherwise · Shiny: 1/%d\nGlitched: 1/%s · Golden: 1/%s" % [80 if stats.variant_sense else 100, "800" if stats.variant_sense else "1,000", "8,000" if stats.variant_sense else "10,000"], 19)
+	hud.menu_label("All 24 bases can roll from the start. Unlocked gameplay zones multiply luck by ×%d. Variant rolls are independent and may combine." % RollManager.zone_luck_multiplier(), 19)
+	for flag in SlimerotVariants.FLAGS:
+		var probability := SlimerotVariants.probability(flag, InventoryManager.shrine_count(flag), SlimerotBalance.VARIANT_SENSE_MULTIPLIER if stats.variant_sense else 1.0)
+		hud.menu_label("%s: %.4f%% · Shrine ×%.3f" % [SlimerotVariants.label(flag), probability * 100.0, InventoryManager.shrine_multiplier(flag)], 19)
 	hud.menu_label("Skip Common shortens common toasts after RO1. First-discovery jackpots always play in full.", 18)
 	refresh_live()
 
@@ -536,7 +554,7 @@ func compact_style(color: Color) -> StyleBoxFlat:
 
 func card(title: String, subtitle: String, slime_id: String, variant: String, silhouette: bool = false) -> PanelContainer:
 	var panel := PanelContainer.new()
-	var accent: Color = {"normal": SlimerotPresentation.MINT, "shiny": Color("8febeb"), "glitched": Color("e5a2ed"), "golden": SlimerotPresentation.GOLD}.get(variant, SlimerotPresentation.MINT)
+	var accent: Color = SlimerotVariants.color(variant)
 	if silhouette: accent = SlimerotPresentation.BORDER
 	var appearance := hud.style(PAPER)
 	appearance.set_border_width_all(1)

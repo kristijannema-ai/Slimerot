@@ -95,7 +95,7 @@ func build_zone(zone_id: int) -> void:
 	for row in SlimerotEncounters.STRUCTURES:
 		if row[1] == zone_id:
 			var id: String = row[0]
-			add_interaction(row[4],id.replace("_"," ").capitalize()+" · %s Coins" % SlimeDatabase.format_number(row[2]),func(): repair(id))
+			add_interaction(row[4],("Variant Shrine" if id == "mutation_lab" else id.replace("_"," ").capitalize())+" · %s Coins" % SlimeDatabase.format_number(row[2]),func(): repair(id))
 			interactions[-1].set_meta("structure",id)
 	respawn_player()
 	if WorldManager.arriving_from_next: player.position = SlimerotCampaign.RETURN_ARRIVAL
@@ -131,7 +131,7 @@ func start_boss_arena(zone_id: int) -> void:
 
 func repair(id: String) -> void:
 	if GameState.structure_unlocked_flags.get(id, false):
-		hud.open_menu({"skill_tree_shrine":"Skills","sell_terminal":"Inventory","potion_bench":"Potions","fast_travel_pillar":"Map","mutation_lab":"Mutation"}[id])
+		hud.open_menu({"skill_tree_shrine":"Skills","sell_terminal":"Inventory","potion_bench":"Potions","fast_travel_pillar":"Map","mutation_lab":"Variant Shrine"}[id])
 	elif WorldManager.repair(id):
 		hud.show_notice("Repaired! Available from the Slimerot HUD.")
 	else:

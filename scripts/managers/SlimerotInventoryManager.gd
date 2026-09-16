@@ -34,13 +34,14 @@ func compact_stack(pair: Dictionary) -> void:
 		pair.favorite_copy_ranges = merged_intervals(identity_intervals(pair, true))
 		pair.favorite_copy_ids = []
 
-func add_copy(slime_id: String, variant: String = "normal", notify: bool = true) -> String:
+func add_copy(slime_id: String, variant: Variant = "normal", notify: bool = true) -> String:
+	variant = SlimerotVariants.key(SlimerotVariants.mask(variant))
 	if SlimeDatabase.get_slime(slime_id) == null or variant not in SlimerotBalance.VARIANTS:
 		return ""
 	if next_copy_id >= SlimerotSaveFormat.MAX_EXACT_INTEGER: return ""
-	var key := slime_id + ":" + variant
+	var key: String = slime_id + ":" + variant
 	if not inventory.has(key):
-		inventory[key] = {"slime_id": slime_id, "variant": variant, "quantity": 0, "favorite": false, "copy_ids": [], "favorite_copy_ids": []}
+		inventory[key] = {"slime_id": slime_id, "variant": variant, "variant_flags": SlimerotVariants.mask(variant), "quantity": 0, "favorite": false, "copy_ids": [], "favorite_copy_ids": []}
 	var copy_id := "slimerot_copy_%d" % next_copy_id
 	next_copy_id += 1
 	var pair: Dictionary = inventory[key]
@@ -53,17 +54,19 @@ func add_copy(slime_id: String, variant: String = "normal", notify: bool = true)
 		discoveries[slime_id] = []
 	if variant not in discoveries[slime_id]:
 		discoveries[slime_id].append(variant)
+	record_acquisition(slime_id, variant)
 	if notify:
 		GameState.changed.emit()
 	return copy_id
 
-func add_copies(slime_id: String, variant: String, quantity: int, notify: bool = false, apply_auto_sell: bool = false) -> Dictionary:
+func add_copies(slime_id: String, variant: Variant, quantity: int, notify: bool = false, apply_auto_sell: bool = false) -> Dictionary:
+	variant = SlimerotVariants.key(SlimerotVariants.mask(variant))
 	if quantity <= 0 or SlimeDatabase.get_slime(slime_id) == null or variant not in SlimerotBalance.VARIANTS:
 		return {}
 	if quantity > SlimerotSaveFormat.MAX_EXACT_INTEGER - next_copy_id: return {}
-	var key := slime_id + ":" + variant
+	var key: String = slime_id + ":" + variant
 	if not inventory.has(key):
-		inventory[key] = {"slime_id": slime_id, "variant": variant, "quantity": 0, "favorite": false, "copy_ids": [], "favorite_copy_ids": []}
+		inventory[key] = {"slime_id": slime_id, "variant": variant, "variant_flags": SlimerotVariants.mask(variant), "quantity": 0, "favorite": false, "copy_ids": [], "favorite_copy_ids": []}
 	var pair: Dictionary = inventory[key]
 	var first := next_copy_id
 	var last := first + quantity - 1
@@ -73,6 +76,7 @@ func add_copies(slime_id: String, variant: String, quantity: int, notify: bool =
 	var sold := 0
 	if not discoveries.has(slime_id): discoveries[slime_id] = []
 	if variant not in discoveries[slime_id]: discoveries[slime_id].append(variant)
+	record_acquisition(slime_id, variant)
 	if apply_auto_sell and auto_sell_pair_eligible(pair) and not pair.favorite:
 		kept = 1 if pair.quantity == 0 else 0
 		sold = quantity - kept
@@ -89,6 +93,12 @@ func add_copies(slime_id: String, variant: String, quantity: int, notify: bool =
 
 func copy_name(serial: int) -> String:
 	return "slimerot_copy_%d" % serial
+
+func record_acquisition(slime_id: String, variant: Variant) -> void:
+	var rarity := SlimeDatabase.get_effective_rarity(slime_id, variant)
+	if rarity > GameState.best_ever_effective_rarity:
+		GameState.best_ever_effective_rarity = rarity
+		GameState.rolls_since_last_power_improvement = 0
 
 func copy_serial(copy_id: Variant) -> int:
 	if not copy_id is String or not copy_id.begins_with("slimerot_copy_"): return -1
@@ -254,6 +264,7 @@ func validate_saved_inventory(saved_inventory: Dictionary, saved_team: Array, sa
 		var pair: Variant = saved_inventory[key]
 		if not pair is Dictionary or not pair.get("slime_id") is String or not pair.get("variant") is String: return "Invalid inventory stack"
 		if SlimeDatabase.get_slime(pair.slime_id) == null or pair.variant not in SlimerotBalance.VARIANTS or key != pair.slime_id + ":" + pair.variant: return "Unknown slime or variant"
+		if not SlimerotSaveFormat.integer(pair.get("variant_flags")) or int(pair.variant_flags) != SlimerotVariants.mask(pair.variant): return "Invalid variant flags"
 		if not pair.get("favorite") is bool or not SlimerotSaveFormat.integer(pair.get("quantity")): return "Invalid inventory quantity or favorite"
 		if not valid_identity_intervals(pair, int(saved_next_id)) or not valid_identity_intervals(pair, int(saved_next_id), true): return "Invalid or overlapping copy identities"
 		var owned := identity_intervals(pair)
@@ -450,7 +461,7 @@ func damage_for_pair(pair: Dictionary, boss: bool = false) -> float:
 
 func calculate_pair_damage(pair: Dictionary, stats: Dictionary, boss: bool = false) -> float:
 	var brew := SlimerotEncounters.BREW_MULTIPLIER if boss and GameState.boss_brew_seconds > 0 else 1.0
-	return roundf(SlimeDatabase.get_slime(pair.slime_id).base_damage * SlimerotBalance.VARIANT_DATA[pair.variant].damage * stats.damage_multiplier * (1.0 + stats.boss_damage_bonus if boss else 1.0) * brew)
+	return roundf(SlimeDatabase.get_base_combat_damage(pair.slime_id, pair.variant) * stats.damage_multiplier * (1.0 + stats.boss_damage_bonus if boss else 1.0) * brew)
 
 func mutation_candidates(slime_id: String, limit: int = SlimerotEncounters.MUTATION_COPIES) -> Array[String]:
 	var result: Array[String] = []
@@ -465,17 +476,26 @@ func mutation_candidates(slime_id: String, limit: int = SlimerotEncounters.MUTAT
 func mutation_candidate_count(slime_id: String) -> int:
 	return range_quantity(available_intervals(inventory.get(slime_id + ":normal", {})))
 
-func mutate(slime_id: String) -> bool:
-	if not GameState.structure_unlocked_flags.get("mutation_lab",false) or GameState.current_zone != 6 or WorldManager.boss_active or GameState.is_paused() or GameState.player_dead: return false
-	var slime := SlimeDatabase.get_slime(slime_id)
-	if slime == null: return false
-	var candidates := mutation_candidates(slime_id)
-	if candidates.size() < SlimerotEncounters.MUTATION_COPIES: return false
-	if not GameState.spend("Coins",slime.base_sell*SlimerotEncounters.MUTATION_FEE_MULTIPLIER,false): return false
-	var pair: Dictionary = inventory[slime_id+":normal"]
-	for copy_id in candidates: remove_copy(pair, copy_id)
-	add_copy(slime_id,"shiny",false)
-	notify_change("mutation")
+func mutate(_slime_id: String) -> bool:
+	# Retired recipe; the persistent structure now hosts a Variant Shrine.
+	return false
+
+func shrine_count(flag: int) -> int:
+	return GameState.shrine_sacrifices.get(SlimerotVariants.key(flag), []).size() if flag in SlimerotVariants.FLAGS else 0
+
+func shrine_multiplier(flag: int) -> float:
+	return pow(SlimerotVariants.SHRINE_FACTOR, shrine_count(flag))
+
+func sacrifice(copy_id: String, flag: int) -> bool:
+	if flag not in SlimerotVariants.FLAGS or is_protected(copy_id): return false
+	if not GameState.structure_unlocked_flags.get("mutation_lab", false) or GameState.current_zone != 6 or WorldManager.boss_active or GameState.is_paused() or GameState.player_dead: return false
+	var pair := pair_for_copy(copy_id)
+	if not (SlimerotVariants.mask(pair.variant) & flag): return false
+	var category := SlimerotVariants.key(flag)
+	if pair.slime_id in GameState.shrine_sacrifices[category]: return false
+	if not remove_copy(pair, copy_id): return false
+	GameState.shrine_sacrifices[category].append(pair.slime_id)
+	notify_change("variant_sacrifice")
 	return true
 
 func damage_for_copy(copy_id: String, boss: bool = false) -> float:
@@ -489,10 +509,15 @@ func team_dps() -> float:
 	return damage / SkillTreeManager.derived_stats().attack_interval
 
 func best_variant_owned(slime_id: String) -> String:
-	for variant in ["golden", "glitched", "shiny", "normal"]:
+	var best := ""
+	var power := -1
+	for variant in SlimerotVariants.KEYS:
 		if inventory.get(slime_id + ":" + variant, {}).get("quantity", 0) > 0:
-			return variant
-	return ""
+			var rarity := SlimeDatabase.get_effective_rarity(slime_id, variant)
+			if rarity > power:
+				best = variant
+				power = rarity
+	return best
 
 func collection() -> Array[Dictionary]:
 	var entries: Array[Dictionary] = []
@@ -511,8 +536,10 @@ func sorted_pairs(order: String) -> Array:
 		var second := SlimeDatabase.get_slime(b.slime_id)
 		if order == "Name" and first.display_name != second.display_name:
 			return first.display_name < second.display_name
-		if order == "Rarity" and first.rarity_threshold != second.rarity_threshold:
-			return first.rarity_threshold > second.rarity_threshold
+		if order == "Rarity":
+			var first_rarity := SlimeDatabase.get_effective_rarity(a.slime_id, a.variant)
+			var second_rarity := SlimeDatabase.get_effective_rarity(b.slime_id, b.variant)
+			if first_rarity != second_rarity: return first_rarity > second_rarity
 		if order == "DPS" and damages[a.slime_id + ":" + a.variant] != damages[b.slime_id + ":" + b.variant]:
 			return damages[a.slime_id + ":" + a.variant] > damages[b.slime_id + ":" + b.variant]
 		return (a.slime_id + a.variant) < (b.slime_id + b.variant))

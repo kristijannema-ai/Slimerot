@@ -42,7 +42,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	GameState.menu_paused = false
 	WorldManager.travel(0)
 	freeze_combat(world)
-	check(SlimerotCampaign.SCENES.size() == 9 and SlimerotRoster.ROWS.size() == 24 and SlimerotBalance.VARIANTS == ["normal", "shiny", "glitched", "golden"], "one Hub, eight zones, 24 base slimes and only the four intended variants")
+	check(SlimerotCampaign.SCENES.size() == 9 and SlimerotRoster.ROWS.size() == 24 and SlimerotBalance.VARIANTS.size() == 8, "one Hub, eight zones, 24 base slimes and all eight variant combinations")
 	check(SlimerotRollTree.MAINLINE.size() == 18 and SlimerotRollTree.OPTIONAL.size() == 7 and SlimerotCoinTree.ROWS.size() == 21 and SlimerotEncounters.BOSSES.size() == 4, "full first-build trees and four bosses stay within the content scope")
 	RollManager.variant_rng.seed = 1234
 	check(RollManager.request_roll(), "fresh first roll commits")
@@ -107,22 +107,22 @@ func run(world: Node, owner_suite: Node) -> void:
 		interact_at(world, SlimerotCampaign.EXIT_GATE)
 		if zone < 8:
 			check(GameState.current_zone == zone + 1 and WorldManager.gate_open(zone) and GameState.coins == before_gate - SlimerotCampaign.zone(zone).gate_coin_cost, "Z%d physical exit pays the current tuned cost and unlocks Z%d" % [zone, zone + 1])
-			check(SlimeDatabase.eligible(GameState.highest_zone_unlocked).size() == (zone + 1) * 3, "Z%d gate adds exactly the next three global roll entries" % zone)
+			check(SlimeDatabase.eligible(GameState.highest_zone_unlocked).size() == 24 and RollManager.zone_luck_multiplier() == zone + 1, "Z%d gate raises zone luck without gating the 24-base pool" % zone)
 		else:
 			check(GameState.completion_portal_unlocked and GameState.campaign_completed and GameState.current_zone == 8 and GameState.coins == before_gate, "final portal completes without currency loss or leaving the playable campaign")
 		world.hud.close_menu()
 	check(GameState.purchased_skill_node_ids.size() == 46 and SkillTreeManager.derived_stats().equipped_slots == 5 and is_equal_approx(SkillTreeManager.derived_stats().damage_multiplier, 2.5), "all 46 first-build nodes integrate with five slots and additive Final Bond")
 	check(GameState.lifetime_rolls == GameState.rolls_balance + SkillTreeManager.rolls_spent(GameState.purchased_skill_node_ids), "complete campaign purchases preserve Lifetime Rolls accounting")
 	# Revisit late structures in completed free-roam, retaining copy protections.
-	check(WorldManager.fast_travel(6), "completion retains Fast Travel to the Mutation Lab")
+	check(WorldManager.fast_travel(6), "completion retains Fast Travel to the Variant Shrine")
 	freeze_combat(world)
 	for index in 6: InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME)
 	var protected_copy: String = InventoryManager.inventory[SlimerotBalance.FIRST_SLIME + ":normal"].copy_ids[-1]
 	InventoryManager.toggle_copy_favorite(protected_copy)
-	var mutation_fee := SlimeDatabase.get_slime(SlimerotBalance.FIRST_SLIME).base_sell * SlimerotEncounters.MUTATION_FEE_MULTIPLIER
-	var mutation_wallet := GameState.coins
-	check(InventoryManager.mutate(SlimerotBalance.FIRST_SLIME) and GameState.coins == mutation_wallet - mutation_fee, "post-completion mutation charges the exact fee for five unprotected Normals")
-	check(InventoryManager.is_protected(starter) and InventoryManager.is_protected(protected_copy) and InventoryManager.inventory[SlimerotBalance.FIRST_SLIME + ":normal"].quantity == 2, "post-completion mutation preserves the equipped starter and favorite")
+	var offering := InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME, 1)
+	var shrine_wallet := GameState.coins
+	check(InventoryManager.sacrifice(offering, 1) and GameState.coins == shrine_wallet and InventoryManager.shrine_count(1) == 1, "post-completion Shrine consumes one variant for one permanent unique boost")
+	check(InventoryManager.is_protected(starter) and InventoryManager.is_protected(protected_copy) and InventoryManager.inventory[SlimerotBalance.FIRST_SLIME + ":normal"].quantity == 7, "post-completion Shrine preserves the equipped starter and favorite")
 	for row in SlimerotRoster.ROWS: InventoryManager.add_copy(row[0], "golden")
 	InventoryManager.auto_equip_strongest()
 	var team := InventoryManager.equipped_copy_ids.duplicate()
@@ -148,7 +148,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	check(same_json(GameState.boss_defeated_flags, state.boss_defeated_flags) and same_json(GameState.unlocked_gate_flags, state.unlocked_gate_flags) and same_json(GameState.structure_unlocked_flags, state.structure_unlocked_flags) and same_json(GameState.zone_kill_counts, state.zone_kill_counts), "all bosses, gates, structures and kill counters survive together")
 	check(same_json(InventoryManager.inventory, state.inventory) and same_json(InventoryManager.discoveries, state.discoveries) and InventoryManager.equipped_copy_ids == team, "variants, quantities, favorites, discoveries and exact equipped identities survive together")
 	check(same_json(GameState.roll_skill_spend, state.roll_skill_spend) and GameState.coins == state.coins and GameState.coins_earned == state.coins_earned and GameState.coins_spent == state.coins_spent and GameState.lifetime_rolls == state.lifetime_rolls, "currency balances, source statistics and historical Roll spend survive together")
-	check(is_equal_approx(RollManager.effective_luck(), SkillTreeManager.derived_stats().luck * 3.0) and GameState.potion_remaining_seconds == 283 and GameState.boss_brew_seconds == 283 and RollManager.rolling_luck() == 20.0, "three saved Breakthroughs derive once while both active potion clocks and Luck Cap resume exactly")
+	check(is_equal_approx(RollManager.effective_luck(), SkillTreeManager.derived_stats().luck * 3.0 * 8.0) and GameState.potion_remaining_seconds == 283 and GameState.boss_brew_seconds == 283 and RollManager.rolling_luck() == 20.0, "three saved Breakthroughs derive once while both active potion clocks and Luck Cap resume exactly")
 	check(GameState.settings.auto_roll_state and GameState.settings.auto_sell_settings.enabled and GameState.settings.auto_sell_settings.threshold == 1000, "Auto Roll and filter choices survive the completed campaign reload")
 	GameState.settings.auto_roll_state = false
 	for zone in range(0, 9):

@@ -27,7 +27,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	for zone in range(1,9):
 		var data := SlimerotCampaign.zone(zone)
 		check(data.kill_requirement == KILLS[zone-1] and data.gate_coin_cost == GATES[zone-1] and data.enemy_level_range == Vector2i(LEVELS[zone-1][0],LEVELS[zone-1][1]), "Z%d canonical gate, kills and level range" % zone)
-		check(data.boss_id_or_null.is_empty() == (zone not in [2,4,6,8]) and data.slime_unlock_ids.size() == 3, "Z%d exact boss requirement and three pool additions" % zone)
+		check(data.boss_id_or_null.is_empty() == (zone not in [2,4,6,8]) and data.slime_unlock_ids.size() == 3, "Z%d exact boss requirement and three origin entries" % zone)
 		for index in 3:
 			var enemy := SlimerotCampaign.enemy(zone,SlimerotCampaign.ARCHETYPES[index])
 			check(enemy.max_hp == HP[zone-1][index] and enemy.coin_reward == COINS[zone-1][index] and enemy.attack_damage == HITS[zone-1][index] and enemy.level >= LEVELS[zone-1][0] and enemy.level <= LEVELS[zone-1][1], "Z%d %s fixed HP/reward/damage/level" % [zone,enemy.archetype])
@@ -60,7 +60,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	await suite.capture("Slimerot-stage-5-backyard-gate")
 	world.interact()
 	check(GameState.current_zone == 2 and WorldManager.gate_open(1) and GameState.coins == 0 and GameState.highest_zone_unlocked == 2, "Z1 to Z2 end-to-end pays 1000 once and permanently unlocks zone")
-	check(SlimeDatabase.eligible(2).size() == 6 and RollManager.select_base(800,1,GameState.highest_zone_unlocked) == "tralalero_tralala", "gate unlock immediately expands global roll eligibility")
+	check(SlimeDatabase.eligible(2).size() == 24 and RollManager.zone_luck_multiplier() == 2 and RollManager.select_base(800,1,GameState.highest_zone_unlocked) == "tralalero_tralala", "gate unlock raises zone luck while all 24 bases stay eligible")
 	WorldManager.return_through_gate()
 	check(GameState.current_zone == 1 and world.player.position == SlimerotCampaign.RETURN_ARRIVAL and GameState.highest_zone_unlocked == 2, "backtracking arrives at far gate and never shrinks pool")
 	world.player.position = SlimerotCampaign.EXIT_GATE

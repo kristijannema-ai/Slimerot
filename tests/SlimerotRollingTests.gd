@@ -44,11 +44,11 @@ func run(world: Node, owner_suite: Node) -> void:
 	check(monotonic, "rarer base thresholds always have strictly higher base damage")
 	for zone_id in range(1, 9):
 		var pool := SlimeDatabase.eligible(zone_id)
-		check(pool.size() == zone_id * 3 and pool.all(func(slime): return slime.zone_unlock <= zone_id), "zone %d eligibility contains exactly all unlocked entries" % zone_id)
+		check(pool.size() == 24, "zone %d eligibility contains all 24 bases independently of origin" % zone_id)
 	check(RollManager.select_base(1, 1, 1) == SlimerotBalance.FIRST_SLIME, "below-threshold fallback Tung Tung")
 	check(RollManager.select_base(12, 1, 1) == "brr_brr_patapim", "threshold equality selects reached base")
 	check(RollManager.select_base(20, 1, 2) == "ballerina_cappuccina", "interleaved zone thresholds sorted globally")
-	check(RollManager.select_base(1, 0.001, 1) == "chimpanzini_bananini" and RollManager.select_base(1, 0.001, 2) == "tralalero_tralala", "highest eligible winner changes only when zone unlocks")
+	check(RollManager.select_base(1, 0.001, 1) == "tralalero_tralala" and RollManager.select_base(1, 0.001, 2) == "tralalero_tralala", "the same score has the same winner in every zone")
 	check(RollManager.select_base(1, 1.0 / 4000000.0, 8) == "brainrot_singularity", "exact jackpot threshold winner")
 	var endpoint_valid := true
 	for index in 10000:
@@ -68,15 +68,20 @@ func run(world: Node, owner_suite: Node) -> void:
 	check(owned == 100 and InventoryManager.discoveries.size() > 1, "100 results stored as quantities and permanent discoveries")
 	check(not world.hud.wallet.text.contains("Lifetime"), "main HUD excludes Lifetime Rolls")
 	check(SlimeDatabase.threshold_label("brainrot_singularity") == "Rarity threshold: 1 in 4,000,000", "UI labels thresholds rather than isolated probabilities")
-	var counts := {"normal": 0, "shiny": 0, "glitched": 0, "golden": 0}
-	var sense_counts := counts.duplicate()
-	for index in 40000:
-		var point := (index + 0.5) / 40000.0
-		counts[RollManager.select_variant(point)] += 1
-		sense_counts[RollManager.select_variant(point, true)] += 1
-	check(counts == {"normal":39556,"shiny":400,"glitched":40,"golden":4}, "disjoint variant intervals have exact listed marginal chances")
-	check(sense_counts == {"normal":39445,"shiny":500,"glitched":50,"golden":5}, "Variant Sense improves each rare-variant chance by exactly 25%")
-	check(RollManager.select_variant(0.0) == "golden" and RollManager.select_variant(0.0001) == "glitched" and RollManager.select_variant(0.0011) == "shiny" and RollManager.select_variant(0.0111) == "normal", "variant interval boundaries and endpoints")
+	var counts := [0, 0, 0]
+	var sense_counts := [0, 0, 0]
+	var chances := RollManager.variant_probabilities()
+	var sensed := RollManager.variant_probabilities(true)
+	for index in 64000:
+		var point := (index + 0.5) / 64000.0
+		var flags := RollManager.select_variant_flags([point, point, point], chances)
+		var sense_flags := RollManager.select_variant_flags([point, point, point], sensed)
+		for bit in 3:
+			if flags & (1 << bit): counts[bit] += 1
+			if sense_flags & (1 << bit): sense_counts[bit] += 1
+	check(counts == [640,160,40], "each independent flag has its exact marginal probability on a uniform grid")
+	check(sense_counts == [800,200,50], "Variant Sense multiplies each independent flag probability by 1.25")
+	check(RollManager.select_variant_flags([0.0,0.0,0.0], chances) == 7 and RollManager.select_variant_flags([0.01,0.0025,0.000625], chances) == 0, "independent thresholds include zero and exclude exact upper boundaries")
 	var sequence: Array[String] = []
 	RollManager.variant_rng.seed = 57
 	for index in 200: sequence.append(RollManager.select_variant(float(RollManager.variant_rng.randi()) / 4294967296.0))
@@ -93,12 +98,12 @@ func run(world: Node, owner_suite: Node) -> void:
 	node_data("slimerot_test_b2", "checkpoint_luck", 20)
 	GameState.active_potion_type = "lucky_soda"
 	GameState.potion_remaining_seconds = 60
-	check(RollManager.effective_luck() == 1000, "effective luck = minor product ×20^breakthroughs ×active potion")
-	check(RollManager.set_luck_cap(20) and RollManager.rolling_luck() == 20 and RollManager.effective_luck() == 1000, "x20-era cap only affects roll luck")
+	check(RollManager.effective_luck() == 8000, "effective luck = minor product ×20^breakthroughs ×8 zones ×active potion")
+	check(RollManager.set_luck_cap(20) and RollManager.rolling_luck() == 20 and RollManager.effective_luck() == 8000, "x20-era cap only affects roll luck")
 	check(RollManager.set_luck_cap(1) and RollManager.rolling_luck() == 1 and SkillTreeManager.derived_stats().damage_multiplier == 1, "x1 cap makes commons reachable without changing combat")
-	check(RollManager.set_luck_cap(0) and RollManager.rolling_luck() == 1000, "MAX removes luck cap")
+	check(RollManager.set_luck_cap(0) and RollManager.rolling_luck() == 8000, "MAX removes luck cap")
 	GameState.potion_remaining_seconds = 0
-	check(RollManager.effective_luck() == 500, "expired potion has no luck effect")
+	check(RollManager.effective_luck() == 4000, "expired potion has no luck effect")
 	GameState.purchased_skill_node_ids.clear()
 	GameState.roll_skill_spend.clear()
 	check(not RollManager.set_luck_cap(1), "Luck Cap locked before Breakthrough I")
@@ -129,7 +134,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	var shiny := InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME, "shiny")
 	var glitched := InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME, "glitched")
 	var golden := InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME, "golden")
-	check(InventoryManager.damage_for_copy(normal) == 12 and InventoryManager.damage_for_copy(shiny) == 18 and InventoryManager.damage_for_copy(glitched) == 30 and InventoryManager.damage_for_copy(golden) == 48, "all four variant multipliers with additive Bonds and final rounding")
+	check(InventoryManager.damage_for_copy(normal) == roundf(7 * 1.7) and InventoryManager.damage_for_copy(shiny) == roundf(SlimeDatabase.get_base_combat_damage(SlimerotBalance.FIRST_SLIME, 1) * 1.7) and InventoryManager.damage_for_copy(glitched) == roundf(SlimeDatabase.get_base_combat_damage(SlimerotBalance.FIRST_SLIME, 2) * 1.7) and InventoryManager.damage_for_copy(golden) == roundf(SlimeDatabase.get_base_combat_damage(SlimerotBalance.FIRST_SLIME, 4) * 1.7), "canonical rounded rarity damage with additive Bonds and final combat rounding")
 	check(InventoryManager.collection().size() == 24 and InventoryManager.discoveries.size() == 1 and InventoryManager.best_variant_owned(SlimerotBalance.FIRST_SLIME) == "golden", "variants share one base collection entry with best owned variant")
 	check(InventoryManager.sell_value(SlimerotBalance.FIRST_SLIME+":normal") == 5 and InventoryManager.sell_value(SlimerotBalance.FIRST_SLIME+":shiny") == 10 and InventoryManager.sell_value(SlimerotBalance.FIRST_SLIME+":glitched") == 25 and InventoryManager.sell_value(SlimerotBalance.FIRST_SLIME+":golden") == 50, "all four variant sell multipliers")
 	var powerful := InventoryManager.add_copy("brainrot_singularity", "golden")
@@ -165,10 +170,11 @@ func run(world: Node, owner_suite: Node) -> void:
 	check(not RollManager.skip_reveal(), "first-discovery jackpot cannot be skipped")
 	RollManager.queue_reveal({"slime_id":SlimerotBalance.FIRST_SLIME, "variant":"normal", "threshold":2, "first_discovery":false, "first_roll":false})
 	check(RollManager.active_reveal.slime_id == "brainrot_singularity" and RollManager.reveal_queue.size() == 1, "later rolls cannot replace an unskippable discovery")
-	RollManager._process(2.8)
+	RollManager._process(SlimerotPresentation.ADAPTIVE_REVEAL_SECONDS[4])
 	check(RollManager.active_reveal.slime_id == SlimerotBalance.FIRST_SLIME and RollManager.skip_reveal() and GameState.lifetime_rolls == old_lifetime, "skip/queued reveals never re-award currency")
 	jackpot.first_discovery = false
 	RollManager.queue_reveal(jackpot)
+	RollManager._process(SlimerotPresentation.MAJOR_REVEAL_BREAK)
 	check(RollManager.skip_reveal(), "repeat jackpot can be skipped")
 	# Remove test-only skill definitions before persistence; preserve real purchase invariant.
 	for id in GameState.purchased_skill_node_ids.duplicate():

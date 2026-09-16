@@ -135,7 +135,7 @@ func test_exact_roundtrip() -> void:
 	var luck := RollManager.effective_luck()
 	var stats := SkillTreeManager.derived_stats()
 	var dps := InventoryManager.team_dps()
-	check(is_equal_approx(stats.luck, 30.36) and is_equal_approx(luck, 91.08), "B1 fixture uses the exact x20 checkpoint and one x3 potion")
+	check(is_equal_approx(stats.luck, 30.36) and is_equal_approx(luck, 91.08 * GameState.highest_zone_unlocked), "B1 fixture uses the exact x20 checkpoint and one x3 potion")
 	check(not expected.has("active_potion_multiplier") and not expected.has("luck") and not expected.has("max_hp") and not expected.has("move_speed") and not expected.has("damage_multiplier"), "current schema stores authoritative purchases and potion identity, excluding derived multipliers")
 	SaveManager.enabled = true
 	check(SaveManager.save_game(), "full progressed state writes successfully")
@@ -219,7 +219,7 @@ func test_schema_boundaries() -> void:
 	legacy.active_potion_multiplier = 600.0
 	write_bytes(SaveManager.save_path, JSON.stringify(legacy))
 	SaveManager.enabled = true
-	check(SaveManager.load_game() and is_equal_approx(RollManager.effective_luck(), 91.08) and GameState.potion_remaining_seconds == 287.5, "schema 6 imports potion identity and ignores stale saved derived multipliers")
+	check(SaveManager.load_game() and is_equal_approx(RollManager.effective_luck(), 91.08 * GameState.highest_zone_unlocked) and GameState.potion_remaining_seconds == 287.5, "schema 6 imports potion identity and ignores stale saved derived multipliers")
 	check(SaveManager.save_game() and disk_state().get("schema_version") == SlimerotBalance.SCHEMA_VERSION, "legacy save rewrites to the current schema after successful migration")
 	var current := SaveManager.snapshot()
 	var invalid_cases: Array = [null, [], "Slimerot", 1, {"schema_version": 1}, {"schema_version": 5, "boss_defeated_flags": []}, {"schema_version": 2, "inventory": {}, "purchased_skill_node_ids": [null], "settings": {}}, {"schema_version": 3, "purchased_skill_node_ids": "C01"}]
@@ -329,13 +329,13 @@ func test_consequential_writes() -> void:
 	WorldManager.travel(6)
 	var protected_copy := InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME)
 	InventoryManager.equip(protected_copy)
-	for index in 5: InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME)
+	var offering := InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME, 3)
 	SaveManager.enabled = true
 	var coins := GameState.coins
-	check(InventoryManager.mutate(SlimerotBalance.FIRST_SLIME), "mutation transaction accepts five valid unequipped Normal copies")
-	var mutation := disk_state()
-	check(mutation.get("coins") == coins - 100 and mutation.get("inventory", {}).get(SlimerotBalance.FIRST_SLIME + ":normal", {}).get("quantity") == 1 and mutation.get("inventory", {}).get(SlimerotBalance.FIRST_SLIME + ":shiny", {}).get("quantity") == 1, "mutation immediately saves fee, consumed copies and Shiny output atomically")
-	check(SaveManager.load_game() and InventoryManager.is_protected(protected_copy) and InventoryManager.discoveries[SlimerotBalance.FIRST_SLIME].has("shiny"), "mutation reload preserves protected team copy and Shiny discovery")
+	check(InventoryManager.sacrifice(offering, 1), "Shrine transaction accepts one unprotected copy with the chosen flag")
+	var shrine := disk_state()
+	check(shrine.get("coins") == coins and shrine.get("inventory", {}).get(SlimerotBalance.FIRST_SLIME + ":shiny+glitched", {}).get("quantity") == 0 and shrine.get("shrine_sacrifices", {}).get("shiny", []) == [SlimerotBalance.FIRST_SLIME], "Shrine immediately saves consumed identity and unique category atomically")
+	check(SaveManager.load_game() and InventoryManager.is_protected(protected_copy) and InventoryManager.discoveries[SlimerotBalance.FIRST_SLIME].has("shiny+glitched"), "Shrine reload preserves protected team and multi-variant discovery")
 	buy_b1()
 	var chosen_seed := -1
 	var probe := RandomNumberGenerator.new()

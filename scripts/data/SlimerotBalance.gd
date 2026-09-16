@@ -1,7 +1,7 @@
 class_name SlimerotBalance
 extends RefCounted
 
-const SCHEMA_VERSION := 9
+const SCHEMA_VERSION := 10
 # Offline roll work yields between bounded batches; it never keeps Android alive.
 const OFFLINE_SLICE_ROLLS := 256
 const OFFLINE_SLICE_MICROSECONDS := 4000
@@ -18,13 +18,8 @@ const DEATH_FADE_SECONDS := 1.5
 const SLIME_ORBIT_RADIUS := 52.0
 const AUTOSAVE_SECONDS := 10.0
 const FIRST_SLIME := "tung_tung_tung_sahur"
-const VARIANTS := ["normal", "shiny", "glitched", "golden"]
-const VARIANT_DATA := {
-	"normal": {"chance": 0.9889, "damage": 1.0, "sell": 1.0, "color": Color("b6ed78")},
-	"shiny": {"chance": 0.01, "damage": 1.5, "sell": 2.0, "color": Color("bcfaff")},
-	"glitched": {"chance": 0.001, "damage": 2.5, "sell": 5.0, "color": Color("e894ff")},
-	"golden": {"chance": 0.0001, "damage": 4.0, "sell": 10.0, "color": Color("ffdc77")},
-}
+const VARIANTS := SlimerotVariants.KEYS
+static var VARIANT_DATA: Dictionary = SlimerotVariants.all_metadata()
 const VARIANT_SENSE_MULTIPLIER := 1.25
 const LUCK_CAPS := {"MAX": 0.0, "x20-era": 20.0, "x1": 1.0}
 const MAX_ZONE := 8

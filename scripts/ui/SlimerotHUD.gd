@@ -364,6 +364,8 @@ func compact(value: float) -> String:
 	return str(int(value)) if value == floor(value) else "%.2f" % value
 
 func _process(delta: float) -> void:
+	var recede := 0.45 if reveal.active and reveal.tier >= 2 else 1.0
+	for control in [wallet, hp_label, location_label, tutorial, team_label, portraits]: control.modulate.a = recede
 	var bosses := get_tree().get_nodes_in_group("slimerot_bosses")
 	boss_label.visible = WorldManager.boss_active and not bosses.is_empty() and not is_instance_valid(menu)
 	if boss_label.visible:
@@ -746,10 +748,10 @@ func build_menu_content(title: String) -> void:
 	menu_label("Welcome back!", 28)
 	menu_label("Time away: %dh %02dm %02ds\nOffline rolls: %s\nRolls earned: +%s" % [seconds / 3600, (seconds / 60) % 60, seconds % 60, compact(offline_summary.get("rolls", 0)), compact(offline_summary.get("rolls_earned", 0))])
 	var discoveries: Array = offline_summary.get("new_discoveries", [])
-	menu_label("New discoveries: %d" % discoveries.size())
+	menu_label("New bases: %d · New variant combinations: %d" % [discoveries.size(), offline_summary.get("new_variant_discoveries", []).size()])
 	var best: Dictionary = offline_summary.get("best_drop", {})
 	if not best.is_empty():
 		var slime := SlimeDatabase.get_slime(best.get("slime_id", ""))
-		if slime != null: menu_label("Best drop: %s %s\n%s" % [str(best.get("variant", "normal")).capitalize(), slime.display_name, SlimeDatabase.threshold_label(slime.id)])
+		if slime != null: menu_label("Best drop: %s %s\nEffective rarity: 1 in %s · Damage %s" % [SlimerotVariants.label(best.get("variant_flags", best.get("variant", "normal"))), slime.display_name, SlimeDatabase.format_number(int(best.get("effective_rarity", SlimeDatabase.get_effective_rarity(slime.id, best.get("variant", "normal"))))), SlimeDatabase.format_number(SlimeDatabase.get_base_combat_damage(slime.id, best.get("variant_flags", best.get("variant", "normal"))))])
 	if offline_summary.get("pending", false): menu_label("Catching up remaining rolls…", 19)
 	menu_button("Continue exploring", close_top_modal, offline_input_locked())

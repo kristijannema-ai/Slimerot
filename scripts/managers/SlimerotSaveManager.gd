@@ -59,6 +59,9 @@ func _process(delta: float) -> void:
 func snapshot() -> Dictionary:
 	return {
 		"schema_version": SlimerotBalance.SCHEMA_VERSION,
+		"best_ever_effective_rarity": maxi(GameState.best_ever_effective_rarity, discovered_power(InventoryManager.discoveries)),
+		"rolls_since_last_power_improvement": GameState.rolls_since_last_power_improvement,
+		"shrine_sacrifices": GameState.shrine_sacrifices.duplicate(true),
 		"coins": GameState.coins, "rolls_balance": GameState.rolls_balance,
 		"lifetime_rolls": GameState.lifetime_rolls, "active_play_seconds": GameState.active_play_seconds,
 		"last_background_timestamp": GameState.last_background_timestamp,
@@ -273,6 +276,7 @@ func validated_candidate(candidate: Dictionary) -> Dictionary:
 func validate(data: Variant) -> bool:
 	if not data is Dictionary or data.get("schema_version") != SlimerotBalance.SCHEMA_VERSION:
 		return false
+	if not validate_rng_state(data): return false
 	if not data.get("first_roll_completed") is bool: return false
 	for key in ["last_background_timestamp", "offline_roll_remainder"]:
 		if (not data.get(key) is float and not data.get(key) is int) or not is_finite(float(data[key])) or data[key] < 0: return false
@@ -375,6 +379,9 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.coins = int(data.coins)
 	GameState.rolls_balance = int(data.rolls_balance)
 	GameState.lifetime_rolls = int(data.lifetime_rolls)
+	GameState.best_ever_effective_rarity = int(data.best_ever_effective_rarity)
+	GameState.rolls_since_last_power_improvement = int(data.rolls_since_last_power_improvement)
+	GameState.shrine_sacrifices = data.shrine_sacrifices.duplicate(true)
 	GameState.active_play_seconds = float(data.active_play_seconds)
 	GameState.last_background_timestamp = float(data.last_background_timestamp)
 	GameState.offline_roll_remainder = float(data.offline_roll_remainder)
@@ -420,6 +427,7 @@ func apply_snapshot(data: Dictionary) -> void:
 func migrate(value: Variant) -> Variant:
 	if not value is Dictionary or not SlimerotSaveFormat.integer(value.get("schema_version")): return value
 	var version := int(value.schema_version)
+	if version == 9: return migrate_rng(value)
 	if version not in [1, 2, 3, 4, 5, 6, 7, 8]: return value
 	value = value.duplicate(true)
 	value.schema_version = version
@@ -450,7 +458,7 @@ func migrate(value: Variant) -> Variant:
 	for pair in data.inventory.values():
 		pair["copy_ranges"] = []
 		pair["favorite_copy_ranges"] = []
-	return data
+	return migrate_rng(data)
 
 func migrate_legacy(value: Variant) -> Variant:
 	if not value is Dictionary or value.get("schema_version") not in [1, 2, 3, 4, 5]:
@@ -610,3 +618,47 @@ func _notification(what: int) -> void:
 func _exit_tree() -> void:
 	if enabled:
 		save_game()
+
+func discovered_power(history: Variant) -> int:
+	var best := 0
+	if not history is Dictionary: return best
+	for id in history:
+		if (not id is String and not id is StringName) or not history[id] is Array: continue
+		for variant in history[id]:
+			if SlimerotVariants.mask(variant) >= 0: best = maxi(best, SlimeDatabase.get_effective_rarity(id, variant))
+	return best
+
+func migrate_rng(value: Dictionary) -> Dictionary:
+	# Work on a copy. The existing candidate validator must succeed before any write.
+	var data := value.duplicate(true)
+	if not data.get("inventory") is Dictionary or not data.get("discoveries") is Dictionary: return {}
+	for key in data.inventory:
+		var pair: Variant = data.inventory[key]
+		if not pair is Dictionary or pair.get("variant") not in ["normal", "shiny", "glitched", "golden"]: return {}
+		var flags := SlimerotVariants.mask(pair.variant)
+		if pair.has("variant_flags") and pair.variant_flags != flags: return {}
+		pair.variant_flags = flags
+	data.schema_version = SlimerotBalance.SCHEMA_VERSION
+	data.best_ever_effective_rarity = discovered_power(data.discoveries)
+	# Legacy ownership can also repair an incomplete historical discovery baseline.
+	for pair in data.inventory.values():
+		if pair.get("quantity", 0) > 0 and pair.get("slime_id") is String:
+			data.best_ever_effective_rarity = maxi(data.best_ever_effective_rarity, SlimeDatabase.get_effective_rarity(pair.slime_id, pair.variant))
+	data.rolls_since_last_power_improvement = 0
+	data.shrine_sacrifices = {"shiny": [], "glitched": [], "golden": []}
+	return data
+
+func validate_rng_state(data: Dictionary) -> bool:
+	if not SlimerotSaveFormat.integer(data.get("best_ever_effective_rarity")) or not SlimerotSaveFormat.integer(data.get("rolls_since_last_power_improvement")): return false
+	if data.best_ever_effective_rarity < 0 or data.best_ever_effective_rarity > SlimeDatabase.get_effective_rarity("brainrot_singularity", 7): return false
+	if data.rolls_since_last_power_improvement < 0 or not SlimerotSaveFormat.integer(data.get("lifetime_rolls")) or data.rolls_since_last_power_improvement > data.lifetime_rolls: return false
+	if data.best_ever_effective_rarity < discovered_power(data.get("discoveries")): return false
+	if not data.get("shrine_sacrifices") is Dictionary or data.shrine_sacrifices.size() != 3: return false
+	for category in ["shiny", "glitched", "golden"]:
+		var ids: Variant = data.shrine_sacrifices.get(category)
+		if not ids is Array or ids.size() > SlimerotRoster.ROWS.size(): return false
+		var seen := {}
+		for id in ids:
+			if not id is String or not SlimeDatabase.slimes.has(id) or seen.has(id): return false
+			seen[id] = true
+	return true

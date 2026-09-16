@@ -59,7 +59,7 @@ func verify_fixture() -> void:
 	check(SaveManager.enabled and SaveManager.last_error.is_empty(), "autoload recovered save")
 	check(GameState.coins == 6994850 and GameState.coins_earned == 7000000 and GameState.coins_spent == 5150, "Coin accounting")
 	check(GameState.lifetime_rolls == 10000 and GameState.rolls_balance == 8035, "Roll accounting")
-	check(is_equal_approx(SkillTreeManager.derived_stats().luck, 30.36) and is_equal_approx(RollManager.effective_luck(), 91.08), "B1 derives once")
+	check(is_equal_approx(SkillTreeManager.derived_stats().luck, 30.36) and is_equal_approx(RollManager.effective_luck(), 91.08 * 8), "B1 derives once")
 	check(InventoryManager.equipped_copy_ids == ["slimerot_copy_3", "slimerot_copy_2", "slimerot_copy_1"] and InventoryManager.next_copy_id == 4, "exact team order and copy serial")
 	check(InventoryManager.inventory[SlimerotBalance.FIRST_SLIME + ":normal"].quantity == 2 and InventoryManager.is_protected("slimerot_copy_3"), "quantities and favorite")
 	check(InventoryManager.discoveries.get("brr_brr_patapim", []).has("shiny"), "variant collection")
