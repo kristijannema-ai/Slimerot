@@ -7,6 +7,8 @@ var coins := 0
 var rolls_balance := 0
 var lifetime_rolls := 0
 var active_play_seconds := 0.0
+var last_background_timestamp := 0.0
+var offline_roll_remainder := 0.0
 var highest_zone_unlocked := 1
 var zone_kill_counts: Dictionary = {}
 var unlocked_gate_flags: Dictionary = {}
@@ -67,6 +69,8 @@ func reset() -> void:
 	rolls_balance = 0
 	lifetime_rolls = 0
 	active_play_seconds = 0.0
+	last_background_timestamp = 0.0
+	offline_roll_remainder = 0.0
 	highest_zone_unlocked = 1
 	zone_kill_counts.clear()
 	unlocked_gate_flags.clear()

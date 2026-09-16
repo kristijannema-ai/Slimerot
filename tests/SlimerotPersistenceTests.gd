@@ -74,7 +74,7 @@ func run(owner_world: Node, owner_suite: Node) -> void:
 	test_exact_roundtrip()
 	test_recovery()
 	test_schema_boundaries()
-	test_active_time()
+	await test_active_time()
 	test_consequential_writes()
 	test_reset()
 	fresh()
@@ -289,7 +289,8 @@ func test_active_time() -> void:
 	check(GameState.is_paused() and GameState.active_play_seconds == paused.active_play_seconds and GameState.potion_remaining_seconds == 300 and GameState.boss_brew_seconds == 300, "Android pause immediately saves and freezes active play and both potion clocks")
 	SaveManager._notification(NOTIFICATION_APPLICATION_RESUMED)
 	SaveManager._notification(NOTIFICATION_APPLICATION_FOCUS_IN)
-	check(not GameState.is_paused(), "resume returns to active gameplay without offline elapsed time")
+	await SaveManager.resume_from_background()
+	check(not GameState.is_paused(), "resume commits catch-up before returning to active gameplay")
 	GameState.menu_paused = true
 	GameState._process(100)
 	SaveManager._process(100)

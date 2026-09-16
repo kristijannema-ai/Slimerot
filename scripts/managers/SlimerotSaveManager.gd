@@ -2,6 +2,7 @@ extends Node
 
 signal save_failed(message: String)
 signal snapshot_applied(previous_active_play_seconds: float)
+signal offline_summary_ready(summary: Dictionary)
 var save_path := "user://Slimerot-save.json"
 var elapsed := 0.0
 var enabled := true
@@ -12,6 +13,10 @@ var recovery_status := ""
 var application_paused := false
 var focus_lost := false
 var writing := false
+var offline_processing := false
+var offline_commit_pending := false
+var last_offline_summary: Dictionary = {}
+var offline_retry_seconds := 0.0
 
 func _ready() -> void:
 	# Slimerot's standalone developer estimator must never load or write a player save.
@@ -24,12 +29,26 @@ func _ready() -> void:
 		save_path = "res://.godot/Slimerot-test-%d.json" % OS.get_process_id()
 	if OS.is_debug_build() and "--slimerot-restart-probe" in OS.get_cmdline_user_args():
 		save_path = "res://.godot/Slimerot-restart.json"
+	if OS.is_debug_build() and "--slimerot-offline-restart-probe" in OS.get_cmdline_user_args():
+		save_path = "res://.godot/Slimerot-offline-restart.json"
 	load_game()
-	GameState.critical_change.connect(func(_reason): save_game())
+	GameState.critical_change.connect(func(_reason):
+		if not offline_processing: save_game())
 	get_tree().auto_accept_quit = false
 	get_tree().quit_on_go_back = false
+	# Only actual launches/resume perform catch-up. Explicit load/import remains a
+	# pure restore operation, also making migration tools safe and deterministic.
+	if enabled and not Array(OS.get_cmdline_user_args()).any(func(argument): return argument in ["--slimerot-test", "--slimerot-restart-probe", "--slimerot-offline-restart-probe"]):
+		GameState.suspended = true
+		resume_from_background.call_deferred()
 
 func _process(delta: float) -> void:
+	if offline_commit_pending:
+		offline_retry_seconds += delta
+		if offline_retry_seconds >= 1.0 and not application_paused and not focus_lost:
+			offline_retry_seconds = 0.0
+			commit_offline_progress()
+		return
 	if not enabled or GameState.is_paused():
 		return
 	elapsed += delta
@@ -42,6 +61,8 @@ func snapshot() -> Dictionary:
 		"schema_version": SlimerotBalance.SCHEMA_VERSION,
 		"coins": GameState.coins, "rolls_balance": GameState.rolls_balance,
 		"lifetime_rolls": GameState.lifetime_rolls, "active_play_seconds": GameState.active_play_seconds,
+		"last_background_timestamp": GameState.last_background_timestamp,
+		"offline_roll_remainder": GameState.offline_roll_remainder,
 		"first_roll_completed": GameState.lifetime_rolls > 0,
 		"highest_zone_unlocked": GameState.highest_zone_unlocked, "current_zone": GameState.current_zone,
 		"zone_kill_counts": GameState.zone_kill_counts.duplicate(true),
@@ -66,7 +87,87 @@ func snapshot() -> Dictionary:
 	}
 
 func save_game() -> bool:
-	return write_snapshot(snapshot()) if enabled else false
+	if not enabled or offline_processing: return false
+	if not GameState.suspended and not offline_commit_pending:
+		stamp_checkpoint(Time.get_unix_time_from_system())
+	return write_snapshot(snapshot())
+
+func stamp_checkpoint(now: float) -> void:
+	# The timestamp accompanies every durable state, including an OS kill with no
+	# pause callback. Never move the anchor backwards after a wall-clock correction.
+	GameState.last_background_timestamp = maxf(GameState.last_background_timestamp, now)
+	var cooldown: float = SkillTreeManager.derived_stats().roll_cooldown
+	GameState.offline_roll_remainder = cooldown - clampf(RollManager.cooldown_remaining, 0.0, cooldown) if RollManager.cooldown_remaining > 0.0 else 0.0
+
+func enter_background(now: float = -1.0) -> bool:
+	GameState.suspended = true
+	if offline_processing: return false # The existing checkpoint still owns this batch.
+	if offline_commit_pending: return commit_offline_progress()
+	stamp_checkpoint(Time.get_unix_time_from_system() if now < 0.0 else now)
+	return save_game()
+
+func resume_from_background(now: float = -1.0) -> Dictionary:
+	if offline_processing or RollManager.completing or application_paused or focus_lost: return {}
+	if offline_commit_pending:
+		commit_offline_progress()
+		return last_offline_summary
+	if not enabled:
+		GameState.suspended = false
+		return {}
+	GameState.suspended = true
+	var observed_time := Time.get_unix_time_from_system() if now < 0.0 else now
+	if not is_finite(observed_time) or observed_time > SlimerotSaveFormat.MAX_EXACT_INTEGER:
+		return reject_offline_resume()
+	var anchor := GameState.last_background_timestamp
+	var away := maxf(0.0, observed_time - anchor) if anchor > 0.0 else 0.0
+	var stats := SkillTreeManager.derived_stats()
+	var count := 0
+	var remainder := GameState.offline_roll_remainder
+	var auto_enabled: bool = GameState.settings.auto_roll_state and stats.auto_roll
+	if anchor > 0.0 and away > 0.0 and auto_enabled:
+		var total: float = away + remainder
+		var cycles: float = floor(total / stats.roll_cooldown + 0.000000001)
+		var capacity := mini(SlimerotSaveFormat.MAX_EXACT_INTEGER - GameState.lifetime_rolls, SlimerotSaveFormat.MAX_EXACT_INTEGER - InventoryManager.next_copy_id)
+		if cycles > capacity: return reject_offline_resume()
+		count = int(cycles)
+		remainder = maxf(0.0, total - count * stats.roll_cooldown)
+		RollManager.cooldown_remaining = stats.roll_cooldown - remainder
+	last_offline_summary = {"seconds_away": away, "rolls": 0, "rolls_earned": 0, "new_discoveries": [], "best_drop": {}, "auto_sold_coins": 0, "pending": true}
+	offline_processing = true
+	if count > 0:
+		offline_summary_ready.emit(last_offline_summary.duplicate(true))
+		var results: Dictionary = await RollManager.process_offline_rolls(count)
+		if int(results.get("rolls", 0)) != count: return reject_offline_resume()
+		last_offline_summary.merge(results, true)
+	GameState.last_background_timestamp = maxf(anchor, observed_time)
+	GameState.offline_roll_remainder = remainder
+	offline_processing = false
+	offline_commit_pending = true
+	commit_offline_progress()
+	return last_offline_summary
+
+func reject_offline_resume() -> Dictionary:
+	# Preserve the original checkpoint if the clock/count cannot be represented.
+	# Never consume an interval for which the complete batch was not committed.
+	offline_processing = false
+	offline_commit_pending = false
+	enabled = false
+	GameState.suspended = application_paused or focus_lost
+	last_offline_summary.clear()
+	fail("Slimerot could not safely calculate offline progress. The previous save was preserved; check the device clock and reopen.")
+	return {}
+
+func commit_offline_progress() -> bool:
+	# Rewards and the consumed timestamp share one checksummed generation. If the
+	# write fails, keep gameplay paused and retry this state, never re-roll the batch.
+	if not enabled or not write_snapshot(snapshot()): return false
+	offline_commit_pending = false
+	last_offline_summary.pending = false
+	GameState.suspended = application_paused or focus_lost
+	GameState.changed.emit()
+	if last_offline_summary.get("seconds_away", 0.0) >= 1.0 or last_offline_summary.get("rolls", 0) > 0:
+		offline_summary_ready.emit(last_offline_summary.duplicate(true))
+	return true
 
 func write_snapshot(data: Dictionary) -> bool:
 	if not enabled or writing:
@@ -173,6 +274,10 @@ func validate(data: Variant) -> bool:
 	if not data is Dictionary or data.get("schema_version") != SlimerotBalance.SCHEMA_VERSION:
 		return false
 	if not data.get("first_roll_completed") is bool: return false
+	for key in ["last_background_timestamp", "offline_roll_remainder"]:
+		if (not data.get(key) is float and not data.get(key) is int) or not is_finite(float(data[key])) or data[key] < 0: return false
+	if data.offline_roll_remainder > SlimerotBalance.ROLL_COOLDOWN: return false
+	if data.last_background_timestamp > SlimerotSaveFormat.MAX_EXACT_INTEGER: return false
 	if not data.get("potion_inventory") is Dictionary or not data.get("completion_portal_unlocked") is bool or not data.get("campaign_completed") is bool: return false
 	if (not data.get("boss_brew_seconds") is float and not data.get("boss_brew_seconds") is int) or not is_finite(float(data.boss_brew_seconds)) or data.boss_brew_seconds < 0 or data.boss_brew_seconds > 300: return false
 	for id in data.potion_inventory:
@@ -230,32 +335,7 @@ func validate(data: Variant) -> bool:
 		if SkillTreeManager.nodes[id].currency_type == "Rolls" and not data.roll_skill_spend.has(id): return false
 	if int(data.lifetime_rolls) != int(data.rolls_balance) + SkillTreeManager.rolls_spent(data.purchased_skill_node_ids, data.roll_skill_spend):
 		return false
-	var seen: Dictionary = {}
-	for key in data.inventory:
-		var pair: Variant = data.inventory[key]
-		if not pair is Dictionary or not pair.get("slime_id") is String or not pair.get("variant") is String:
-			return false
-		if SlimeDatabase.get_slime(pair.slime_id) == null or pair.variant not in SlimerotBalance.VARIANTS or key != pair.slime_id + ":" + pair.variant:
-			return false
-		if not pair.get("copy_ids") is Array or not pair.get("favorite") is bool or pair.get("quantity") != pair.copy_ids.size():
-			return false
-		if not pair.get("favorite_copy_ids") is Array:
-			return false
-		var pair_ids: Dictionary = {}
-		for copy_id in pair.copy_ids:
-			if not copy_id is String or not copy_id.begins_with("slimerot_copy_") or copy_id in seen:
-				return false
-			var serial: String = copy_id.trim_prefix("slimerot_copy_")
-			if not serial.is_valid_int() or int(serial) < 1 or int(serial) >= int(data.next_copy_id):
-				return false
-			seen[copy_id] = true
-			pair_ids[copy_id] = true
-		# A whole favorited pair can contain thousands of copies. Hash membership
-		# keeps validation linear instead of rescanning its array for each favorite.
-		var favorites: Dictionary = {}
-		for favorite_id in pair.favorite_copy_ids:
-			if not favorite_id is String or not pair_ids.has(favorite_id) or favorites.has(favorite_id): return false
-			favorites[favorite_id] = true
+	if not InventoryManager.validate_saved_inventory(data.inventory, data.equipped_copy_ids, data.next_copy_id).is_empty(): return false
 	for id in data.discoveries:
 		if not SlimeDatabase.slimes.has(id) or not data.discoveries[id] is Array:
 			return false
@@ -265,14 +345,11 @@ func validate(data: Variant) -> bool:
 	for pair in data.inventory.values():
 		if pair.quantity > 0 and pair.variant not in data.discoveries.get(pair.slime_id, []):
 			return false
-	var equipped: Array = []
-	for copy_id in data.equipped_copy_ids:
-		if not copy_id is String or copy_id not in seen or copy_id in equipped:
-			return false
-		equipped.append(copy_id)
-	# Slot count is derived from the saved purchases, never trusted as an independent stat.
-	if equipped.size() > SkillTreeManager.derived_stats(data.purchased_skill_node_ids).equipped_slots or (data.lifetime_rolls == 0 and not seen.is_empty()):
-		return false
+	# Capacity is derived; identity/protection validation supports compact stacks.
+	if data.equipped_copy_ids.size() > SkillTreeManager.derived_stats(data.purchased_skill_node_ids).equipped_slots: return false
+	if data.lifetime_rolls == 0:
+		for pair in data.inventory.values():
+			if pair.quantity > 0: return false
 	if not SlimerotSaveFormat.integer(data.get("equipped_slot_count")) or data.equipped_slot_count != SkillTreeManager.derived_stats(data.purchased_skill_node_ids).equipped_slots: return false
 	for key in SlimerotBalance.SETTINGS:
 		if not data.settings.has(key):
@@ -299,6 +376,10 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.rolls_balance = int(data.rolls_balance)
 	GameState.lifetime_rolls = int(data.lifetime_rolls)
 	GameState.active_play_seconds = float(data.active_play_seconds)
+	GameState.last_background_timestamp = float(data.last_background_timestamp)
+	GameState.offline_roll_remainder = float(data.offline_roll_remainder)
+	offline_commit_pending = false
+	last_offline_summary.clear()
 	GameState.highest_zone_unlocked = int(data.highest_zone_unlocked)
 	GameState.current_zone = int(data.current_zone)
 	GameState.zone_kill_counts = data.zone_kill_counts.duplicate(true)
@@ -316,6 +397,8 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.settings = SlimerotBalance.SETTINGS.duplicate(true)
 	GameState.settings.merge(data.settings, true)
 	InventoryManager.inventory = data.inventory.duplicate(true)
+	InventoryManager.compact_inventory()
+	InventoryManager.invalidate_lookup_cache()
 	InventoryManager.equipped_copy_ids.assign(data.equipped_copy_ids)
 	InventoryManager.next_copy_id = int(data.next_copy_id)
 	InventoryManager.discoveries = data.discoveries.duplicate(true)
@@ -337,7 +420,7 @@ func apply_snapshot(data: Dictionary) -> void:
 func migrate(value: Variant) -> Variant:
 	if not value is Dictionary or not SlimerotSaveFormat.integer(value.get("schema_version")): return value
 	var version := int(value.schema_version)
-	if version not in [1, 2, 3, 4, 5, 6, 7]: return value
+	if version not in [1, 2, 3, 4, 5, 6, 7, 8]: return value
 	value = value.duplicate(true)
 	value.schema_version = version
 	# Guard every legacy container before any migration dereferences it.
@@ -362,6 +445,11 @@ func migrate(value: Variant) -> Variant:
 	var settings: Dictionary = SlimerotBalance.SETTINGS.duplicate(true)
 	settings.merge(data.settings, true)
 	data.settings = settings
+	data.last_background_timestamp = 0.0
+	data.offline_roll_remainder = 0.0
+	for pair in data.inventory.values():
+		pair["copy_ranges"] = []
+		pair["favorite_copy_ranges"] = []
 	return data
 
 func migrate_legacy(value: Variant) -> Variant:
@@ -461,6 +549,7 @@ func migrate_coin_tree(data: Dictionary) -> Dictionary:
 
 func reset_save() -> bool:
 	# Called only by the hold-to-confirm settings control; never by a roll or a load failure.
+	if offline_processing or offline_commit_pending: return false
 	# Commit a durable reset marker first. Recovery then cannot resurrect old progress
 	# if the process dies between replacing the main and clearing its older backup.
 	var previous := snapshot()
@@ -469,6 +558,8 @@ func reset_save() -> bool:
 	InventoryManager.reset()
 	RollManager.reset()
 	GameState.reset()
+	last_offline_summary.clear()
+	offline_retry_seconds = 0.0
 	var fresh := snapshot()
 	for suffix in SlimerotSaveFormat.SUFFIXES:
 		var candidate := SlimerotSaveFormat.read(save_path + suffix)
@@ -499,17 +590,21 @@ func reset_save() -> bool:
 
 func _notification(what: int) -> void:
 	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN]:
+		var was_inactive := application_paused or focus_lost
 		if what == NOTIFICATION_APPLICATION_PAUSED: application_paused = true
 		if what == NOTIFICATION_APPLICATION_RESUMED: application_paused = false
 		if what == NOTIFICATION_APPLICATION_FOCUS_OUT: focus_lost = true
 		if what == NOTIFICATION_APPLICATION_FOCUS_IN: focus_lost = false
-		GameState.suspended = application_paused or focus_lost
-		if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT]:
+		var is_inactive := application_paused or focus_lost
+		if is_inactive and not was_inactive:
+			GameState.suspended = true
 			for action in ["move_left", "move_right", "move_up", "move_down", "roll", "interact"]:
 				if InputMap.has_action(action): Input.action_release(action)
-			save_game()
+			enter_background()
+		elif was_inactive and not is_inactive:
+			resume_from_background.call_deferred()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST:
-		save_game()
+		if not offline_processing: enter_background()
 		get_tree().quit()
 
 func _exit_tree() -> void:

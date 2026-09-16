@@ -132,6 +132,8 @@ func test_snapshots_and_time() -> void:
 	var strongest: Dictionary = logger.snapshot().strongest_owned
 	check(strongest.id == SlimerotBalance.FIRST_SLIME and strongest.variant == "shiny" and strongest.damage == InventoryManager.damage_for_copy(real), "zero-quantity historical rarest entries cannot become strongest owned")
 	check(strongest.has("name") and logger.snapshot().strongest_equipped == strongest, "strongest summaries include stable id, content name, variant and actual damage")
+	InventoryManager.add_copies("brainrot_singularity", "golden", 100000)
+	check(logger.snapshot().strongest_owned.id == "brainrot_singularity" and logger.snapshot().strongest_equipped.id == SlimerotBalance.FIRST_SLIME, "compact offline stacks participate in strongest-owned instrumentation without changing equipment")
 	var copied: Dictionary = logger.snapshot()
 	copied.equipped_copy_ids.clear()
 	copied.zone_kill_counts["1"] = 999

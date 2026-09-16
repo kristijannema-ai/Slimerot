@@ -5,6 +5,9 @@ var hud: SlimerotHUD
 var zone_root: Node2D
 var interactions: Array[SlimerotInteraction] = []
 var current_interaction: SlimerotInteraction
+var interaction_in_flight := false
+var transition_in_flight := false
+var arrival_interaction: SlimerotInteraction
 var arena: SlimerotBossArena
 var rounded_styles: Dictionary = {}
 
@@ -18,7 +21,7 @@ func _ready() -> void:
 	hud = SlimerotHUD.new()
 	add_child(hud)
 	player.joystick = hud.joystick
-	hud.interact_requested.connect(interact)
+	hud.interact_requested.connect(request_interaction)
 	WorldManager.zone_changed.connect(build_zone)
 	WorldManager.respawn_requested.connect(respawn_player)
 	WorldManager.boss_requested.connect(start_boss_arena)
@@ -55,6 +58,8 @@ func configure_input() -> void:
 				InputMap.action_add_event(action, event)
 
 func build_zone(zone_id: int) -> void:
+	transition_in_flight = true
+	arrival_interaction = null
 	if is_instance_valid(arena):
 		remove_child(arena)
 		arena.queue_free()
@@ -95,6 +100,8 @@ func build_zone(zone_id: int) -> void:
 	respawn_player()
 	if WorldManager.arriving_from_next: player.position = SlimerotCampaign.RETURN_ARRIVAL
 	reset_camera()
+	transition_in_flight = false
+	update_context()
 	queue_redraw()
 
 func reset_camera() -> void:
@@ -157,21 +164,41 @@ func add_interaction(at: Vector2, prompt: String, action: Callable) -> void:
 	interactions.append(component)
 
 func interact() -> void:
-	if GameState.player_dead or WorldManager.boss_active: return
-	if not GameState.is_paused() and is_instance_valid(current_interaction):
-		current_interaction.activate(player.global_position)
+	request_interaction()
+
+func request_interaction() -> void:
+	if interaction_in_flight or transition_in_flight or GameState.player_dead or WorldManager.boss_active or GameState.is_paused(): return
+	# Resolve proximity now: a stationary tap must never depend on a movement or
+	# process frame updating an old context reference first.
+	update_context()
+	if not is_instance_valid(current_interaction): return
+	interaction_in_flight = true
+	var previous_zone := GameState.current_zone
+	current_interaction.activate(player.global_position)
+	if previous_zone != GameState.current_zone:
+		# Arrivals are inside the return gate's range. Suppress that gate until the
+		# player leaves it so repeated taps cannot bounce between two loaded zones.
+		arrival_interaction = current_interaction
+	interaction_in_flight = false
+	update_context()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("roll") and not event.is_echo():
 		RollManager.request_roll()
 	if event.is_action_pressed("interact") and not event.is_echo():
-		interact()
+		request_interaction()
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
+	update_context()
+
+func update_context() -> void:
 	var previous_interaction := current_interaction
 	current_interaction = null
+	if is_instance_valid(arrival_interaction) and not arrival_interaction.is_available(player.global_position):
+		arrival_interaction = null
 	var distance := SlimerotBalance.INTERACT_RANGE + 1.0
 	for component in interactions:
+		if not is_instance_valid(component) or component == arrival_interaction: continue
 		if component.has_meta("gate"): component.prompt = "Enter Completion Portal" if GameState.current_zone == 8 and GameState.completion_portal_unlocked else WorldManager.gate_prompt(int(component.get_meta("gate")))
 		if component.has_meta("structure") and GameState.structure_unlocked_flags.get(component.get_meta("structure"),false): component.prompt = "Open " + str(component.get_meta("structure")).replace("_"," ").capitalize()
 		var candidate := component.global_position.distance_to(player.global_position)
@@ -180,6 +207,7 @@ func _process(delta: float) -> void:
 			current_interaction = component
 	var prompt := current_interaction.prompt if current_interaction != null else ""
 	hud.set_interaction(prompt)
+	hud.interact_button.disabled = interaction_in_flight or transition_in_flight
 	if previous_interaction != current_interaction: queue_redraw()
 
 func rounded(rect: Rect2, color: Color, radius: int = 12) -> void:
