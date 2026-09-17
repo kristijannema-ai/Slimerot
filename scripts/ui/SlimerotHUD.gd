@@ -354,7 +354,7 @@ func refresh() -> void:
 	skills_button.visible = GameState.structure_unlocked_flags.get("skill_tree_shrine", false)
 	map_button.visible = GameState.boss_defeated_flags.get("zone_4", false) or GameState.structure_unlocked_flags.get("fast_travel_pillar", false)
 	super_label.visible = stats.super_roll
-	super_label.text = "SUPER ROLL ×5\n" + ("Next roll!" if RollManager.rolls_until_super() == 1 else "In %d rolls" % RollManager.rolls_until_super())
+	super_label.text = "SUPER ROLL ×%d\n" % int(stats.super_roll_multiplier) + ("Next roll!" if RollManager.rolls_until_super() == 1 else "In %d rolls" % RollManager.rolls_until_super())
 	auto_button.disabled = not stats.auto_roll or GameState.is_paused()
 	auto_button.text = "Auto · Locked" if not stats.auto_roll else ("Auto · ON" if GameState.settings.auto_roll_state else "Auto · OFF")
 

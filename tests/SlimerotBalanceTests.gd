@@ -157,7 +157,10 @@ func test_estimator_isolation() -> void:
 		var estimated: Dictionary = model._stats(owned)
 		var actual := SkillTreeManager.derived_stats(ids)
 		effects_match = effects_match and is_equal_approx(estimated.luck, actual.luck) and is_equal_approx(estimated.cooldown, actual.roll_cooldown) and estimated.slots == actual.equipped_slots and is_equal_approx(estimated.damage, actual.damage_multiplier) and is_equal_approx(estimated.boss_damage, 1.0 + actual.boss_damage_bonus)
-	check(effects_match, "all modeled Roll/Coin effects agree with live derived stats, including three exact x20 checkpoints")
+		effects_match = effects_match and is_equal_approx(estimated.minor_roll_tree_product, actual.minor_roll_tree_product) and is_equal_approx(estimated.breakthrough_product, actual.breakthrough_product) and is_equal_approx(estimated.coin_tree_luck_product, actual.coin_tree_luck_product)
+		effects_match = effects_match and estimated.super_roll_tier == actual.super_roll_tier and estimated.super_roll_interval == actual.super_roll_interval and estimated.super_roll_multiplier == actual.super_roll_multiplier
+		effects_match = effects_match and is_equal_approx(estimated.coin_gain, 1.0 + actual.coin_scavenger) and is_equal_approx(estimated.move_speed, actual.move_speed)
+	check(effects_match, "all modeled Roll/Coin effects agree with live derived stats, including Fortune, Super tiers and exact x20 checkpoints")
 	for policy in first.policies:
 		var counts: Dictionary = policy.summary.milestones.final_boss
 		check(counts.observed == 0 and counts.median == null, "%s estimator reports unfinished runs without inventing completion" % policy.policy.id)
@@ -195,7 +198,7 @@ func live_fight() -> void:
 	CombatManager.set_physics_process(true)
 	GameState.lifetime_rolls = 140
 	GameState.rolls_balance = 140
-	for id in ["R01", "R02", "R03"]: check(SkillTreeManager.purchase(id), "live fixture purchases " + id)
+	for id in ["R01", "R03", "R02"]: check(SkillTreeManager.purchase(id), "live fixture purchases " + id)
 	InventoryManager.equip(InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME))
 	WorldManager.travel(1)
 	await get_tree().physics_frame

@@ -111,7 +111,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	for extra in 40:
 		RollManager.cooldown_remaining = 0.0
 		RollManager.request_roll()
-	check((SkillTreeManager.purchase("R01") and SkillTreeManager.purchase("R02") and SkillTreeManager.purchase("R03")), "Roll-tree purchase consumes currency without minting Rolls")
+	check((SkillTreeManager.purchase("R01") and SkillTreeManager.purchase("R03") and SkillTreeManager.purchase("R02")), "Roll-tree purchase consumes currency without minting Rolls")
 	check(GameState.lifetime_rolls == GameState.rolls_balance + SkillTreeManager.rolls_spent(GameState.purchased_skill_node_ids), "Lifetime Rolls equals balance plus Roll-tree spending")
 	GameState.settings.auto_roll_state = true
 	var before_auto := GameState.lifetime_rolls

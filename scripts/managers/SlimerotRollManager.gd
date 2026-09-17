@@ -41,24 +41,60 @@ func zone_luck_multiplier() -> int:
 	return clampi(GameState.highest_zone_unlocked, 1, SlimerotBalance.MAX_ZONE)
 
 func effective_luck(single_roll_multiplier: float = 1.0) -> float:
-	# Derived tree luck includes every owned luck_multiplier node.
-	var luck: float = SkillTreeManager.derived_stats().luck * zone_luck_multiplier()
-	if GameState.potion_remaining_seconds > 0.0: luck *= GameState.active_potion_multiplier
-	return luck * single_roll_multiplier
+	return get_effective_luck({"super_roll_multiplier": single_roll_multiplier})
 
 func rolling_luck(single_roll_multiplier: float = 1.0) -> float:
-	var luck := effective_luck()
-	if SkillTreeManager.derived_stats().breakthrough_count > 0:
-		var cap: float = GameState.settings.luck_cap
-		if cap in SlimerotBalance.LUCK_CAPS.values() and cap > 0.0: luck = minf(luck, cap)
-	return luck * single_roll_multiplier
+	return get_effective_luck({"super_roll_multiplier": single_roll_multiplier, "apply_cap": true})
+
+func get_luck_breakdown(context: Dictionary = {}) -> Dictionary:
+	var stats := SkillTreeManager.derived_stats(context.get("node_ids", null))
+	var parts := {"minor_roll_tree_product": float(stats.minor_roll_tree_product),
+		"breakthrough_product": float(stats.breakthrough_product),
+		"zone_luck_multiplier": float(clampi(int(context.get("highest_zone_unlocked", GameState.highest_zone_unlocked)), 1, SlimerotBalance.MAX_ZONE)),
+		"coin_tree_luck_product": float(stats.coin_tree_luck_product),
+		"active_potion_multiplier": float(context.get("active_potion_multiplier", GameState.active_potion_multiplier)),
+		"super_roll_multiplier": float(context.get("super_roll_multiplier", 1.0))}
+	var base: float = parts.minor_roll_tree_product * parts.breakthrough_product * parts.zone_luck_multiplier * parts.coin_tree_luck_product * parts.active_potion_multiplier
+	parts.total = base * parts.super_roll_multiplier
+	var cap := float(context.get("luck_cap", GameState.settings.luck_cap))
+	if stats.breakthrough_count > 0 and cap in SlimerotBalance.LUCK_CAPS.values() and cap > 0.0: base = minf(base, cap)
+	parts.capped_total = base * parts.super_roll_multiplier
+	return parts
+
+func get_effective_luck(context: Dictionary = {}) -> float:
+	var breakdown := get_luck_breakdown(context)
+	return breakdown.capped_total if context.get("apply_cap", false) else breakdown.total
+
+func super_schedule_initial(lifetime: int, interval: int = 100) -> int:
+	return SlimerotSuperRoll.initial(lifetime, interval)
+
+func update_super_roll_schedule(previous_tier: int) -> void:
+	var stats := SkillTreeManager.derived_stats()
+	if not stats.super_roll:
+		GameState.super_roll_next_trigger = 0
+	elif previous_tier == 0:
+		GameState.super_roll_next_trigger = SlimerotSuperRoll.initial(GameState.lifetime_rolls, stats.super_roll_interval)
+	elif stats.super_roll_tier > previous_tier:
+		GameState.super_roll_next_trigger = SlimerotSuperRoll.upgrade(GameState.lifetime_rolls, GameState.super_roll_next_trigger, stats.super_roll_interval)
+
+func current_super_trigger(state: Dictionary, stats: Dictionary) -> int:
+	if not stats.super_roll: return 0
+	var trigger := int(state.super_roll_next_trigger)
+	if trigger == 0 and int(state.lifetime_rolls) > SlimerotSaveFormat.MAX_EXACT_INTEGER - int(stats.super_roll_interval): return 0
+	# Migration initializes old profiles. This fallback also supports dev fixtures
+	# with directly assigned nodes; normal gameplay always persists a future target.
+	return trigger if trigger > int(state.lifetime_rolls) else SlimerotSuperRoll.initial(int(state.lifetime_rolls), stats.super_roll_interval)
 
 func next_roll_multiplier() -> float:
-	if SkillTreeManager.derived_stats().super_roll and (int(roll_state().lifetime_rolls) + 1) % SlimerotRollTree.SUPER_ROLL_INTERVAL == 0: return SlimerotRollTree.SUPER_ROLL_MULTIPLIER
+	var stats := SkillTreeManager.derived_stats()
+	var state := roll_state()
+	if SlimerotSuperRoll.due(state.lifetime_rolls, current_super_trigger(state, stats)): return stats.super_roll_multiplier
 	return 1.0
 
 func rolls_until_super() -> int:
-	return SlimerotRollTree.SUPER_ROLL_INTERVAL - GameState.lifetime_rolls % SlimerotRollTree.SUPER_ROLL_INTERVAL
+	var state := roll_state()
+	var trigger := current_super_trigger(state, SkillTreeManager.derived_stats())
+	return maxi(0, trigger - int(state.lifetime_rolls)) if trigger > 0 else 0
 
 func set_luck_cap(cap: float) -> bool:
 	if cap not in SlimerotBalance.LUCK_CAPS.values() or SkillTreeManager.derived_stats().breakthrough_count == 0: return false
@@ -153,19 +189,24 @@ func resolve_roll() -> SlimerotRollResult:
 		"weakest_equipped_damage": weakest if is_finite(weakest) else 0.0,
 		"team_has_space": InventoryManager.equipped_copy_ids.size() < SkillTreeManager.derived_stats().equipped_slots,
 		"power_improvement": rarity > best, "luck_used": luck_used, "effective_luck": effective_luck(multiplier),
-		"super_roll": multiplier > 1.0, "pity_assisted": assisted, "hard_pity": forced}
+		"super_roll": multiplier > 1.0, "super_roll_multiplier": multiplier,
+		"super_roll_interval": SkillTreeManager.derived_stats().super_roll_interval,
+		"super_roll_next_trigger": current_super_trigger(state, SkillTreeManager.derived_stats()),
+		"pity_assisted": assisted, "hard_pity": forced}
 	_pending = result
 	return result
 
 func roll_state() -> Dictionary:
 	if not _offline_state.is_empty(): return _offline_state
 	return {"rolls_balance": GameState.rolls_balance, "lifetime_rolls": GameState.lifetime_rolls,
+		"super_roll_next_trigger": GameState.super_roll_next_trigger,
 		"best_ever_effective_rarity": GameState.best_ever_effective_rarity, "rolls_since_last_power_improvement": GameState.rolls_since_last_power_improvement,
 		"rarest_threshold_reached": GameState.rarest_threshold_reached, "highest_luck": GameState.highest_luck, "discoveries": InventoryManager.discoveries}
 
 func apply_roll_state(state: Dictionary) -> void:
 	GameState.rolls_balance = state.rolls_balance
 	GameState.lifetime_rolls = state.lifetime_rolls
+	GameState.super_roll_next_trigger = state.super_roll_next_trigger
 	GameState.best_ever_effective_rarity = state.best_ever_effective_rarity
 	GameState.rolls_since_last_power_improvement = state.rolls_since_last_power_improvement
 	GameState.rarest_threshold_reached = state.rarest_threshold_reached
@@ -196,6 +237,7 @@ func commit_roll(result: SlimerotRollResult, offline: bool = false) -> bool:
 	# The sole reward-counter operation for manual, Auto AND simulated rolls.
 	state.rolls_balance += 1
 	state.lifetime_rolls += 1
+	state.super_roll_next_trigger = SlimerotSuperRoll.after_trigger(state.lifetime_rolls, data.super_roll_interval) if data.super_roll else data.super_roll_next_trigger
 	if data.power_improvement:
 		state.best_ever_effective_rarity = maxi(state.best_ever_effective_rarity, int(data.effective_rarity))
 		state.rolls_since_last_power_improvement = 0

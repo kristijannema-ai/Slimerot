@@ -12,6 +12,11 @@ func check(condition: bool, description: String) -> void:
 		push_error("Slimerot FAIL: " + description)
 
 func run(world: Node2D) -> void:
+	if "--slimerot-progression-only" in OS.get_cmdline_user_args():
+		await run_progression(world)
+		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
+		get_tree().quit(0 if failures == 0 else 1)
+		return
 	if "--slimerot-rng-only" in OS.get_cmdline_user_args():
 		await run_rng(world)
 		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
@@ -123,7 +128,7 @@ func run(world: Node2D) -> void:
 	check(not WorldManager.repair("skill_tree_shrine"), "no repeat structure purchase")
 	GameState.rolls_balance = 200
 	GameState.lifetime_rolls = 200
-	check((SkillTreeManager.purchase("R01") and SkillTreeManager.purchase("R02") and SkillTreeManager.purchase("R03")), "Auto Roll purchase through shared derived stats")
+	check((SkillTreeManager.purchase("R01") and SkillTreeManager.purchase("R03") and SkillTreeManager.purchase("R02")), "Auto Roll purchase through shared derived stats")
 	GameState.settings.auto_roll_state = true
 	RollManager.cooldown_remaining = 0.0
 	var lifetime := GameState.lifetime_rolls
@@ -195,10 +200,17 @@ func run(world: Node2D) -> void:
 	await endurance_tests.run(world, self)
 	await run_stability(world)
 	await run_rng(world)
+	await run_progression(world)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
 	get_tree().quit(0 if failures == 0 else 1)
+
+func run_progression(world: Node2D) -> void:
+	for script in [preload("res://tests/SlimerotProgressionTests.gd"), preload("res://tests/SlimerotProgressionSaveTests.gd")]:
+		var probe: Node = script.new()
+		add_child(probe)
+		await probe.run(world, self)
 
 func run_rng(world: Node2D) -> void:
 	for script in [preload("res://tests/SlimerotRngTests.gd"), preload("res://tests/SlimerotRngSaveTests.gd")]:

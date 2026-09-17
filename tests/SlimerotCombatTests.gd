@@ -29,7 +29,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	world.hud.close_menu()
 	CombatManager.set_physics_process(false)
 	var coin_nodes: Array = SkillTreeManager.nodes.values().filter(func(n): return n.tree_type == "Coin")
-	check(coin_nodes.size() == 21, "exactly 19 Coin nodes and two Fleet Feet nodes")
+	check(coin_nodes.size() == 27, "Coin tree preserves all 21 original nodes and adds six progression nodes")
 	for index in 21:
 		var id := "C%02d" % (index+1) if index < 19 else "CO%d" % (index-18)
 		var node: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]
@@ -48,7 +48,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	for zone in [2,4,6]: GameState.boss_defeated_flags["zone_%d" % zone] = true
 	for index in range(2,19): check(SkillTreeManager.purchase("C%02d" % index), "purchase Coin node C%02d" % index)
 	check(not SkillTreeManager.purchase("C19"), "Final Bond still requires Breakthrough III")
-	for index in range(1,19): SkillTreeManager.purchase("R%02d" % index)
+	for row in SlimerotRollTree.MAINLINE: check(SkillTreeManager.purchase(row[0]), "combat fixture buys Roll node in progression order: " + row[0])
 	check(SkillTreeManager.purchase("C19") and SkillTreeManager.purchase("CO1") and SkillTreeManager.purchase("CO2"), "Final Bond and both movement upgrades purchase")
 	var stats := SkillTreeManager.derived_stats()
 	check(is_equal_approx(stats.damage_multiplier,2.5) and is_equal_approx(stats.boss_damage_bonus,0.5), "Final Bond adds to 2.5x team and Boss Hunter adds to 1.5x bosses")
@@ -81,7 +81,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	InventoryManager.auto_equip_strongest()
 	check(InventoryManager.equipped_copy_ids[0] == rare and InventoryManager.equipped_copy_ids.size() == 5, "Auto Equip fills only available slots with highest rounded DPS copies")
 	var snapshot := SaveManager.snapshot()
-	check(SaveManager.validate(snapshot), "full Coin/Roll progression validates schema 4")
+	check(SaveManager.validate(snapshot), "original Coin contracts and reordered Roll progression validate current schema")
 	SaveManager.enabled = true
 	check(SaveManager.save_game() and SaveManager.load_game() and is_equal_approx(SkillTreeManager.derived_stats().damage_multiplier,2.5), "Coin effects and accounting survive JSON save/load without stacking")
 	SaveManager.enabled = false

@@ -2,8 +2,9 @@ extends Node
 
 var suite: Node
 const COSTS := [25,40,75,125,175,275,350,900,350,400,550,550,1300,700,700,900,900,1300]
+const MAINLINE_ORDER := ["R01","R03","R02","R04","R05","R06","R07","R08","R09","R10","R11","R12","R13","R14","R15","R16","R17","R18"]
 const SPEEDS := {"R01":2.2,"R04":1.9,"R06":1.55,"R09":1.25,"R11":1.0,"R14":0.8,"R16":0.65,"RO7":0.5}
-const OPTIONAL := [["RO1","R04",150],["RO2","R08",450],["RO3","R08",300],["RO4","R13",500],["RO5","R13",650],["RO6","R13",700],["RO7","R18",1400]]
+const OPTIONAL := [["RO1",["R04"],150],["RO2",["R08"],450],["RO3",["R08"],300],["RO4",["R13"],500],["RO5",["R08"],650],["RO6",["R13"],700],["RO7",["R18"],1400],["RO8",["RO5","R13"],900],["RO9",["RO8","R18"],1500]]
 
 func check(value: bool, label: String) -> void:
 	suite.check(value, label)
@@ -23,10 +24,11 @@ func fresh(funding: int = 50000) -> void:
 	RollManager.variant_rng.seed = 603
 
 func buy_to(number: int) -> void:
-	for index in range(1, number + 1):
-		var id := "R%02d" % index
+	for row in SlimerotRollTree.MAINLINE:
+		var id: String = row[0]
 		if id not in GameState.purchased_skill_node_ids:
 			assert(SkillTreeManager.purchase(id), "Slimerot test prerequisite setup failed: " + id)
+		if id == "R%02d" % number: break
 
 func run(world: Node, owner_suite: Node) -> void:
 	suite = owner_suite
@@ -36,17 +38,17 @@ func run(world: Node, owner_suite: Node) -> void:
 	var roll_nodes := 0
 	for node in SkillTreeManager.nodes.values():
 		if node.tree_type == "Roll": roll_nodes += 1
-	check(roll_nodes == 25, "exactly 18 canonical mainline and seven optional Roll nodes")
+	check(roll_nodes == 27, "exactly 18 canonical mainline and nine optional Roll nodes")
 	check(not SkillTreeManager.nodes.has("auto_roll") and not SkillTreeManager.nodes.has("luck_1"), "provisional IDs removed from purchasable tree")
-	check(COSTS.slice(0,8).reduce(func(a,b):return a+b,0) == 1965 and COSTS.slice(8,13).reduce(func(a,b):return a+b,0) == 3150 and COSTS.slice(13,18).reduce(func(a,b):return a+b,0) == 4500, "Prompt 9 spend blocks 1965 / 3150 / 4500")
-	for index in range(1,19):
-		var id := "R%02d" % index
+	check(COSTS.slice(0,8).reduce(func(a,b):return a+b,0) == 1965 and COSTS.slice(8,13).reduce(func(a,b):return a+b,0) == 3150 and COSTS.slice(13,18).reduce(func(a,b):return a+b,0) == 4500, "Prompt 13 preserves mainline spend blocks 1965 / 3150 / 4500")
+	for index in MAINLINE_ORDER.size():
+		var id: String = MAINLINE_ORDER[index]
 		var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]
-		var requires: Array = [] if index == 1 else ["R%02d" % (index-1)]
-		check(data.cost == COSTS[index-1] and data.currency_type == "Rolls" and data.prerequisite_ids == requires, id + " exact cost/currency/prerequisites")
+		var requires: Array = [] if index == 0 else [MAINLINE_ORDER[index-1]]
+		check(data.cost == COSTS[index] and data.currency_type == "Rolls" and data.prerequisite_ids == requires and SlimerotRollTree.MAINLINE[index][0] == id, id + " exact cost/currency/prerequisites/order")
 	for row in OPTIONAL:
 		var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[row[0]]
-		check(data.cost == row[2] and data.prerequisite_ids == [row[1]] and data.optional, row[0] + " exact independent branch contract")
+		check(data.cost == row[2] and data.prerequisite_ids == row[1] and data.optional, row[0] + " exact independent branch contract")
 	check(not SkillTreeManager.purchase("R08") and not SkillTreeManager.purchase("RO6"), "funding alone cannot bypass mainline or optional prerequisites")
 	GameState.rolls_balance = 24
 	GameState.lifetime_rolls = 24
@@ -55,11 +57,11 @@ func run(world: Node, owner_suite: Node) -> void:
 	var life := GameState.lifetime_rolls
 	var initial_rolls := GameState.rolls_balance
 	var expected_spend := 0
-	for index in range(1,19):
-		var id := "R%02d" % index
+	for index in MAINLINE_ORDER.size():
+		var id: String = MAINLINE_ORDER[index]
 		var old_luck := RollManager.effective_luck()
 		check(SkillTreeManager.purchase(id), id + " mainline purchase without any optional nodes")
-		expected_spend += COSTS[index-1]
+		expected_spend += COSTS[index]
 		check(GameState.rolls_balance == initial_rolls - expected_spend and GameState.lifetime_rolls == life and GameState.coins == 0, id + " spends Rolls only and preserves Lifetime Rolls")
 		if SPEEDS.has(id): check(is_equal_approx(SkillTreeManager.derived_stats().roll_cooldown, SPEEDS[id]), id + " exact absolute cooldown")
 		if id in ["R08","R13","R18"]:
@@ -73,7 +75,9 @@ func run(world: Node, owner_suite: Node) -> void:
 	check(SkillTreeManager.derived_stats() == ordered, "derived luck and speed do not depend on saved node order")
 	check(GameState.lifetime_rolls == GameState.rolls_balance + SkillTreeManager.rolls_spent(GameState.purchased_skill_node_ids), "new-save Roll ledger preserves Lifetime = balance + all spending")
 	for row in OPTIONAL:
-		if row[0] != "RO7": check(SkillTreeManager.purchase(row[0]), row[0] + " optional purchase after its independent prerequisite")
+		# This legacy cadence section deliberately exercises Super Roll I. The new
+		# progression suite covers purchasing and committing tiers II and III.
+		if row[0] not in ["RO7","RO8","RO9"]: check(SkillTreeManager.purchase(row[0]), row[0] + " optional purchase after its independent prerequisite")
 	check(RollManager.reveal_duration(75,false) == 0.2 and RollManager.reveal_duration(100,false) == 0.65, "RO1 skips only thresholds below 100")
 	check(SkillTreeManager.derived_stats().variant_sense and RollManager.variant_probabilities(true) == [1.0/80.0, 1.0/320.0, 1.0/1280.0], "RO6 independent denominators 80 / 320 / 1280")
 	GameState.active_potion_type = "lucky_soda"
@@ -91,6 +95,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	var ledger_spend := SkillTreeManager.rolls_spent(GameState.purchased_skill_node_ids)
 	for number in [19998,19999,20000,20001,20099,20100]:
 		GameState.lifetime_rolls = number - 1
+		GameState.super_roll_next_trigger = RollManager.super_schedule_initial(number - 1, 100)
 		GameState.rolls_balance = number - 1 - ledger_spend
 		RollManager.cooldown_remaining = 0
 		var coins_before := GameState.rolls_balance
@@ -140,10 +145,11 @@ func run(world: Node, owner_suite: Node) -> void:
 	SkillTreeManager.purchase("RO5")
 	ledger_spend = SkillTreeManager.rolls_spent(GameState.purchased_skill_node_ids)
 	GameState.lifetime_rolls = 9999
+	GameState.super_roll_next_trigger = 10000
 	GameState.rolls_balance = 9999-ledger_spend
 	RollManager.cooldown_remaining = 0
 	var snapshot := SaveManager.snapshot()
-	check(SaveManager.validate(snapshot), "schema 3 validates canonical purchases and historical spending ledger")
+	check(SaveManager.validate(snapshot), "current schema validates canonical purchases and historical spending ledger")
 	SaveManager.enabled = true
 	check(SaveManager.save_game() and SaveManager.load_game() and GameState.settings.luck_cap == 20 and RollManager.next_roll_multiplier() == 5, "load before roll 10000 retains selected cap and Super eligibility")
 	check(RollManager.request_roll() and RollManager.last_result.luck_used == 100 and RollManager.last_result.super_roll, "post-load roll 10000 gets exactly cap20 ×5")
@@ -179,6 +185,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	RollManager.set_luck_cap(1)
 	for slime in SlimeDatabase.eligible(1): InventoryManager.add_copy(slime.id)
 	GameState.lifetime_rolls = 9999
+	GameState.super_roll_next_trigger = 10000
 	GameState.rolls_balance = 9999 - SkillTreeManager.rolls_spent(GameState.purchased_skill_node_ids)
 	var balance_before := GameState.rolls_balance
 	GameState.settings.auto_roll_state = true

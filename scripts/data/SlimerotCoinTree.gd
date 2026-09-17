@@ -22,6 +22,12 @@ const ROWS := [
 	["C17","Boss Hunter II",["C09"],250000,"boss_damage_add",0.30,1,6,""],
 	["C18","Coin Scavenger III",["C11"],300000,"coin_scavenger",0.50,6,0,""],
 	["C19","Final Bond",["C16","R18"],1000000,"team_damage_add",0.50,7,0,""],
+	["C20","Fortune I",[],8000,"luck_multiplier",1.15,3,0,""],
+	["C21","Fortune II",["C20"],80000,"luck_multiplier",1.20,5,0,""],
+	["C22","Fortune III",["C21"],600000,"luck_multiplier",1.25,7,0,""],
+	["C23","Slime Bond VI",["C16"],450000,"team_damage_add",0.50,7,0,""],
+	["C24","Coin Scavenger IV",["C18"],500000,"coin_scavenger",1.00,7,0,""],
+	["C25","Fleet Feet III",["CO2"],250000,"move_speed_add",0.15,7,0,""],
 	["CO1","Fleet Feet I",[],2000,"move_speed_add",0.10,2,0,""],
 	["CO2","Fleet Feet II",["CO1"],40000,"move_speed_add",0.10,5,0,""],
 ]
@@ -30,6 +36,7 @@ const LEGACY_COSTS := {"team_slot_2":350,"team_slot_3":3500,"team_slot_4":25000,
 
 static func description(effect: String, value: float) -> String:
 	match effect:
+		"luck_multiplier": return "Permanent luck ×%.2f" % value
 		"team_damage_add": return "Team damage +%d%% (additive)" % roundi(value*100)
 		"boss_damage_add": return "Boss damage +%d%% (additive Boss Hunter bonus)" % roundi(value*100)
 		"coin_scavenger": return "Normal-enemy Coins +%d%% (additive)" % roundi(value*100)

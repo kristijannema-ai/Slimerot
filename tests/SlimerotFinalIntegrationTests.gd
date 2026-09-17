@@ -43,7 +43,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	WorldManager.travel(0)
 	freeze_combat(world)
 	check(SlimerotCampaign.SCENES.size() == 9 and SlimerotRoster.ROWS.size() == 24 and SlimerotBalance.VARIANTS.size() == 8, "one Hub, eight zones, 24 base slimes and all eight variant combinations")
-	check(SlimerotRollTree.MAINLINE.size() == 18 and SlimerotRollTree.OPTIONAL.size() == 7 and SlimerotCoinTree.ROWS.size() == 21 and SlimerotEncounters.BOSSES.size() == 4, "full first-build trees and four bosses stay within the content scope")
+	check(SlimerotRollTree.MAINLINE.size() == 18 and SlimerotRollTree.OPTIONAL.size() == 9 and SlimerotCoinTree.ROWS.size() == 27 and SlimerotEncounters.BOSSES.size() == 4, "Prompt 13 tree additions and four bosses stay within the content scope")
 	RollManager.variant_rng.seed = 1234
 	check(RollManager.request_roll(), "fresh first roll commits")
 	var starter: String = InventoryManager.equipped_copy_ids[0]
@@ -111,7 +111,7 @@ func run(world: Node, owner_suite: Node) -> void:
 		else:
 			check(GameState.completion_portal_unlocked and GameState.campaign_completed and GameState.current_zone == 8 and GameState.coins == before_gate, "final portal completes without currency loss or leaving the playable campaign")
 		world.hud.close_menu()
-	check(GameState.purchased_skill_node_ids.size() == 46 and SkillTreeManager.derived_stats().equipped_slots == 5 and is_equal_approx(SkillTreeManager.derived_stats().damage_multiplier, 2.5), "all 46 first-build nodes integrate with five slots and additive Final Bond")
+	check(GameState.purchased_skill_node_ids.size() == 54 and SkillTreeManager.derived_stats().equipped_slots == 5 and is_equal_approx(SkillTreeManager.derived_stats().damage_multiplier, 3.0), "all 54 progression nodes integrate with five slots and additive Final Bond")
 	check(GameState.lifetime_rolls == GameState.rolls_balance + SkillTreeManager.rolls_spent(GameState.purchased_skill_node_ids), "complete campaign purchases preserve Lifetime Rolls accounting")
 	# Revisit late structures in completed free-roam, retaining copy protections.
 	check(WorldManager.fast_travel(6), "completion retains Fast Travel to the Variant Shrine")
