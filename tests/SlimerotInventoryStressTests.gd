@@ -1,6 +1,6 @@
 extends Node
 
-# Slimerot P0 regression: millions of copies remain 96 data stacks and five winners.
+# Slimerot P0 regression: millions of copies remain 192 data stacks and five winners.
 func run(world: Node, suite: Node) -> void:
 	SaveManager.enabled = false
 	world.hud.close_menu()
@@ -25,12 +25,12 @@ func run(world: Node, suite: Node) -> void:
 			total += int(result.quantity)
 	GameState.lifetime_rolls = total
 	GameState.rolls_balance = total
-	suite.check(InventoryManager.inventory.size() == 96 and total == 9600288, "96 compact variant stacks own over 9.6 million physical copies")
+	suite.check(InventoryManager.inventory.size() == 192 and total == 19200576, "192 compact variant stacks own over 19.2 million physical copies")
 	var compact := true
 	for pair in InventoryManager.inventory.values(): compact = compact and pair.copy_ids.is_empty() and pair.copy_ranges.size() == 1 and pair.quantity == 100003
 	suite.check(compact and counts.state == 0 and counts.inventory == 0, "Bulk allocation creates no per-copy arrays or per-copy notifications")
-	var winner: Dictionary = InventoryManager.inventory["brainrot_singularity:golden"]
-	var strongest_damage := roundf(SlimeDatabase.get_slime("brainrot_singularity").base_damage * SlimerotBalance.VARIANT_DATA.golden.damage)
+	var winner: Dictionary = InventoryManager.inventory["brainrot_singularity:shiny+glitched+golden"]
+	var strongest_damage := float(SlimeDatabase.get_base_combat_damage("brainrot_singularity", 7))
 	var slot_nodes := [[], ["C01", "C02"], ["C01", "C02", "C05", "C06"], ["C01", "C02", "C05", "C06", "C08", "C10"], ["C01", "C02", "C05", "C06", "C08", "C10", "C13", "C15"]]
 	for slots in range(1, 6):
 		GameState.purchased_skill_node_ids.assign(slot_nodes[slots - 1])
@@ -40,7 +40,7 @@ func run(world: Node, suite: Node) -> void:
 		for index in slots: expected.append(InventoryManager.copy_name(int(winner.copy_ranges[0][0]) + index))
 		suite.check(changed and InventoryManager.equipped_copy_ids == expected, "Equip Best chooses the mathematically strongest %d owned physical copies" % slots)
 		suite.check(counts.team == before.team + 1 and counts.state == before.state + 1 and counts.inventory == before.inventory and counts.critical == before.critical + 1, "Equip Best commits slot count %d once, with one HUD signal and one save event" % slots)
-		var expected_per_hit := roundf(SlimeDatabase.get_slime("brainrot_singularity").base_damage * SlimerotBalance.VARIANT_DATA.golden.damage * SkillTreeManager.derived_stats().damage_multiplier)
+		var expected_per_hit := roundf(SlimeDatabase.get_base_combat_damage("brainrot_singularity", 7) * SkillTreeManager.derived_stats().damage_multiplier)
 		suite.check(InventoryManager.team_dps() == slots * expected_per_hit and expected_per_hit >= strongest_damage, "Team DPS reflects the selected %d copies" % slots)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -52,8 +52,8 @@ func run(world: Node, suite: Node) -> void:
 	var elapsed_ms := float(Time.get_ticks_usec() - started) / 1000.0
 	await get_tree().process_frame
 	suite.check(unchanged and counts == before_repeat and get_tree().get_node_count() == node_count, "100 repeated Equip Best requests create no notifications, saves, UI rebuilds or scene nodes")
-	suite.check(elapsed_ms < 2000, "100 Equip Best operations over 9.6 million copies complete without a multi-second freeze")
-	print("Slimerot INVENTORY STRESS: unique_stacks=96 copies=%d equip_best_100_ms=%.3f" % [total, elapsed_ms])
+	suite.check(elapsed_ms < 2000, "100 Equip Best operations over 19.2 million copies complete without a multi-second freeze")
+	print("Slimerot INVENTORY STRESS: unique_stacks=192 copies=%d equip_best_100_ms=%.3f" % [total, elapsed_ms])
 	suite.check(InventoryManager.validate_saved_inventory(InventoryManager.inventory, InventoryManager.equipped_copy_ids, InventoryManager.next_copy_id).is_empty(), "Compact inventory validates without expanding serial ranges")
 	var page := InventoryManager.copies_page(winner, 99996, 12)
 	suite.check(page.size() == 7 and page[0] == InventoryManager.copy_name(int(winner.copy_ranges[0][0]) + 99996), "Copy pagination jumps directly to the end of a huge stack")
@@ -114,11 +114,11 @@ func run(world: Node, suite: Node) -> void:
 	GameState.menu_paused = false
 	GameState.coins = 1000
 	GameState.coins_earned = 1000
-	var fee := SlimeDatabase.get_slime(SlimerotBalance.FIRST_SLIME).base_sell * SlimerotEncounters.MUTATION_FEE_MULTIPLIER
-	suite.check(InventoryManager.mutate(SlimerotBalance.FIRST_SLIME) and pair.quantity == 100000 and GameState.coins == 1000 - fee and InventoryManager.is_protected("slimerot_copy_6") and InventoryManager.pair_for_copy("slimerot_copy_7").is_empty(), "Compact mutation consumes five exact unprotected identities and charges the canonical fee")
+	var shrine_copy := InventoryManager.add_copy("brr_brr_patapim", 3)
+	suite.check(InventoryManager.sacrifice(shrine_copy, 2) and pair.quantity == 100005 and GameState.coins == 1000 and InventoryManager.is_protected("slimerot_copy_6") and InventoryManager.pair_for_copy(shrine_copy).is_empty(), "Shrine consumes one exact unprotected compact-compatible identity without touching Normal stacks or charging Coins")
 	GameState.menu_paused = true
 	var value := InventoryManager.sell_value(SlimerotBalance.FIRST_SLIME + ":normal")
-	suite.check(InventoryManager.sell_duplicates() == 99994 * value and pair.quantity == 6 and InventoryManager.equipped_copy_ids.size() == 5 and InventoryManager.is_protected("slimerot_copy_6"), "Bulk duplicate sale retains equipped and favorite identities without expanding quantities")
+	suite.check(InventoryManager.sell_duplicates() == 99999 * value and pair.quantity == 6 and InventoryManager.equipped_copy_ids.size() == 5 and InventoryManager.is_protected("slimerot_copy_6"), "Bulk duplicate sale retains equipped and favorite identities without expanding quantities")
 	suite.check(InventoryManager.sell_duplicates() == 0, "Repeated compact duplicate sale cannot pay twice")
 	InventoryManager.reset()
 	bulk = InventoryManager.add_copies(SlimerotBalance.FIRST_SLIME, "normal", 100000)

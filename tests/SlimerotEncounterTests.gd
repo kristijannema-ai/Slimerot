@@ -56,7 +56,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	GameState.coins = 100000
 	check(WorldManager.craft_potion("lucky_soda") and GameState.potion_inventory.lucky_soda == 1 and GameState.coins == 99700, "Lucky Soda crafts for exactly 300 Coins at Bench")
 	check(not WorldManager.craft_potion("hyper_soda") and not WorldManager.craft_potion("boss_brew"), "later potion recipes remain boss-gated")
-	check(WorldManager.drink_potion("lucky_soda") and RollManager.effective_luck() == 2 and GameState.potion_remaining_seconds == 300, "Lucky Soda grants x2 for exactly five active minutes")
+	check(WorldManager.drink_potion("lucky_soda") and RollManager.effective_luck() == 16 and GameState.potion_remaining_seconds == 300, "Lucky Soda grants x2 for exactly five active minutes")
 	GameState.menu_paused = true
 	GameState._process(30)
 	check(GameState.potion_remaining_seconds == 300, "pause does not consume potion duration")
@@ -64,19 +64,19 @@ func run(world: Node, owner_suite: Node) -> void:
 	GameState._process(10)
 	check(GameState.potion_remaining_seconds == 290, "active play consumes potion duration")
 	GameState.boss_defeated_flags.zone_4 = true
-	check(WorldManager.craft_potion("hyper_soda") and GameState.coins == 91700 and WorldManager.drink_potion("hyper_soda") and RollManager.effective_luck() == 3, "Hyper Soda unlocks after Z4, costs 8000 and replaces x2 with x3")
+	check(WorldManager.craft_potion("hyper_soda") and GameState.coins == 91700 and WorldManager.drink_potion("hyper_soda") and RollManager.effective_luck() == 24, "Hyper Soda unlocks after Z4, costs 8000 and replaces x2 with x3")
 	WorldManager.craft_potion("lucky_soda")
-	check(not WorldManager.drink_potion("lucky_soda") and GameState.potion_inventory.lucky_soda == 1 and RollManager.effective_luck() == 3, "weaker soda cannot replace stronger potion or consume a bottle")
+	check(not WorldManager.drink_potion("lucky_soda") and GameState.potion_inventory.lucky_soda == 1 and RollManager.effective_luck() == 24, "weaker soda cannot replace stronger potion or consume a bottle")
 	GameState.boss_defeated_flags.zone_6 = true
 	var before := GameState.coins
 	check(WorldManager.craft_potion("boss_brew") and GameState.coins == before-30000 and WorldManager.drink_potion("boss_brew"), "Boss Brew costs exactly 30000 after Z6")
 	var copy := InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME,"golden")
 	GameState.purchased_skill_node_ids.assign(["C09","C17"])
-	check(InventoryManager.damage_for_copy(copy,true) == roundf(7*4*1.5*1.25) and InventoryManager.damage_for_copy(copy) == 28 and RollManager.effective_luck() == 3, "Brew stacks x1.25 with Boss Hunter and coexists with soda without affecting raw DPS")
+	check(InventoryManager.damage_for_copy(copy,true) == roundf(SlimeDatabase.get_base_combat_damage(SlimerotBalance.FIRST_SLIME, 4)*1.5*1.25) and InventoryManager.damage_for_copy(copy) == SlimeDatabase.get_base_combat_damage(SlimerotBalance.FIRST_SLIME, 4) and RollManager.effective_luck() == 24, "Brew stacks x1.25 with Boss Hunter and coexists with soda without affecting raw DPS")
 	GameState._process(299)
 	check(GameState.boss_brew_seconds == 1 and GameState.potion_remaining_seconds == 1, "both potion channels count active time independently")
 	GameState._process(1)
-	check(GameState.boss_brew_seconds == 0 and GameState.potion_remaining_seconds == 0 and RollManager.effective_luck() == 1, "potion effects expire exactly at 300 active seconds")
+	check(GameState.boss_brew_seconds == 0 and GameState.potion_remaining_seconds == 0 and RollManager.effective_luck() == 8, "potion effects expire exactly at 300 active seconds")
 	GameState.purchased_skill_node_ids.clear()
 	WorldManager.travel(6)
 	GameState.coins = 100
@@ -86,16 +86,14 @@ func run(world: Node, owner_suite: Node) -> void:
 	InventoryManager.equip(copies[0])
 	InventoryManager.toggle_copy_favorite(copies[1])
 	check(InventoryManager.mutation_candidates(SlimerotBalance.FIRST_SLIME).size() == 5, "mutation excludes equipped and favorite physical copies")
-	check(InventoryManager.mutate(SlimerotBalance.FIRST_SLIME) and GameState.coins == 0 and InventoryManager.inventory[SlimerotBalance.FIRST_SLIME+":normal"].quantity == 2 and InventoryManager.inventory[SlimerotBalance.FIRST_SLIME+":shiny"].quantity == 1, "five identical Normal copies plus 20x base sell create exactly one Shiny")
-	check(not InventoryManager.pair_for_copy(copies[0]).is_empty() and not InventoryManager.pair_for_copy(copies[1]).is_empty() and not InventoryManager.mutate(SlimerotBalance.FIRST_SLIME), "mutation preserves protected copies and rejects insufficient eligible quantity")
-	for index in 5: InventoryManager.add_copy("brr_brr_patapim")
-	GameState.coins = 239
-	check(not InventoryManager.mutate("brr_brr_patapim") and InventoryManager.mutation_candidates("brr_brr_patapim").size() == 5 and GameState.coins == 239, "mutation fee failure is atomic")
-	for variant in ["shiny","glitched","golden"]:
-		for index in 5: InventoryManager.add_copy("chimpanzini_bananini",variant)
-	check(not InventoryManager.mutate("chimpanzini_bananini"), "non-Normal variants cannot substitute in mutation recipe")
-	world.hud.open_menu("Mutation")
-	await suite.capture("Slimerot-stage-6-mutation")
+	check(not InventoryManager.mutate(SlimerotBalance.FIRST_SLIME) and GameState.coins == 100 and InventoryManager.inventory[SlimerotBalance.FIRST_SLIME+":normal"].quantity == 7, "retired mutation recipe consumes neither copies nor Coins")
+	var offered := InventoryManager.add_copy("brr_brr_patapim", 3)
+	var same_base := InventoryManager.add_copy("brr_brr_patapim", 3)
+	check(InventoryManager.sacrifice(offered, 1) and GameState.coins == 100 and InventoryManager.shrine_count(1) == 1 and InventoryManager.shrine_count(2) == 0, "Variant Shrine consumes one multi-variant copy for one selected category")
+	check(not InventoryManager.sacrifice(same_base, 1) and not InventoryManager.pair_for_copy(same_base).is_empty(), "duplicate base/category sacrifice is atomic and blocked")
+	check(not InventoryManager.pair_for_copy(copies[0]).is_empty() and not InventoryManager.pair_for_copy(copies[1]).is_empty(), "Shrine leaves equipped and favorite Normal copies untouched")
+	world.hud.open_menu("Variant Shrine")
+	await suite.capture("Slimerot-stage-12-shrine")
 	world.hud.close_menu()
 	# Isolated boss patterns and their actual arena lifecycle.
 	fresh(world)

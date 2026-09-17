@@ -310,7 +310,7 @@ func test_reveals() -> void:
 		check(SlimerotPresentation.reveal_tier(row[0]) == row[1] and is_equal_approx(RollManager.reveal_duration(row[0], true), row[2]), "threshold %d uses tier %d for exactly %.2fs" % [row[0], row[1], row[2]])
 	var shown_tiers: Dictionary = {}
 	for slime in SlimeDatabase.eligible(8):
-		var expected_tier := SlimerotPresentation.reveal_tier(slime.rarity_threshold)
+		var expected_tier := SlimerotPresentation.adaptive_tier(reveal_result(slime.id, true))
 		if shown_tiers.has(expected_tier): continue
 		shown_tiers[expected_tier] = true
 		RollManager.reset()
@@ -351,12 +351,12 @@ func test_reveals() -> void:
 	var common := reveal_result(SlimerotBalance.FIRST_SLIME, false)
 	RollManager.queue_reveal(common)
 	check(RollManager.reveal_queue.size() == 1 and RollManager.active_reveal.slime_id == "brainrot_singularity", "new feedback queues behind an unskippable first jackpot")
-	RollManager._process(2.81)
+	RollManager._process(SlimerotPresentation.ADAPTIVE_REVEAL_SECONDS[4] + 0.01)
 	check(RollManager.active_reveal.slime_id == SlimerotBalance.FIRST_SLIME and RollManager.reveal_queue.is_empty(), "queued result follows the complete first jackpot")
 	RollManager.reset()
 	jackpot.first_discovery = false
 	RollManager.start_reveal(jackpot)
-	check(is_equal_approx(RollManager.reveal_remaining, 1.0), "repeat jackpot lasts exactly 1.0s")
+	check(is_equal_approx(RollManager.reveal_remaining, SlimerotPresentation.ADAPTIVE_REVEAL_SECONDS[4]), "repeat jackpot uses the new complete adaptive sequence")
 	var balances := [GameState.coins, GameState.rolls_balance, GameState.lifetime_rolls]
 	await tap(hud.reveal.card)
 	check(RollManager.active_reveal.is_empty() and balances == [GameState.coins, GameState.rolls_balance, GameState.lifetime_rolls], "repeat jackpot touch skip closes feedback without changing rewards")

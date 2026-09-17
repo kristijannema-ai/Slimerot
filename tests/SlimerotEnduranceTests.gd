@@ -176,7 +176,7 @@ func test_auto_roll_and_reveal_reuse() -> void:
 	check(retained_max <= SlimerotPresentation.MAX_PENDING_REVEALS, "30-minute repeat feedback backlog remains within its configured bound")
 	check(InventoryManager.collection().size() == 24 and InventoryManager.inventory.size() <= 96, "mature Auto Roll keeps the canonical 24-by-four collection namespace")
 	GameState.settings.auto_roll_state = false
-	while not RollManager.active_reveal.is_empty(): RollManager._process(3.0)
+	while not RollManager.active_reveal.is_empty() or not RollManager.reveal_queue.is_empty(): RollManager._process(5.0)
 	await settled()
 	check(not world.hud.reveal.active and not world.hud.reveal.visible and RollManager.reveal_queue.is_empty(), "all pending feedback drains without a stuck reveal after Auto Roll stops")
 	check(node_count(world.hud.reveal) == reveal_nodes_before and node_count(world) == nodes_before, "3600 reveals reuse the same world, portraits and procedural sparkle nodes")

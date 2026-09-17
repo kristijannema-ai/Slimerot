@@ -6,6 +6,9 @@ signal critical_change(reason: String)
 var coins := 0
 var rolls_balance := 0
 var lifetime_rolls := 0
+var best_ever_effective_rarity := 0
+var rolls_since_last_power_improvement := 0
+var shrine_sacrifices: Dictionary = {"shiny": [], "glitched": [], "golden": []}
 var active_play_seconds := 0.0
 var last_background_timestamp := 0.0
 var offline_roll_remainder := 0.0
@@ -68,6 +71,9 @@ func reset() -> void:
 	campaign_completed = false
 	rolls_balance = 0
 	lifetime_rolls = 0
+	best_ever_effective_rarity = 0
+	rolls_since_last_power_improvement = 0
+	shrine_sacrifices = {"shiny": [], "glitched": [], "golden": []}
 	active_play_seconds = 0.0
 	last_background_timestamp = 0.0
 	offline_roll_remainder = 0.0

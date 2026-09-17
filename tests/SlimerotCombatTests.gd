@@ -57,8 +57,8 @@ func run(world: Node, owner_suite: Node) -> void:
 	check(GameState.coins_spent == COSTS.reduce(func(a,b): return a+b,0) and GameState.coins == GameState.coins_earned-GameState.coins_spent and GameState.lifetime_rolls == GameState.rolls_balance+SkillTreeManager.rolls_spent(GameState.purchased_skill_node_ids), "all Coin spending counted once and Rolls ledger unchanged by Coin nodes")
 	for variant in SlimerotBalance.VARIANTS:
 		var id := InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME,variant)
-		var mult: float = SlimerotBalance.VARIANT_DATA[variant].damage
-		check(InventoryManager.damage_for_copy(id) == roundf(7*mult*2.5) and InventoryManager.damage_for_copy(id,true) == roundf(7*mult*2.5*1.5), variant+" rounds only after base ×variant ×team ×boss")
+		var raw := SlimeDatabase.get_base_combat_damage(SlimerotBalance.FIRST_SLIME, variant)
+		check(InventoryManager.damage_for_copy(id) == roundf(raw*2.5) and InventoryManager.damage_for_copy(id,true) == roundf(raw*2.5*1.5), variant+" rounds rarity damage first, then team and boss modifiers")
 	InventoryManager.reset()
 	var copies: Array[String] = []
 	for index in 6: copies.append(InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME))

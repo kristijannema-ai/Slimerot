@@ -1,8 +1,10 @@
-# Slimerot validation — prompts 1–11
+# Slimerot validation — prompts 1–12
 
 Engine: official Godot 4.5.1 stable on Windows. The project runs headlessly and with the OpenGL compatibility renderer. Tests use isolated per-process files under `.godot/`, preserving player saves.
 
-Current Prompt 11 validation: **1,505 headless checks passed, zero failures**; **1,504 rendered checks passed** before one additional fragmented-range assertion, followed by **118 focused rendered checks**. Two independent post-force-kill launches each passed **11 checks**, proving one offline batch is not claimed twice. Import validation is clean apart from existing machine certificate/Android SDK warnings. See the [Prompt 11 report](Slimerot-Prompt-11.md) for issue mapping, schema 9, measured inventory/save performance and the Android procedure. The following Prompt 10 results are retained as historical baseline evidence.
+Current Prompt 12 validation: **1,662 combined headless checks, zero failures**, including Prompt 11 input/inventory/offline suites and the new RNG/migration suites. **161 focused rendered checks** passed with no Slimerot script errors. The actual process-kill save probe passed 11 checks; two independent reopened offline processes passed 11 each. The isolated exported-resource audit passed **152 checks**. Rendered combined-variant reveal and Variant Shrine captures were inspected. See the [Prompt 12 report](Slimerot-Prompt-12.md) for requirements and provisional constants. Screenshots, logs, packs and generated reports are local validation artifacts, excluded from publication.
+
+Historical Prompt 11 validation: **1,505 headless checks passed, zero failures**; **1,504 rendered checks passed** before one additional fragmented-range assertion, followed by **118 focused rendered checks**. Two independent post-force-kill launches each passed **11 checks**, proving one offline batch is not claimed twice. Import validation is clean apart from existing machine certificate/Android SDK warnings. See the [Prompt 11 report](Slimerot-Prompt-11.md) for issue mapping, schema 9, measured inventory/save performance and the Android procedure. The following Prompt 10 results are retained as historical baseline evidence.
 
 Historical Prompt 10 result: **1,383 checks passed, 0 failures** in both the final combined headless and rendered suites using the unchanged Prompt 9 balance tables. An actual forced-termination/reopen probe passed **11 additional checks** on the final source, with the writer killed after its durable save completed. An isolated exported-resource audit passed **148 checks** and the packed main scene launched successfully. No Slimerot script errors or leaked-object warnings remain in the final runs. The combined suite retains the 1,165-check merged Prompt 9 baseline and its earlier save/UI coverage.
 
@@ -30,10 +32,10 @@ Seven source configuration assertions pass for app naming, portrait/stretch sett
 The combined suites exercise real Godot nodes and input dispatch plus deterministic boundary tests:
 
 - Original new-save, physics movement/collision, simultaneous joystick + ROLL, first ownership/equip, Bedroom-to-Backyard context travel, automatic combat, direct Coin rewards, and loss-free respawn.
-- All 24 roster rows against the supplied damage/sell table, monotonic base damage by threshold, and exactly three added entries per unlocked zone.
-- Strict positive score sampler endpoints, highest eligible threshold/equality/fallback logic, and interleaved thresholds across zones.
+- All 24 roster rows against the supplied damage/sell table, monotonic base damage by threshold, and all 24 entries eligible at every unlocked zone.
+- Strict positive score sampler endpoints, highest threshold/equality/fallback logic, and interleaved thresholds across zones.
 - First guaranteed base with all zones unlocked; 100 manual completions and 100 automatic completions each grant exactly 100 Rolls and Lifetime Rolls.
-- Exclusive variant intervals and boundaries, exact marginal masses on a deterministic 40,000-point grid, +25% Variant Sense, and seeded independence from ordinary luck.
+- Independent variant intervals and boundaries, all eight masks, exact marginal counts on a deterministic 64,000-point grid, +25% Variant Sense, and seeded independence from ordinary luck.
 - Minor/checkpoint/potion luck multiplication, expiration, MAX/x20-era/x1 caps, cap locking, and combat independence.
 - Quantity/discovery separation, exactly 24 actual Collection UI cards, per-copy favorites/equipment protection, all variant multipliers, strongest-team selection, same-base multi-equip, slot costs/prerequisites, and boss gating.
 - Independent Coin Scavenger / Duplicate Dealer formulas, fixed first-boss bookkeeping, and permanent discovery after all copies are sold.
@@ -43,10 +45,10 @@ The combined suites exercise real Godot nodes and input dispatch plus determinis
 - Every canonical cooldown including post-campaign 0.50s; each Breakthrough exactly x20; cumulative x30.36/x910.8/x28,462.5; stable derived values across node ordering and repeated save loads.
 - Historical spend ledger, grandfathered legacy Auto Roll ancestors, unchanged wallets/Lifetime Rolls, and invalid canonical prerequisite-chain rejection.
 - Super Roll at 100th-completion boundaries, rejected attempts, manual and automatic commit paths, cap-before-x5 behavior, and reload immediately before/after a Super completion.
-- Variant Sense denominators 80/800/8,000; independent filter branches; discovered-only custom thresholds; Normal-only new-copy auto-sale; equality boundaries; group/copy favorites; equipment protection; real roll-to-sale Coin credit.
+- Variant Sense denominators 80/320/1,280; independent filter branches; discovered-only custom thresholds; Normal-only new-copy auto-sale; equality boundaries; group/copy favorites; equipment protection; real roll-to-sale Coin credit.
 - Actual Auto Roll at 0.50s while physically moving beside active Backyard enemies and taking combat damage.
 - All 21 Coin nodes: exact costs and node/zone/boss gates, Sell Terminal requirement, insufficient funding, duplicate-purchase protection and Final Bond's R18 gate.
-- Additive 2.5x ordinary damage and 1.5x Boss Hunter, final rounding for all four variants, 250 max HP, 216 px/s movement, and independent +100% Scavenger/+75% Dealer.
+- Additive 2.5x ordinary damage and 1.5x Boss Hunter, final rounding for all eight variant masks, 250 max HP, 216 px/s movement, and independent +100% Scavenger/+75% Dealer.
 - Same-base physical-copy multi-equip, no sixth slot or duplicate-ID equip, immediate rounded Team DPS updates and strongest-copy ranking.
 - Exact Coins Earned/Spent accounting, fixed one-time boss payouts, protected sales, schema 4 round trip and legacy-slot migration without wallet loss.
 - 500 px/s non-instant slime projectiles, straight locked flight/guaranteed impact, dead-target cancellation, no double hits, per-slot nearest targeting and independent one-second timers.
@@ -109,7 +111,7 @@ Rendered Espresso slam, Sand Router fan, Janitor burst, Admin shrinking circle, 
 25. Verify each boss pays its exact first-kill Coins once, with Lucky/Hyper Soda bottles for Z2/Z4. Confirm repeat entry or reload cannot farm the reward and that Coin Scavenger never increases it.
 26. Repair the Z2 Bench for 900. Craft/drink Lucky Soda, unlock Hyper with Z4 and Brew with Z6. Pause, background and restart: only active time counts. A weaker soda must not consume its bottle while Hyper is active; Brew coexists and affects bosses only.
 27. Repair the Z4 Pillar for 15,000. Map lists Hub and all zones, disabling locked destinations. Select an unlocked zone and confirm its entrance arrival without changing unlocks or wallet.
-28. Repair the Z6 Lab for 250,000. With seven identical Normal copies, equip one and favorite one; mutate the other five for the exact fee. Confirm one Shiny appears and protected copies remain. Insufficient funds or copies must consume nothing.
+28. Repair the Z6 Variant Shrine for 250,000. Offer one unprotected variant copy to one active category. Confirm no Coin fee, one consumed physical copy and one unique-base increase. Duplicate base/category offerings and equipped/favorite copies must consume nothing. A combined copy must increase only the chosen category; Normal copies have no offering action.
 29. Defeat Singularity Admin, enter the completion portal, and restart. The victory, 6,000,000-Coin first payout, portal and completion state persist. Continuing exploration does not grant another payout or start prestige.
 ## Prompt 7 mobile interaction validation
 
@@ -160,3 +162,9 @@ The estimator requires its explicit flag and a debug build. Keep generated repor
 32. Compare equal-duration farming samples in adjacent zones with exactly the same team, Coin upgrades and sale policy. Record kills, Coins earned and travel/death time separately; do not treat a changed loadout as evidence for the >=3x target.
 33. Repeat with optional Roll purchases, delayed manual sales/equipment, and ordinary mobile interruptions. Confirm optional branches never become mandatory prerequisites, then measure the timing cost of choosing them.
 34. On physical Android hardware, complete a long offline session with simultaneous movement/Auto Roll, menu use, boss dodging, pause/background and OS-kill recovery. APK export, battery/performance, touch/audio and a real 3–3.5-hour campaign remain outstanding acceptance work.
+
+## Prompt 12 focused command
+
+Run `godot --headless --path <project> -- --slimerot-test --slimerot-rng-only` for the 161-check RNG/save group. Omit `--headless` and add `--slimerot-capture` to inspect the combined reveal and Shrine captures in `.godot/`. The combined `--slimerot-test` run includes this group and the complete Prompt 11 regressions. Review both the result count and console for `SCRIPT ERROR`; an engine script abort can otherwise leave a misleading partial count.
+
+Legacy pure threshold-duration helpers remain for authored aura metadata/compatibility tests. Runtime queue tests assert the new adaptive durations, team relevance, five-second gap, skip behavior and unchanged currency. Historical Prompt 9 pacing reports describe the old RNG. The developer estimator now models zone luck, independent variants, canonical damage and hidden pity, but those historical campaign timings are not evidence for Prompt 12 balance.

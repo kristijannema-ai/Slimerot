@@ -143,7 +143,9 @@ func test_estimator_isolation() -> void:
 		var luck: float = [1.0, 30.36, 910.8, 28462.5][index % 4]
 		var modeled: Dictionary = model._sample(luck, zone, sampler, variants, true)
 		var expected := RollManager.select_base(luck, (float(reference.randi()) + 1.0) / 4294967296.0, zone)
-		var expected_variant := RollManager.select_variant(float(reference_variants.randi()) / 4294967296.0, true)
+		var draws: Array = []
+		for bit in 3: draws.append(float(reference_variants.randi()) / 4294967296.0)
+		var expected_variant := SlimerotVariants.key(RollManager.select_variant_flags(draws, RollManager.variant_probabilities(true)))
 		samplers_match = samplers_match and modeled.slime.id == expected and modeled.variant == expected_variant
 	check(samplers_match, "estimator's seeded ordinary/variant sampler agrees with the actual rolling implementation")
 	var owned: Dictionary = {}
