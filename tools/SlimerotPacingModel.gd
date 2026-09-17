@@ -1,14 +1,14 @@
 extends RefCounted
 
-# Slimerot decision-event estimate, deliberately independent of gameplay managers.
+# Slimerot decision-event estimate. Explicit luck contexts keep live state isolated.
 # A result is an assumption-sensitive model, never evidence of a full playthrough.
-const MODEL_VERSION := "Slimerot pacing decision-event model 2 (Prompt 12 RNG)"
+const MODEL_VERSION := "Slimerot pacing decision-event model 3 (Prompt 13 progression)"
 const DEFAULTS := {"seeds": 12, "first_seed": 9001, "horizon_minutes": 360.0,
 	"frame_hz": 60.0, "travel_seconds": 2.0, "combat_utilisation": 0.70,
 	"boss_utilisation": 0.70, "sale_interval_seconds": 300.0}
-const COIN_PRIORITY := ["C01", "C02", "C03", "C04", "C05", "C06", "C07", "C08", "C09",
-	"C10", "C11", "C12", "C13", "C14", "C15", "C16", "C17", "C18", "C19"]
-const OPTIONAL_AFTER := {"R04": ["RO1"], "R08": ["RO2", "RO3"], "R13": ["RO4", "RO5", "RO6"]}
+const COIN_PRIORITY := ["C01", "C02", "C03", "C04", "C05", "CO1", "C06", "C07", "C08", "C09", "C20",
+	"C10", "C11", "C12", "C13", "CO2", "C14", "C21", "C15", "C16", "C17", "C18", "C23", "C24", "C25", "C22", "C19"]
+const OPTIONAL_AFTER := {"R04": ["RO1"], "R08": ["RO2", "RO3", "RO5"], "R13": ["RO4", "RO6", "RO8"], "R18": ["RO9"]}
 const TARGETS := {"Z2": [8, 12], "R08": [55, 65], "Z5": [70, 90], "R13": [115, 130],
 	"Z7": [135, 155], "R18": [170, 190], "final_boss": [200, 230]}
 var options: Dictionary = {}
@@ -64,7 +64,8 @@ func run(overrides: Dictionary = {}) -> Dictionary:
 		"variant": _variant_constants(), "structures": SlimerotEncounters.STRUCTURES,
 		"respawn_seconds": SlimerotCampaign.RESPAWN_SECONDS, "move_speed": SlimerotBalance.MOVE_SPEED,
 		"zone_travel_distance": SlimerotCampaign.ENTRANCE.distance_to(SlimerotCampaign.EXIT_GATE),
-		"super_roll_interval": SlimerotRollTree.SUPER_ROLL_INTERVAL, "super_roll_multiplier": SlimerotRollTree.SUPER_ROLL_MULTIPLIER,
+		"super_roll_intervals": SlimerotRollTree.SUPER_ROLL_INTERVALS, "super_roll_multipliers": SlimerotRollTree.SUPER_ROLL_MULTIPLIERS,
+		"coin_priority": COIN_PRIORITY, "optional_after": OPTIONAL_AFTER,
 		"default_auto_sell_threshold": SlimerotRollTree.DEFAULT_SELL_THRESHOLD, "maximum_slots": SlimerotBalance.MAX_SLOTS}
 	return {"model_version": MODEL_VERSION, "constants_sha256": JSON.stringify(constants).sha256_text(),
 		"constants": constants, "assumptions": _assumptions(), "options": options.duplicate(),
@@ -83,6 +84,7 @@ func _assumptions() -> Array[String]:
 		"Start in Z1 with the first guaranteed starter roll at active second zero. Manual rolls before Auto Roll follow the stated uptime.",
 		"Auto Roll is independent of combat and movement. Settings pauses active time; other menus can remain live. No menu interaction time is simulated or added to fill target windows.",
 		"Every ordinary roll uses the live score=luck/U sampler, three independent variant draws, zone luck and hidden pity, and immediately equips the strongest owned copies.",
+		"Fortune luck is multiplied once. Super Roll I starts on the next lifetime multiple of 100; upgrades preserve an earlier scheduled trigger and subsequent triggers use the active interval.",
 		"No potions, Variant Shrine offerings, offline rewards, specific-slime gate requirements, or free currency are assumed.",
 		"Safe Chasers are farmed with the stated travel and damage utilisation. Six spawn positions rotate with the live respawn time.",
 		"Coin nodes are bought in the stated priority when eligible and affordable; gates are attempted first. Shrine and terminal are repaired as soon as affordable.",
@@ -121,21 +123,25 @@ func _roll_clock(policy: Dictionary) -> Dictionary:
 		"frame_quantisation_note": "ceil(cooldown * Hz)/Hz; float scheduling jitter and frame stalls are excluded"}
 
 func _stats(owned: Dictionary) -> Dictionary:
-	var stats := {"luck": 1.0, "cooldown": SlimerotBalance.ROLL_COOLDOWN,
+	var stats := {"luck": 1.0, "node_ids": owned.keys(), "cooldown": SlimerotBalance.ROLL_COOLDOWN,
+		"minor_roll_tree_product": 1.0, "breakthrough_product": 1.0, "coin_tree_luck_product": 1.0,
 		"slots": 1, "damage": 1.0, "boss_damage": 1.0, "coin_gain": 1.0, "sale_gain": 1.0,
-		"move_speed": SlimerotBalance.MOVE_SPEED, "super_roll": false, "variant_sense": false}
+		"move_speed": SlimerotBalance.MOVE_SPEED, "super_roll": false, "super_roll_tier": 0,
+		"super_roll_interval": 0, "super_roll_multiplier": 1.0, "variant_sense": false}
 	for id in owned:
 		var row: Array = roll_rows.get(id, [])
 		if not row.is_empty():
 			match row[4]:
-				"luck_multiplier", "checkpoint_luck": stats.luck *= float(row[5])
+				"luck_multiplier": stats.minor_roll_tree_product *= float(row[5])
+				"checkpoint_luck": stats.breakthrough_product *= float(row[5])
 				"cooldown_set": stats.cooldown = minf(stats.cooldown, float(row[5]))
-				"super_roll": stats.super_roll = true
+				"super_roll": stats.super_roll_tier = maxi(stats.super_roll_tier, int(row[5]))
 				"variant_sense": stats.variant_sense = true
 			continue
 		row = coin_rows.get(id, [])
 		if row.is_empty(): continue
 		match row[4]:
+			"luck_multiplier": stats.coin_tree_luck_product *= float(row[5])
 			"slot_set": stats.slots = maxi(stats.slots, int(row[5]))
 			"team_damage_add": stats.damage += float(row[5])
 			"boss_damage_add": stats.boss_damage += float(row[5])
@@ -143,7 +149,16 @@ func _stats(owned: Dictionary) -> Dictionary:
 			"duplicate_dealer": stats.sale_gain += float(row[5])
 			"move_speed_add": stats.move_speed += SlimerotBalance.MOVE_SPEED * float(row[5])
 	stats.slots = mini(stats.slots, SlimerotBalance.MAX_SLOTS)
+	stats.super_roll_tier = clampi(stats.super_roll_tier, 0, 3)
+	stats.super_roll = stats.super_roll_tier > 0
+	stats.super_roll_interval = SlimerotRollTree.SUPER_ROLL_INTERVALS[stats.super_roll_tier]
+	stats.super_roll_multiplier = SlimerotRollTree.SUPER_ROLL_MULTIPLIERS[stats.super_roll_tier]
+	stats.luck = stats.minor_roll_tree_product * stats.breakthrough_product * stats.coin_tree_luck_product
 	return stats
+
+func _luck(stats: Dictionary, zone: int, multiplier: float = 1.0) -> float:
+	return RollManager.get_effective_luck({"node_ids": stats.node_ids, "highest_zone_unlocked": zone,
+		"active_potion_multiplier": 1.0, "super_roll_multiplier": multiplier, "apply_cap": false})
 
 func _sample(luck: float, _zone: int, rng: RandomNumberGenerator, variants: RandomNumberGenerator, sense: bool) -> Dictionary:
 	var score := luck / ((float(rng.randi()) + 1.0) / 4294967296.0)
@@ -188,6 +203,7 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 	var sequence := _roll_sequence(policy.optional)
 	var node_index := 0
 	var rolls := 0
+	var next_super_roll := 0
 	var best_ever := 0
 	var misses := 0
 	var pity_key: Array = []
@@ -216,8 +232,8 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 	var horizon: float = options.horizon_minutes * 60.0
 	while t < horizon:
 		if t >= next_roll - 0.000001:
-			var multiplier := SlimerotRollTree.SUPER_ROLL_MULTIPLIER if stats.super_roll and (rolls + 1) % SlimerotRollTree.SUPER_ROLL_INTERVAL == 0 else 1.0
-			var luck: float = float(stats.luck) * maxi(1, zone) * multiplier
+			var multiplier: float = stats.super_roll_multiplier if stats.super_roll and SlimerotSuperRoll.due(rolls, next_super_roll) else 1.0
+			var luck := _luck(stats, zone, multiplier)
 			var result := _sample(luck, zone, rng, variants, stats.variant_sense)
 			if rolls == 0: result.slime = roster[0]
 			var rarity: int = int(result.slime.threshold) * SlimerotVariants.rarity_multiplier(result.variant)
@@ -246,6 +262,7 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 			inventory[key].count += 1
 			rolls += 1
 			balance += 1
+			if multiplier > 1.0: next_super_roll = SlimerotSuperRoll.after_trigger(rolls, stats.super_roll_interval)
 			if owned.has("RO2") and structures.has("sell_terminal") and result.variant == "normal" and inventory[key].count > 1 and result.slime.threshold <= SlimerotRollTree.DEFAULT_SELL_THRESHOLD:
 				# Auto-sale sees the old equipped copy set, just as the live transaction does.
 				if int(team.equipped.get(key, 0)) < int(inventory[key].count):
@@ -260,7 +277,10 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 			balance -= int(node[3])
 			owned[node[0]] = true
 			node_index += 1
+			var previous_super_tier: int = stats.super_roll_tier
 			stats = _stats(owned)
+			if stats.super_roll_tier > previous_super_tier:
+				next_super_roll = SlimerotSuperRoll.initial(rolls, stats.super_roll_interval) if previous_super_tier == 0 else SlimerotSuperRoll.upgrade(rolls, next_super_roll, stats.super_roll_interval)
 			team = _team(inventory, stats)
 			next_roll = minf(next_roll, t + _quantised_cooldown(stats.cooldown) / float(policy.roll_uptime))
 			if node[4] == "checkpoint_luck":
@@ -382,7 +402,7 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 func _snapshot(t: float, zone: int, rolls: int, balance: int, coins: int, stats: Dictionary, team: Dictionary, reason: String) -> Dictionary:
 	return {"reason": reason, "active_seconds": t, "zone": zone, "lifetime_rolls": rolls,
 		"spendable_rolls": balance, "coins": coins, "team_dps": team.dps, "slots": stats.slots,
-		"effective_luck": stats.luck * maxi(1, zone), "strongest_owned": team.strongest_id, "strongest_equipped": team.strongest_id}
+		"effective_luck": _luck(stats, zone), "strongest_owned": team.strongest_id, "strongest_equipped": team.strongest_id}
 
 func _farm_comparison(zone: int, stats: Dictionary, team: Dictionary, zones_back: int = 1) -> Dictionary:
 	if zone <= zones_back: return {}
@@ -480,7 +500,8 @@ func _breakthrough_probability() -> Array[Dictionary]:
 			var target: Dictionary = roster[0]
 			for slime in roster:
 				if slime.zone == target_zone: target = slime
-			var p := minf(1.0, float(stats.luck) * zone / float(target.threshold))
+			var luck := _luck(stats, zone)
+			var p := minf(1.0, luck / float(target.threshold))
 			var before := minf(1.0, p / float(row[5]))
 			var cooldown := _quantised_cooldown(stats.cooldown)
 			var rolls_10m := floori(600.0 / cooldown)
@@ -498,7 +519,7 @@ func _breakthrough_probability() -> Array[Dictionary]:
 				if hit_before: seeded_before += 1
 				if hit_after: seeded_after += 1
 			result.append({"breakthrough": row[0], "slime": target.id, "origin_zone": target_zone,
-				"threshold": target.threshold, "luck_after": stats.luck * zone, "cooldown": cooldown,
+				"threshold": target.threshold, "luck_after": luck, "cooldown": cooldown,
 				"mean_minutes_after": cooldown / p / 60.0,
 				"median_minutes_after": ceil(log(0.5) / log(1.0 - p)) * cooldown / 60.0 if p < 1.0 else cooldown / 60.0,
 				"p90_minutes_after": ceil(log(0.1) / log(1.0 - p)) * cooldown / 60.0 if p < 1.0 else cooldown / 60.0,

@@ -4,7 +4,8 @@ extends Node
 # background checkpoint, offline reward commit, and a second reopened process.
 const PROFILE := "res://.godot/Slimerot-offline-restart.json"
 const BACKGROUND_AT := 10000.0
-const INITIAL_LIFETIME := 1000
+const INITIAL_LIFETIME := 20000
+const ROLL_SPEND := 12665 # Full mainline + Super Roll I/II/III, no Coin effects.
 var checks := 0
 var failures := 0
 
@@ -37,7 +38,9 @@ func write_fixture() -> void:
 	GameState.menu_paused = false
 	GameState.rolls_balance = INITIAL_LIFETIME
 	GameState.lifetime_rolls = INITIAL_LIFETIME
-	for id in ["R01", "R02", "R03"]: assert(SkillTreeManager.purchase(id))
+	for row in SlimerotRollTree.MAINLINE: assert(SkillTreeManager.purchase(row[0]))
+	for id in ["RO5", "RO8", "RO9"]: assert(SkillTreeManager.purchase(id))
+	GameState.super_roll_next_trigger = INITIAL_LIFETIME + 17
 	GameState.settings.auto_roll_state = true
 	GameState.award_coins(765)
 	GameState.active_play_seconds = 25.5
@@ -57,10 +60,12 @@ func verify_fixture() -> void:
 	var second_reopen := "--slimerot-offline-restart-verify" in OS.get_cmdline_user_args()
 	var expected_lifetime := INITIAL_LIFETIME + 100 if second_reopen else INITIAL_LIFETIME
 	check(SaveManager.enabled and SaveManager.last_error.is_empty(), "isolated saved profile loads")
-	check(GameState.lifetime_rolls == expected_lifetime and GameState.rolls_balance == expected_lifetime - 140, "pre-resume wallet agrees with the committed generation")
+	check(GameState.lifetime_rolls == expected_lifetime and GameState.rolls_balance == expected_lifetime - ROLL_SPEND, "pre-resume wallet agrees with the committed generation")
+	check(GameState.super_roll_next_trigger == expected_lifetime + 17 and SkillTreeManager.derived_stats().super_roll_tier == 3, "Super III's arbitrary pending phase survives process death")
 	var resume_at: float = BACKGROUND_AT + SkillTreeManager.derived_stats().roll_cooldown * 100.0
 	var summary: Dictionary = await SaveManager.resume_from_background(resume_at)
-	check(GameState.lifetime_rolls == INITIAL_LIFETIME + 100 and GameState.rolls_balance == INITIAL_LIFETIME - 140 + 100, "force-close catch-up awards exactly 100 Rolls and Lifetime Rolls once")
+	check(GameState.lifetime_rolls == INITIAL_LIFETIME + 100 and GameState.rolls_balance == INITIAL_LIFETIME - ROLL_SPEND + 100, "force-close catch-up awards exactly 100 Rolls and Lifetime Rolls once")
+	check(GameState.super_roll_next_trigger == INITIAL_LIFETIME + 117 and RollManager.rolls_until_super() == 17, "two offline Super III triggers preserve their fifty-roll phase without replay")
 	check(int(summary.get("rolls", 0)) == (0 if second_reopen else 100), "second reopened process has no already claimed AFK rewards")
 	check(GameState.coins == 765 and GameState.coins_earned == 765 and GameState.coins_spent == 0, "no offline combat Coins")
 	check(GameState.active_play_seconds == 25.5 and GameState.potion_remaining_seconds == 120.25 and GameState.boss_brew_seconds == 90.5, "active timers do not advance across process death")

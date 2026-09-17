@@ -130,7 +130,7 @@ func test_offline_parity() -> void:
 	fresh()
 	GameState.lifetime_rolls = 10000
 	GameState.rolls_balance = 10000
-	for index in range(1, 14): assert(SkillTreeManager.purchase("R%02d" % index))
+	for row in SlimerotRollTree.MAINLINE.slice(0, 13): assert(SkillTreeManager.purchase(row[0]))
 	GameState.highest_zone_unlocked = 8
 	var snapshot := SaveManager.snapshot()
 	RollManager.rng.seed = 8912
@@ -238,7 +238,7 @@ func test_live_presentation() -> void:
 	fresh()
 	GameState.lifetime_rolls = 140
 	GameState.rolls_balance = 140
-	for id in ["R01", "R02", "R03"]: assert(SkillTreeManager.purchase(id))
+	for id in ["R01", "R03", "R02"]: assert(SkillTreeManager.purchase(id))
 	InventoryManager.equip(InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME))
 	var result := {"slime_id": "brainrot_singularity", "variant": SlimerotVariants.key(7), "variant_flags": 7,
 		"threshold": 4000000, "effective_rarity": SlimeDatabase.get_effective_rarity("brainrot_singularity", 7), "luck_used": 1.0,

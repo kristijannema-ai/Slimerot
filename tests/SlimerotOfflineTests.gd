@@ -40,8 +40,8 @@ func unlock_auto(last_mainline: int = 3) -> void:
 	# Fixture currency is balanced; all permanent nodes use real purchase rules.
 	GameState.rolls_balance = 50000
 	GameState.lifetime_rolls = 50000
-	for index in range(1, last_mainline + 1):
-		assert(SkillTreeManager.purchase("R%02d" % index))
+	for row in SlimerotRollTree.MAINLINE.slice(0, last_mainline):
+		assert(SkillTreeManager.purchase(row[0]))
 	GameState.settings.auto_roll_state = true
 	RollManager.cooldown_remaining = SkillTreeManager.derived_stats().roll_cooldown
 

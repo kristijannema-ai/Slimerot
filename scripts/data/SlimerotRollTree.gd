@@ -5,9 +5,9 @@ extends RefCounted
 # ID, name, prerequisite, Rolls cost, effect, value, description.
 const MAINLINE := [
 	["R01", "Quick Hands I", "", 25, "cooldown_set", 2.20, "Cooldown 2.40 → 2.20 seconds"],
-	["R02", "Luck I", "R01", 40, "luck_multiplier", 1.10, "Minor luck ×1.10"],
-	["R03", "Auto Roll", "R02", 75, "auto_roll", 1.0, "Unlock Auto Roll while exploring and fighting"],
-	["R04", "Quick Hands II", "R03", 125, "cooldown_set", 1.90, "Cooldown 2.20 → 1.90 seconds"],
+	["R03", "Auto Roll", "R01", 40, "auto_roll", 1.0, "Unlock Auto Roll while exploring and fighting"],
+	["R02", "Luck I", "R03", 75, "luck_multiplier", 1.10, "Minor luck ×1.10"],
+	["R04", "Quick Hands II", "R02", 125, "cooldown_set", 1.90, "Cooldown 2.20 → 1.90 seconds"],
 	["R05", "Luck II", "R04", 175, "luck_multiplier", 1.15, "Minor luck ×1.15"],
 	["R06", "Quick Hands III", "R05", 275, "cooldown_set", 1.55, "Cooldown 1.90 → 1.55 seconds"],
 	["R07", "Luck III", "R06", 350, "luck_multiplier", 1.20, "Minor luck ×1.20"],
@@ -28,7 +28,9 @@ const OPTIONAL := [
 	["RO2", "Auto-Sell Duplicates", "R08", 450, "auto_sell", 1.0, "Auto-sell duplicate Normal rolls · default threshold ≤100"],
 	["RO3", "Filter I", "R08", 300, "filter_1", 1.0, "Auto-sell thresholds 20 / 100 / 1,000"],
 	["RO4", "Filter II", "R13", 500, "filter_2", 1.0, "Use any discovered base slime's threshold"],
-	["RO5", "Super Roll", "R13", 650, "super_roll", 1.0, "Every 100th Lifetime Roll uses ×5 luck once"],
+	["RO5", "Super Roll I", "R08", 650, "super_roll", 1.0, "Every 100 rolls: one Super Roll with ×5 luck"],
+	["RO8", "Super Roll II", ["RO5", "R13"], 900, "super_roll", 2.0, "Every 75 rolls: one Super Roll with ×10 luck"],
+	["RO9", "Super Roll III", ["RO8", "R18"], 1500, "super_roll", 3.0, "Every 50 rolls: one Super Roll with ×20 luck"],
 	["RO6", "Variant Sense", "R13", 700, "variant_sense", 1.0, "Variant chances ×1.25 · Shiny 1/80"],
 	["RO7", "Quick Hands VIII", "R18", 1400, "cooldown_set", 0.50, "Post-campaign cooldown 0.65 → 0.50 seconds"],
 ]
@@ -39,6 +41,8 @@ const LEGACY_NODES := {
 }
 const SUPER_ROLL_INTERVAL := 100
 const SUPER_ROLL_MULTIPLIER := 5.0
+const SUPER_ROLL_INTERVALS := [0, 100, 75, 50]
+const SUPER_ROLL_MULTIPLIERS := [1.0, 5.0, 10.0, 20.0]
 const DEFAULT_SELL_THRESHOLD := 100
 const FILTER_I_THRESHOLDS := [20, 100, 1000]
 

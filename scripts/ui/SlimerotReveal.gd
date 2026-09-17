@@ -79,7 +79,7 @@ func show_result(slime_id: String, variant: String, first: bool) -> void:
 	else:
 		label.text = data.display_name
 		details.text = ("NEW DISCOVERY · " if first_discovery else "") + SlimerotVariants.label(variant).to_upper() + "\nEffective rarity: 1 in " + SlimeDatabase.format_number(SlimeDatabase.get_effective_rarity(slime_id, variant)) + "\nDamage " + SlimeDatabase.format_number(SlimeDatabase.get_base_combat_damage(slime_id, variant))
-		if RollManager.active_reveal.get("super_roll", false): details.text += "\nSUPER ROLL · LUCK ×5"
+		if RollManager.active_reveal.get("super_roll", false): details.text += "\nSUPER ROLL · LUCK ×%d" % int(RollManager.active_reveal.get("super_roll_multiplier", SlimerotRollTree.SUPER_ROLL_MULTIPLIER))
 		if RollManager.active_reveal.get("auto_sold_coins", 0) > 0: details.text += "\nAuto-sold duplicate · +%d Coins" % RollManager.active_reveal.auto_sold_coins
 	label.add_theme_font_size_override("font_size", 19 if tier == 0 else 24)
 	details.add_theme_color_override("font_color", SlimerotBalance.VARIANT_DATA[variant].color)

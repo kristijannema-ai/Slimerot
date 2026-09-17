@@ -97,9 +97,9 @@ func test_roll_transactions() -> void:
 			check(InventoryManager.pair_for_copy(InventoryManager.equipped_copy_ids[0]).slime_id == SlimerotBalance.FIRST_SLIME, "first saved team owns and equips Tung Tung Tung Sahur")
 	check(GameState.rolls_balance == 100 and GameState.lifetime_rolls == 100, "100 real completed rolls mint exactly 100 Rolls and 100 Lifetime Rolls")
 	check(SaveManager.save_game() and SaveManager.load_game() and GameState.rolls_balance == 100 and GameState.lifetime_rolls == 100, "100-roll accounting survives save/load")
-	check(SkillTreeManager.purchase("R01") and SkillTreeManager.purchase("R02"), "25-Roll and 40-Roll purchases use the normal tree transaction")
+	check(SkillTreeManager.purchase("R01") and SkillTreeManager.purchase("R03"), "25-Roll and 40-Roll purchases use the normal tree transaction")
 	var saved := disk_state()
-	check(saved.get("rolls_balance") == 35 and saved.get("lifetime_rolls") == 100 and saved.get("roll_skill_spend", {}).get("R02") == 40, "40-Roll skill spends exactly 40 and immediately saves unchanged Lifetime Rolls")
+	check(saved.get("rolls_balance") == 35 and saved.get("lifetime_rolls") == 100 and saved.get("roll_skill_spend", {}).get("R03") == 40, "40-Roll Auto Roll spends exactly 40 and immediately saves unchanged Lifetime Rolls")
 	check(SaveManager.load_game() and GameState.lifetime_rolls == GameState.rolls_balance + SkillTreeManager.rolls_spent(GameState.purchased_skill_node_ids), "saved Roll ledger conserves all minted Rolls")
 	var before := GameState.lifetime_rolls
 	RollManager.cooldown_remaining = 0.0

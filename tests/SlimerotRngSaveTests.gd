@@ -101,7 +101,7 @@ func test_schema_nine_compact_migration() -> void:
 	check(GameState.last_background_timestamp == 1700000012.5 and GameState.offline_roll_remainder == 0.75 and is_equal_approx(RollManager.cooldown_remaining, 1.65), "Prompt 11 offline checkpoint and partial cooldown survive schema 9 migration")
 	check(same_json(InventoryManager.discoveries, legacy.discoveries) and GameState.best_ever_effective_rarity == SlimeDatabase.get_effective_rarity("brainrot_singularity", SlimerotVariants.GOLDEN), "sold-out legacy discovery establishes the historical best-ever power target")
 	check(GameState.rolls_since_last_power_improvement == 0 and GameState.shrine_sacrifices == {"shiny": [], "glitched": [], "golden": []}, "legacy pity counter and Shrine categories initialize safely")
-	check(SaveManager.save_game() and SlimerotSaveFormat.read(SaveManager.save_path).state.schema_version == 10, "only validated migration is durably committed as schema 10")
+	check(SaveManager.save_game() and SlimerotSaveFormat.read(SaveManager.save_path).state.schema_version == SlimerotBalance.SCHEMA_VERSION, "only validated migration is durably committed as the current schema")
 	check(FileAccess.get_file_as_string(SaveManager.save_path + ".bak") == original_bytes, "first schema 10 commit retains the complete schema 9 backup")
 
 func test_all_masks_round_trip() -> void:

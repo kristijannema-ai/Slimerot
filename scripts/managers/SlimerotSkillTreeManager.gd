@@ -1,14 +1,21 @@
 extends Node
 
 var nodes: Dictionary = {}
+var definitions: Array = []
+var validation_report: Dictionary = {}
 signal purchased(id: String, previous_luck: float, new_luck: float)
 
 func _ready() -> void:
+	nodes.clear()
+	definitions.clear()
 	for row in SlimerotRollTree.MAINLINE + SlimerotRollTree.OPTIONAL:
 		var data := SlimerotData.SkillNodeData.new()
 		data.id = row[0]
 		data.display_name = row[1]
-		if not row[2].is_empty(): data.prerequisite_ids.append(row[2])
+		if row[2] is Array:
+			data.prerequisite_ids.assign(row[2])
+		elif not row[2].is_empty():
+			data.prerequisite_ids.append(row[2])
 		data.tree_type = "Roll"
 		data.currency_type = "Rolls"
 		data.cost = row[3]
@@ -16,7 +23,7 @@ func _ready() -> void:
 		data.effect_value = row[5]
 		data.description = row[6]
 		data.optional = data.id.begins_with("RO")
-		nodes[data.id] = data
+		definitions.append(data)
 	for row in SlimerotCoinTree.ROWS:
 		var data := SlimerotData.SkillNodeData.new()
 		data.id = row[0]
@@ -31,19 +38,30 @@ func _ready() -> void:
 		data.required_boss_zone = row[7]
 		data.required_structure = row[8]
 		data.description = SlimerotCoinTree.description(data.effect_type, data.effect_value)
+		definitions.append(data)
+	# Validate the list before IDs become dictionary keys, so collisions cannot hide.
+	validation_report = validate_tree()
+	if OS.is_debug_build():
+		for message in validation_report.errors: push_error("Slimerot skill tree: " + message)
+		for message in validation_report.warnings: push_warning("Slimerot skill tree: " + message)
+	for data in definitions:
 		nodes[data.id] = data
 
+func validate_tree(node_list: Variant = null) -> Dictionary:
+	return SlimerotSkillTreeValidator.validate(definitions if node_list == null else node_list)
+
 func derived_stats(node_ids: Variant = null) -> Dictionary:
-	var stats := {"luck": 1.0, "roll_cooldown": SlimerotBalance.ROLL_COOLDOWN,
+	var stats := {"luck": 1.0, "minor_roll_tree_product": 1.0, "breakthrough_product": 1.0,
+		"coin_tree_luck_product": 1.0, "roll_cooldown": SlimerotBalance.ROLL_COOLDOWN,
 		"max_hp": SlimerotBalance.PLAYER_HP, "move_speed": SlimerotBalance.MOVE_SPEED,
 		"attack_interval": SlimerotBalance.ATTACK_INTERVAL, "attack_range": SlimerotBalance.ATTACK_RANGE,
 		"damage_multiplier": 1.0, "team_damage_bonus": 0.0, "boss_damage_bonus": 0.0, "move_speed_bonus": 0.0, "equipped_slots": 1, "auto_roll": false,
 		"breakthrough_count": 0, "variant_sense": false, "skip_common": false,
 		"auto_sell": false, "filter_1": false, "filter_2": false, "super_roll": false,
+		"super_roll_tier": 0, "super_roll_interval": 0, "super_roll_multiplier": 1.0,
 		"coin_scavenger": 0.0, "duplicate_dealer": 0.0}
 	var owned_nodes: Array = (GameState.purchased_skill_node_ids if node_ids == null else node_ids).duplicate()
 	owned_nodes.sort()
-	var minor_luck := 1.0
 	var seen: Dictionary = {}
 	for id in owned_nodes:
 		if seen.has(id): continue
@@ -56,14 +74,17 @@ func derived_stats(node_ids: Variant = null) -> Dictionary:
 			"boss_damage_add": stats.boss_damage_bonus += data.effect_value
 			"move_speed_add": stats.move_speed_bonus += data.effect_value
 			"slot_set": stats.equipped_slots = maxi(stats.equipped_slots, int(data.effect_value))
-			"luck_multiplier": minor_luck *= data.effect_value
+			"luck_multiplier":
+				if data.tree_type == "Coin": stats.coin_tree_luck_product *= data.effect_value
+				else: stats.minor_roll_tree_product *= data.effect_value
 			"checkpoint_luck":
 				stats.breakthrough_count += 1
+				stats.breakthrough_product *= data.effect_value
 			"cooldown_set": stats.roll_cooldown = minf(stats.roll_cooldown, data.effect_value)
 			"auto_sell": stats.auto_sell = true
 			"filter_1": stats.filter_1 = true
 			"filter_2": stats.filter_2 = true
-			"super_roll": stats.super_roll = true
+			"super_roll": stats.super_roll_tier = maxi(stats.super_roll_tier, int(data.effect_value))
 			"variant_sense": stats.variant_sense = true
 			"skip_common": stats.skip_common = true
 			"coin_scavenger": stats.coin_scavenger += data.effect_value
@@ -74,7 +95,11 @@ func derived_stats(node_ids: Variant = null) -> Dictionary:
 			"speed_add": stats.move_speed += data.effect_value
 			"slot_add": stats.equipped_slots += int(data.effect_value)
 			"auto_roll": stats.auto_roll = true
-	stats.luck = minor_luck * pow(20.0, stats.breakthrough_count)
+	stats.super_roll_tier = clampi(stats.super_roll_tier, 0, 3)
+	stats.super_roll = stats.super_roll_tier > 0
+	stats.super_roll_interval = SlimerotRollTree.SUPER_ROLL_INTERVALS[stats.super_roll_tier]
+	stats.super_roll_multiplier = SlimerotRollTree.SUPER_ROLL_MULTIPLIERS[stats.super_roll_tier]
+	stats.luck = stats.minor_roll_tree_product * stats.breakthrough_product * stats.coin_tree_luck_product
 	stats.damage_multiplier *= 1.0 + stats.team_damage_bonus
 	stats.move_speed *= 1.0 + stats.move_speed_bonus
 	stats.equipped_slots = clampi(stats.equipped_slots, 1, SlimerotBalance.MAX_SLOTS)
@@ -85,9 +110,11 @@ func purchase(id: String) -> bool:
 	if not purchase_blocker(id).is_empty(): return false
 	var data: SlimerotData.SkillNodeData = nodes.get(id)
 	var previous_luck := RollManager.effective_luck()
+	var previous_super_tier: int = derived_stats().super_roll_tier
 	if not GameState.spend(data.currency_type, data.cost, false): return false
 	GameState.purchased_skill_node_ids.append(id)
 	if data.currency_type == "Rolls": GameState.roll_skill_spend[id] = data.cost
+	RollManager.update_super_roll_schedule(previous_super_tier)
 	if id == "R08": GameState.settings.luck_cap = 0.0
 	RollManager.cooldown_remaining = minf(RollManager.cooldown_remaining, derived_stats().roll_cooldown)
 	GameState.highest_luck = maxf(GameState.highest_luck, RollManager.effective_luck())
@@ -118,7 +145,13 @@ func purchase_blocker(id: String) -> String:
 func rolls_spent(node_ids: Array, paid_costs: Variant = null) -> int:
 	var total := 0
 	var ledger: Dictionary = GameState.roll_skill_spend if paid_costs == null else paid_costs
+	var seen: Dictionary = {}
 	for id in node_ids:
-		if nodes.has(id) and nodes[id].currency_type == "Rolls":
+		if seen.has(id): continue
+		seen[id] = true
+		# Unknown IDs retain their recorded spend without applying unknown effects.
+		if not nodes.has(id):
+			total += int(ledger.get(id, 0))
+		elif nodes[id].currency_type == "Rolls":
 			total += int(ledger.get(id, nodes[id].cost))
 	return total

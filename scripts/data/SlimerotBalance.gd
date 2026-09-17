@@ -1,7 +1,7 @@
 class_name SlimerotBalance
 extends RefCounted
 
-const SCHEMA_VERSION := 10
+const SCHEMA_VERSION := 11
 # Offline roll work yields between bounded batches; it never keeps Android alive.
 const OFFLINE_SLICE_ROLLS := 256
 const OFFLINE_SLICE_MICROSECONDS := 4000

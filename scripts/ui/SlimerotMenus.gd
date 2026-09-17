@@ -14,6 +14,8 @@ var reset_progress: ProgressBar
 var save_status: Label
 var auto_status: Button
 var luck_status: Label
+var super_status: Label
+var luck_breakdown_status: Label
 var stat_labels: Dictionary = {}
 var hold_pointer := -2
 var slider_dragging := false
@@ -39,6 +41,8 @@ func build(owner_hud: SlimerotHUD, title: String) -> void:
 	potion_status = null
 	auto_status = null
 	luck_status = null
+	super_status = null
+	luck_breakdown_status = null
 	slider_dragging = false
 	if title.begins_with("Copies:"):
 		copies(title.trim_prefix("Copies:"))
@@ -241,7 +245,7 @@ func skills() -> void:
 	if skill_tab == "Roll":
 		hud.menu_label("Luck ×%.2f · Cooldown %.2fs\nBreakthroughs %d / 3 · every one multiplies TOTAL luck ×20" % [RollManager.effective_luck(), SkillTreeManager.derived_stats().roll_cooldown, SkillTreeManager.derived_stats().breakthrough_count], 19)
 		hud.menu_button("Show mainline" if optional_branch else "Show optional branches", func(): optional_branch = not optional_branch; hud.open_menu("Skills"))
-		hud.menu_label("Optional branches never gate a Breakthrough." if optional_branch else "Mainline · R01 → R08 → R13 → R18", 18)
+		hud.menu_label("Optional branches never gate a Breakthrough." if optional_branch else "Start · R01 → R03 Auto Roll → R02 Luck I\nBreakthroughs · R08 → R13 → R18", 18)
 	hud.menu_label("Follow the connecting paths. Mint = prerequisite owned · Slate = prerequisite locked.", 18)
 	var graph := SlimerotSkillConnections.new()
 	graph.add_to_group("slimerot_skill_graph")
@@ -256,6 +260,9 @@ func skills() -> void:
 		if data.tree_type != skill_tab: continue
 		if skill_tab == "Roll" and data.optional != optional_branch: continue
 		displayed.append(id)
+	# Show prerequisite cards before their children, including the Super Roll branch
+	# and Fleet Feet III, while keeping persistent IDs independent of screen order.
+	displayed = progression_order(displayed)
 	# Off-tab prerequisites get a real source card and connecting path, never a missing edge.
 	for id in displayed:
 		var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]
@@ -304,13 +311,33 @@ func skills() -> void:
 		if not blocker.is_empty() and blocker != "Owned":
 			label_in(column, blocker, 18, Color("eeb0ad"))
 
+func progression_order(ids: Array[String]) -> Array[String]:
+	var ordered: Array[String] = []
+	var pending: Array[String] = ids.duplicate()
+	while not pending.is_empty():
+		var ready := -1
+		for index in pending.size():
+			var blocked := false
+			for prerequisite in SkillTreeManager.nodes[pending[index]].prerequisite_ids:
+				if prerequisite in pending: blocked = true
+			if not blocked:
+				ready = index
+				break
+		# Debug validation diagnoses malformed graphs; the menu still remains usable.
+		if ready < 0:
+			ordered.append_array(pending)
+			break
+		ordered.append(pending[ready])
+		pending.remove_at(ready)
+	return ordered
+
 func roll_settings() -> void:
 	hud.menu_label("Rolling is free. Each completed roll grants +1 Rolls.", 20)
 	luck_status = label_in(hud.menu_body, "", 20, SlimerotPresentation.CREAM)
 	auto_status = hud.menu_button("Auto Roll · " + ("ON" if GameState.settings.auto_roll_state else "OFF"), hud.toggle_auto, not SkillTreeManager.derived_stats().auto_roll)
 	set_icon(auto_status, "auto")
 	if not SkillTreeManager.derived_stats().auto_roll:
-		hud.menu_label("Auto Roll unlocks at R03 in the Roll Tree.", 18)
+		hud.menu_label("After Quick Hands I, buy R03 Auto Roll for 40 Rolls.", 18)
 	if SkillTreeManager.derived_stats().breakthrough_count > 0:
 		hud.menu_label("Luck Cap · affects rolling only", 20)
 		for cap in SlimerotBalance.LUCK_CAPS:
@@ -321,7 +348,7 @@ func roll_settings() -> void:
 		hud.menu_label("Luck Cap unlocks with Breakthrough I. Default: MAX.", 18)
 	var stats := SkillTreeManager.derived_stats()
 	if stats.super_roll:
-		hud.menu_label("Super Roll: next in %d rolls. Every 100th Lifetime Roll uses ×5 after the selected cap." % RollManager.rolls_until_super(), 19)
+		super_status = label_in(hud.menu_body, "", 19)
 	if stats.auto_sell:
 		hud.menu_button("Auto-sell Normal duplicates · " + ("ON" if GameState.settings.auto_sell_settings.enabled else "OFF"), func(): InventoryManager.set_auto_sell(not GameState.settings.auto_sell_settings.enabled); hud.open_menu("Roll Settings"))
 		hud.menu_label("Only new Normal duplicates at or below the selected threshold. Keeps one copy per pair; favorites and equipped copies are always protected.", 18)
@@ -343,6 +370,8 @@ func roll_settings() -> void:
 		var probability := SlimerotVariants.probability(flag, InventoryManager.shrine_count(flag), SlimerotBalance.VARIANT_SENSE_MULTIPLIER if stats.variant_sense else 1.0)
 		hud.menu_label("%s: %.4f%% · Shrine ×%.3f" % [SlimerotVariants.label(flag), probability * 100.0, InventoryManager.shrine_multiplier(flag)], 19)
 	hud.menu_label("Skip Common shortens common toasts after RO1. First-discovery jackpots always play in full.", 18)
+	if OS.is_debug_build() and "--slimerot-playtest" in OS.get_cmdline_user_args():
+		luck_breakdown_status = label_in(hud.menu_body, "", 18, MUTED)
 	refresh_live()
 
 func stats() -> void:
@@ -395,6 +424,15 @@ func refresh_live() -> void:
 		save_status.text = "Save: " + (SaveManager.last_saved_at if SaveManager.last_error.is_empty() else SaveManager.last_error)
 		if not SaveManager.recovery_status.is_empty(): save_status.text += " · " + SaveManager.recovery_status
 	if is_instance_valid(luck_status): luck_status.text = "Effective Luck ×%.2f · Next roll ×%.2f" % [RollManager.effective_luck(), RollManager.rolling_luck(RollManager.next_roll_multiplier())]
+	if is_instance_valid(super_status):
+		var stats := SkillTreeManager.derived_stats()
+		super_status.text = "Super Roll %s · next in %d rolls\n×%d luck after the selected cap · repeats every %d rolls. Upgrades keep an earlier scheduled trigger." % [["", "I", "II", "III"][stats.super_roll_tier], RollManager.rolls_until_super(), int(stats.super_roll_multiplier), stats.super_roll_interval]
+	if is_instance_valid(luck_breakdown_status):
+		var breakdown := RollManager.get_luck_breakdown({"super_roll_multiplier": RollManager.next_roll_multiplier(), "apply_cap": true})
+		luck_breakdown_status.text = "DEV · Next-roll luck components"
+		for component in ["minor_roll_tree_product", "breakthrough_product", "zone_luck_multiplier", "coin_tree_luck_product", "active_potion_multiplier", "super_roll_multiplier"]:
+			luck_breakdown_status.text += "\n%s: ×%.6f" % [component, breakdown[component]]
+		luck_breakdown_status.text += "\nTOTAL: ×%.6f · After cap: ×%.6f" % [breakdown.total, breakdown.capped_total]
 	if is_instance_valid(auto_status): auto_status.text = "Auto Roll · " + ("ON" if GameState.settings.auto_roll_state else "OFF")
 	if stat_labels.is_empty(): return
 	var bosses := 0

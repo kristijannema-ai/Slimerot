@@ -35,7 +35,7 @@ func write_fixture() -> void:
 	for zone in range(1, 8): GameState.unlocked_gate_flags[str(zone)] = true
 	for zone in [2, 4, 6]: GameState.boss_defeated_flags["zone_%d" % zone] = true
 	for row in SlimerotEncounters.STRUCTURES: GameState.structure_unlocked_flags[row[0]] = true
-	for index in range(1, 9): assert(SkillTreeManager.purchase("R%02d" % index))
+	for row in SlimerotRollTree.MAINLINE.slice(0, 8): assert(SkillTreeManager.purchase(row[0]))
 	for id in ["C01", "C02", "C05", "C06"]: assert(SkillTreeManager.purchase(id))
 	var shiny := InventoryManager.add_copy("brr_brr_patapim", "shiny")
 	var duplicate := InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME)

@@ -57,6 +57,12 @@ func _process(delta: float) -> void:
 		save_game()
 
 func snapshot() -> Dictionary:
+	var super_trigger := GameState.super_roll_next_trigger
+	var stats := SkillTreeManager.derived_stats()
+	# Older in-memory fixtures may not yet have initialized their schedule. Capture
+	# the derived future boundary without changing live state during a save read.
+	if super_trigger == 0 and stats.super_roll and GameState.lifetime_rolls <= SlimerotSaveFormat.MAX_EXACT_INTEGER - int(stats.super_roll_interval):
+		super_trigger = RollManager.super_schedule_initial(GameState.lifetime_rolls, int(stats.super_roll_interval))
 	return {
 		"schema_version": SlimerotBalance.SCHEMA_VERSION,
 		"best_ever_effective_rarity": maxi(GameState.best_ever_effective_rarity, discovered_power(InventoryManager.discoveries)),
@@ -64,6 +70,7 @@ func snapshot() -> Dictionary:
 		"shrine_sacrifices": GameState.shrine_sacrifices.duplicate(true),
 		"coins": GameState.coins, "rolls_balance": GameState.rolls_balance,
 		"lifetime_rolls": GameState.lifetime_rolls, "active_play_seconds": GameState.active_play_seconds,
+		"super_roll_next_trigger": super_trigger,
 		"last_background_timestamp": GameState.last_background_timestamp,
 		"offline_roll_remainder": GameState.offline_roll_remainder,
 		"first_roll_completed": GameState.lifetime_rolls > 0,
@@ -326,19 +333,30 @@ func validate(data: Variant) -> bool:
 		return false
 	var unique_nodes: Array = []
 	for id in data.purchased_skill_node_ids:
-		if not id is String or not SkillTreeManager.nodes.has(id) or id in unique_nodes:
+		if not id is String or id.is_empty() or id in unique_nodes:
 			return false
 		unique_nodes.append(id)
+		# Unknown historical IDs remain inert, preserving progress and any recorded
+		# spend without pretending that the current tree supplies their effects.
+		if not SkillTreeManager.nodes.has(id): continue
 		for prerequisite in SkillTreeManager.nodes[id].prerequisite_ids:
-			if prerequisite not in data.purchased_skill_node_ids: return false
+			if prerequisite not in data.purchased_skill_node_ids and not grandfathered_luck_i(data, id, prerequisite): return false
+	var recorded_spend := 0
 	for id in data.roll_skill_spend:
-		if not id is String or not SkillTreeManager.nodes.has(id) or id not in data.purchased_skill_node_ids or SkillTreeManager.nodes[id].currency_type != "Rolls": return false
+		if not id is String or id.is_empty() or id not in data.purchased_skill_node_ids: return false
+		if SkillTreeManager.nodes.has(id) and SkillTreeManager.nodes[id].currency_type != "Rolls": return false
 		var paid: Variant = data.roll_skill_spend[id]
-		if (not paid is int and not paid is float) or not is_finite(float(paid)) or paid < 0 or paid != floor(float(paid)) or paid > SkillTreeManager.nodes[id].cost: return false
+		if not SlimerotSaveFormat.integer(paid): return false
+		if int(paid) > SlimerotSaveFormat.MAX_EXACT_INTEGER - recorded_spend: return false
+		recorded_spend += int(paid)
+		if SkillTreeManager.nodes.has(id):
+			var maximum_paid: int = maxi(SkillTreeManager.nodes[id].cost, 75 if id == "R03" else 0)
+			if paid > maximum_paid: return false
 	for id in data.purchased_skill_node_ids:
-		if SkillTreeManager.nodes[id].currency_type == "Rolls" and not data.roll_skill_spend.has(id): return false
+		if SkillTreeManager.nodes.has(id) and SkillTreeManager.nodes[id].currency_type == "Rolls" and not data.roll_skill_spend.has(id): return false
 	if int(data.lifetime_rolls) != int(data.rolls_balance) + SkillTreeManager.rolls_spent(data.purchased_skill_node_ids, data.roll_skill_spend):
 		return false
+	if not validate_super_roll_state(data): return false
 	if not InventoryManager.validate_saved_inventory(data.inventory, data.equipped_copy_ids, data.next_copy_id).is_empty(): return false
 	for id in data.discoveries:
 		if not SlimeDatabase.slimes.has(id) or not data.discoveries[id] is Array:
@@ -379,6 +397,7 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.coins = int(data.coins)
 	GameState.rolls_balance = int(data.rolls_balance)
 	GameState.lifetime_rolls = int(data.lifetime_rolls)
+	GameState.super_roll_next_trigger = int(data.super_roll_next_trigger)
 	GameState.best_ever_effective_rarity = int(data.best_ever_effective_rarity)
 	GameState.rolls_since_last_power_improvement = int(data.rolls_since_last_power_improvement)
 	GameState.shrine_sacrifices = data.shrine_sacrifices.duplicate(true)
@@ -427,7 +446,8 @@ func apply_snapshot(data: Dictionary) -> void:
 func migrate(value: Variant) -> Variant:
 	if not value is Dictionary or not SlimerotSaveFormat.integer(value.get("schema_version")): return value
 	var version := int(value.schema_version)
-	if version == 9: return migrate_rng(value)
+	if version == 10: return migrate_progression(value)
+	if version == 9: return migrate_progression(migrate_rng(value))
 	if version not in [1, 2, 3, 4, 5, 6, 7, 8]: return value
 	value = value.duplicate(true)
 	value.schema_version = version
@@ -458,7 +478,7 @@ func migrate(value: Variant) -> Variant:
 	for pair in data.inventory.values():
 		pair["copy_ranges"] = []
 		pair["favorite_copy_ranges"] = []
-	return migrate_rng(data)
+	return migrate_progression(migrate_rng(data))
 
 func migrate_legacy(value: Variant) -> Variant:
 	if not value is Dictionary or value.get("schema_version") not in [1, 2, 3, 4, 5]:
@@ -519,10 +539,13 @@ func migrate_roll_tree(data: Dictionary) -> Dictionary:
 	for old_id in data.purchased_skill_node_ids:
 		if not old_id is String: return data
 		var id: String = SlimerotRollTree.LEGACY_NODES.get(old_id, {}).get("id", old_id)
-		if not SkillTreeManager.nodes.has(id): return data
 		if id not in purchased_ids: purchased_ids.append(id)
+		if not SkillTreeManager.nodes.has(id):
+			if data.get("roll_skill_spend", {}).has(old_id): paid_costs[id] = data.roll_skill_spend[old_id]
+			continue
 		if SkillTreeManager.nodes[id].currency_type == "Rolls":
-			paid_costs[id] = SlimerotRollTree.LEGACY_NODES.get(old_id, {}).get("paid", data.get("roll_skill_spend", {}).get(id, SkillTreeManager.nodes[id].cost))
+			var historical_cost: int = 40 if id == "R02" else 75 if id == "R03" else SkillTreeManager.nodes[id].cost
+			paid_costs[id] = SlimerotRollTree.LEGACY_NODES.get(old_id, {}).get("paid", data.get("roll_skill_spend", {}).get(id, historical_cost))
 		if SlimerotRollTree.LEGACY_NODES.has(old_id):
 			# Grandfather the required ancestors, preserving an already unlocked Auto Roll.
 			# Neither wallet nor Lifetime Rolls changes; the ledger records historical spend.
@@ -662,3 +685,28 @@ func validate_rng_state(data: Dictionary) -> bool:
 			if not id is String or not SlimeDatabase.slimes.has(id) or seen.has(id): return false
 			seen[id] = true
 	return true
+
+func grandfathered_luck_i(data: Dictionary, id: String, prerequisite: String) -> bool:
+	# Before Prompt 13, R02 cost 40 and followed R01 directly. Keep that purchased
+	# effect and ledger through every future save without awarding or refunding R03.
+	var paid: Variant = data.roll_skill_spend.get("R02")
+	return id == "R02" and prerequisite == "R03" and "R01" in data.purchased_skill_node_ids and SlimerotSaveFormat.integer(paid) and paid <= 40
+
+func migrate_progression(value: Dictionary) -> Dictionary:
+	if value.is_empty() or not value.get("purchased_skill_node_ids") is Array or not SlimerotSaveFormat.integer(value.get("lifetime_rolls")): return {}
+	for id in value.purchased_skill_node_ids:
+		if not id is String: return {}
+	var data := value.duplicate(true)
+	data.schema_version = SlimerotBalance.SCHEMA_VERSION
+	# Prompt 12 used the upcoming 100th Lifetime Roll. Preserve that established
+	# boundary even when RO5 was bought mid-cycle; never replay a past trigger.
+	data.super_roll_next_trigger = RollManager.super_schedule_initial(int(data.lifetime_rolls), 100) if "RO5" in data.purchased_skill_node_ids else 0
+	return data
+
+func validate_super_roll_state(data: Dictionary) -> bool:
+	if not SlimerotSaveFormat.integer(data.get("super_roll_next_trigger")): return false
+	var stats := SkillTreeManager.derived_stats(data.purchased_skill_node_ids)
+	if not stats.super_roll: return data.super_roll_next_trigger == 0
+	if data.super_roll_next_trigger == 0:
+		return data.lifetime_rolls > SlimerotSaveFormat.MAX_EXACT_INTEGER - int(stats.super_roll_interval)
+	return data.super_roll_next_trigger > data.lifetime_rolls and int(data.super_roll_next_trigger) - int(data.lifetime_rolls) <= int(stats.super_roll_interval)
