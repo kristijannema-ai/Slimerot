@@ -1,8 +1,10 @@
-# Slimerot validation — prompts 1–13
+# Slimerot validation — prompts 1–14
 
 Engine: official Godot 4.5.1 stable on Windows. The project runs headlessly and with the OpenGL compatibility renderer. Tests use isolated per-process files under `.godot/`, preserving player saves.
 
-Current Prompt 13 validation: **1,766 combined headless checks, zero failures**; **68 focused rendered progression/save checks**; **37 process-restart checks** (11 ordinary, 13 first offline reopen, 13 second reopen); **154 isolated exported-resource checks**; and a 120-frame packed main-scene smoke test. Final logs contain no Slimerot script errors. Early Auto, Super branch and tier-III Settings captures were inspected. See the [Prompt 13 report](Slimerot-Prompt-13.md) for the exact node delta, schema 11 compatibility and provisional balance.
+Current Prompt 14 validation: **1,837 full headless checks**, **68 focused rendered UI checks** and **178 isolated export checks**, all passing, plus a successful 120-frame packed main-scene launch. The final full-suite count is recorded in the [Prompt 14 report](Slimerot-Prompt-14.md). Captures cover 720×1280, 720×1560 and 800×1280. Android touch-event pan/pinch, real touch purchases, one-layer Back, 20-cycle closes, clipped hit testing, app-suspension cleanup, preserved pan and closed-Team Auto Roll node counts are covered. Physical Android hardware remains untested.
+
+Historical Prompt 13 validation: **1,766 combined headless checks, zero failures**; **68 focused rendered progression/save checks**; **37 process-restart checks** (11 ordinary, 13 first offline reopen, 13 second reopen); **154 isolated exported-resource checks**; and a 120-frame packed main-scene smoke test. Final logs contain no Slimerot script errors. Early Auto, Super branch and tier-III Settings captures were inspected. See the [Prompt 13 report](Slimerot-Prompt-13.md) for the exact node delta, schema 11 compatibility and provisional balance.
 
 Historical Prompt 12 validation: **1,662 combined headless checks, zero failures**, including Prompt 11 input/inventory/offline suites and the new RNG/migration suites. **161 focused rendered checks** passed with no Slimerot script errors. The actual process-kill save probe passed 11 checks; two independent reopened offline processes passed 11 each. The isolated exported-resource audit passed **152 checks**. Rendered combined-variant reveal and Variant Shrine captures were inspected. See the [Prompt 12 report](Slimerot-Prompt-12.md) for requirements and provisional constants. Screenshots, logs, packs and generated reports are local validation artifacts, excluded from publication.
 
@@ -81,8 +83,8 @@ The sandbox emits an engine certificate-store diagnostic at startup and the edit
 
 1. Start with a fresh save. Walk and roll simultaneously using touch or WASD + Space. Confirm the first base is Tung Tung Tung Sahur, immediately equipped, and both currency counts increase by one. Check Lifetime Rolls in Stats.
 2. Continue rolling at the 2.4-second cooldown. Confirm free rolls, normal threshold-labeled toasts, all 24 bases available from Z1, and no scene change.
-3. Open Inventory and try DPS/rarity/name sorting. Use the paginated copy manager; favorite one copy, equip another, and verify both sale protections. Repair the Sell Terminal before trying sales.
-4. Open Collection: exactly 24 base cards, correct discovery states and current best variant. Sell every unprotected copy of one base and verify its discovery remains.
+3. Open TEAM and try DPS/rarity/name sorting. Use the paginated copy manager; favorite one copy, equip another, and verify both sale protections. Repair the Sell Terminal before trying sales.
+4. Open TEAM → COLLECTION: exactly 24 base cards, correct discovery states and current best variant. Sell every unprotected copy of one base and verify its discovery remains.
 5. Repair the Shrine, buy C01 for 100 Coins and Slot 2 for 350 Coins, own multiple copies, and use Auto Equip Strongest. Verify two strongest copies equip, including duplicate bases. Later slots require their listed Bond and boss gates.
 6. Repair the Bedroom Shrine and open Skills. R01 costs 25 Rolls; buy R03 for 40 Rolls immediately after R01, enable Auto Roll, then buy R02 for 75 Rolls while walking/fighting. Confirm purchases lower Rolls without lowering Lifetime Rolls. Optional branches must never block the mainline.
 7. Inspect Shiny outline/sparkles, Glitched jitter/chromatic offset, Golden aura, each reveal tier, and sound/shake settings. A first jackpot cannot be skipped; repeats can. Continue holding movement and rolling during feedback.
@@ -180,3 +182,11 @@ Coverage includes all 15 requested requirements, real purchases of all new Coin 
 The offline restart probe uses its existing write/read/second-read flags with tier III already owned and a pending trigger 17 rolls away. The write process is force-stopped only after durable readiness; the first read claims 100 offline rolls and the second read verifies no repeated claim. Each reader now passes **13 checks**. The separate ordinary restart probe remains **11 checks**. Generated probe saves, console logs, packs and screenshots are local and excluded from export/publication.
 
 The pacing model now uses the central luck function, Fortune nodes and persistent Super phases. Previous campaign-time reports remain historical; Prompt 13 has not been measured in a new full human campaign or on Android hardware.
+
+## Prompt 14 mobile UI command
+
+Run `godot --headless --path <project> -- --slimerot-test --slimerot-ui-only` for the **68-check** mobile UI group. Omit `--headless` and add `--slimerot-capture` for local rendered captures. The combined suite includes this group and the updated historical UI tests; those still check backend outcomes and input behavior after navigation moves.
+
+The focused group verifies the HUD entry count and structure gates, Team tabs and two cards for a 100,003-copy stack plus another variant, consolidated Settings, centered passive world labels, real touch pan/pinch, clamped zoom and plus/minus/Fit, the full graph fitting the phone viewport, details/current-to-new stats/real purchases, four node styles, preserved view after Back, gesture cancellation on app switching, three phone aspect ratios, relevant-data refreshes, 100 Auto Rolls with Team closed, simultaneous joystick/ROLL after overlay disposal, and 20 Close/Back cycles for seven major routes. Existing tests additionally cover all other modal routes, safe-area insets, reset cancellation, sliders, pointer emulation and backend save/RNG/progression regressions.
+
+On Android hardware, repeat a two-finger pinch, switch apps while fingers are held, resume and pan with one finger. Open a node detail while zoomed/panned and use Android Back; the prior view should remain. Check text/font fallback, touch targets and system insets at native resolution. The synthetic desktop event tests do not claim those physical-device checks.

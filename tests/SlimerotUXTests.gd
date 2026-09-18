@@ -82,7 +82,9 @@ func run(owner_world: Node, owner_suite: Node) -> void:
 	fresh()
 
 func test_layouts() -> void:
-	GameState.purchased_skill_node_ids.assign(["C15"])
+	GameState.purchased_skill_node_ids.assign(["C15", "R03"])
+	GameState.structure_unlocked_flags.skill_tree_shrine = true
+	GameState.structure_unlocked_flags.fast_travel_pillar = true
 	for index in 5: InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME)
 	InventoryManager.auto_equip_strongest()
 	hud.refresh()
@@ -101,8 +103,9 @@ func test_layouts() -> void:
 			hud.apply_layout(safe)
 			await settled()
 			var bounds_ok := true
-			for control in [hud.hp_bar, hud.hp_label, hud.location_label, hud.wallet, hud.layout_items.settings,
-				hud.joystick, hud.auto_button, hud.roll_button, hud.layout_items.inventory, hud.team_label, hud.portraits]:
+			for control in [hud.hp_bar, hud.hp_label, hud.location_label, hud.layout_items.top, hud.layout_items.settings,
+				hud.joystick, hud.auto_button, hud.roll_button, hud.layout_items.team, hud.skills_button, hud.map_button,
+				hud.layout_items.currencies, hud.currency_labels.coins, hud.currency_labels.rolls, hud.currency_labels.luck]:
 				bounds_ok = bounds_ok and safe.grow(0.1).encloses(control.get_global_rect())
 			check(bounds_ok, "%s %s HUD remains inside safe bounds" % [str(dimensions), "inset" if inset else "edge"])
 			check(not hud.joystick.get_global_rect().intersects(hud.roll_button.get_global_rect()) and not hud.auto_button.get_global_rect().intersects(hud.roll_button.get_global_rect()), "%s %s movement and roll touch targets are separate" % [str(dimensions), "inset" if inset else "edge"])
@@ -155,14 +158,15 @@ func test_pointer_controls() -> void:
 
 func test_menus_and_back() -> void:
 	await settled()
-	check(not hud.skills_button.visible and not hud.map_button.visible and not hud.super_label.visible and hud.auto_button.disabled, "fresh HUD hides gated Skills, Fast Travel, Super Roll and disables Auto")
+	check(not hud.skills_button.visible and not hud.map_button.visible and not hud.super_label.visible and not hud.auto_button.visible and hud.auto_button.disabled, "fresh HUD hides gated Skills, Fast Travel, Super Roll and Auto")
 	hud.open_menu("Skills")
 	check(not is_instance_valid(hud.menu), "direct Skills entry is gated until Shrine repair")
 	hud.open_menu("Inventory")
 	await settled()
-	check(find_button("Sell Duplicates").disabled, "Inventory sale is gated by the Sell Terminal")
-	await tap(find_button("Team"))
-	check(hud.menu_title == "Team", "touch navigation opens the Team menu")
+	check(hud.menu_title == "Team" and find_button("Sell spare copies") == null, "Inventory alias opens Team with sale gated by the Sell Terminal")
+	await tap(find_button("COLLECTION"))
+	await tap(find_button("TEAM"))
+	check(hud.menu_title == "Team", "Team hub touch navigation returns from Collection to Team")
 	var slots: Array[Node] = descendants(hud.menu).filter(func(node): return node is SlimerotTeamSlot)
 	check(slots.size() == 5 and slots.filter(func(node): return node.locked).size() == 4, "Team shows five portrait slots with four chained at new game")
 	hud.open_menu("Roll Settings")
@@ -170,6 +174,7 @@ func test_menus_and_back() -> void:
 	check(find_button("Auto Roll").disabled and find_button("MAX") == null and find_button("Auto-sell Normal") == null, "Roll Settings gates Auto, Luck Cap and auto-sell separately")
 	GameState.structure_unlocked_flags.skill_tree_shrine = true
 	GameState.structure_unlocked_flags.sell_terminal = true
+	GameState.structure_unlocked_flags.fast_travel_pillar = true
 	GameState.boss_defeated_flags.zone_4 = true
 	GameState.rolls_balance = 20000
 	GameState.lifetime_rolls = 20000
@@ -177,8 +182,9 @@ func test_menus_and_back() -> void:
 		if row[0] == "R09": break
 		SkillTreeManager.purchase(row[0])
 	check(SkillTreeManager.purchase("RO2"), "auto-sell prerequisite purchase succeeds after B1")
+	hud.close_menu()
 	hud.refresh()
-	check(hud.skills_button.visible and hud.map_button.visible and not hud.auto_button.disabled, "Shrine, Z4 and Auto unlocks update actual HUD controls")
+	check(hud.skills_button.visible and hud.map_button.visible and hud.auto_button.visible and not hud.auto_button.disabled, "Shrine, repaired Fast Travel and Auto unlocks update actual HUD controls")
 	hud.open_menu("Roll Settings")
 	await settled()
 	check(not find_button("Auto Roll").disabled and find_button("MAX") != null and find_button("Auto-sell Normal") != null, "unlocked Roll Settings exposes Auto, Luck Cap and auto-sell")
@@ -188,7 +194,6 @@ func test_menus_and_back() -> void:
 	await tap(cap)
 	check(GameState.settings.luck_cap == 1.0 and RollManager.rolling_luck() == 1.0, "touch Luck Cap selection updates rolling luck")
 	hud.menus.skill_tab = "Roll"
-	hud.menus.optional_branch = false
 	hud.open_menu("Skills")
 	await settled()
 	var graphs := get_tree().get_nodes_in_group("slimerot_skill_graph")
@@ -196,7 +201,7 @@ func test_menus_and_back() -> void:
 	hud.menus.skill_tab = "Coin"
 	hud.open_menu("Skills")
 	await settled()
-	check(menu_text().contains("Coin Tree") and menu_text().contains("Coins") and get_tree().get_nodes_in_group("slimerot_skill_graph")[0].edges.size() > 0, "Coin Tree exposes its wallet and prerequisite paths")
+	check(menu_text().to_upper().contains("COIN TREE") and menu_text().contains("Coins") and get_tree().get_nodes_in_group("slimerot_skill_graph")[0].edges.size() > 0, "Coin Tree exposes its wallet and prerequisite paths")
 	hud.open_menu("Stats")
 	await settled()
 	var text := menu_text()
@@ -207,7 +212,7 @@ func test_menus_and_back() -> void:
 	InventoryManager.add_copy(SlimerotBalance.FIRST_SLIME)
 	hud.open_menu("Copies:" + SlimerotBalance.FIRST_SLIME + ":normal")
 	hud.notification(NOTIFICATION_WM_GO_BACK_REQUEST)
-	check(hud.menu_title == "Inventory", "Android back from copies returns to Inventory")
+	check(hud.menu_title == "Team", "Android back from copies returns to the Team hub")
 	hud.notification(NOTIFICATION_WM_GO_BACK_REQUEST)
 	check(not is_instance_valid(hud.menu), "Android back closes a normal menu")
 	hud.notification(NOTIFICATION_WM_GO_BACK_REQUEST)
@@ -231,7 +236,7 @@ func test_touch_scroll() -> void:
 	check(hud.menu_scroll.scroll_vertical >= 150 and hud.scroll_touch == -1, "real touch drag scrolls the 24-card Collection")
 	hud.open_menu("Inventory")
 	await settled()
-	var favorite := find_button("Favorite")
+	var favorite := find_button("☆ Favorite")
 	hud.menu_scroll.ensure_control_visible(favorite)
 	await settled()
 	var key: String = InventoryManager.sorted_pairs(hud.menus.sort_order)[0].slime_id + ":normal"

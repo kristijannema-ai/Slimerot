@@ -66,7 +66,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	var owned := 0
 	for pair in InventoryManager.inventory.values(): owned += pair.quantity
 	check(owned == 100 and InventoryManager.discoveries.size() > 1, "100 results stored as quantities and permanent discoveries")
-	check(not world.hud.wallet.text.contains("Lifetime"), "main HUD excludes Lifetime Rolls")
+	check(not world.hud.currency_labels.rolls.text.contains("Lifetime") and world.hud.currency_labels.size() == 3, "main HUD shows three currency/luck chips and excludes Lifetime Rolls")
 	check(SlimeDatabase.threshold_label("brainrot_singularity") == "Rarity threshold: 1 in 4,000,000", "UI labels thresholds rather than isolated probabilities")
 	var counts := [0, 0, 0]
 	var sense_counts := [0, 0, 0]
