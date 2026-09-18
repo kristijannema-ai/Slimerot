@@ -199,10 +199,7 @@ func test_validator() -> void:
 func capture_skill(id: String, label: String) -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
-	for card in get_tree().get_nodes_in_group("slimerot_skill_node"):
-		if card.get_meta("skill_id") == id and not card.is_queued_for_deletion():
-			world.hud.menu_scroll.ensure_control_visible(card)
-			break
+	world.hud.menus.skill_canvas.focus_node(id)
 	await get_tree().process_frame
 	await suite.capture(label)
 
@@ -212,7 +209,6 @@ func test_ui() -> void:
 	GameState.lifetime_rolls = 65
 	assert(SkillTreeManager.purchase("R01"))
 	world.hud.menus.skill_tab = "Roll"
-	world.hud.menus.optional_branch = false
 	world.hud.open_menu("Skills")
 	var unordered: Array[String] = ["R02","R03","R01","R04"]
 	var ordered: Array[String] = world.hud.menus.progression_order(unordered)
@@ -223,7 +219,6 @@ func test_ui() -> void:
 	assert(SkillTreeManager.purchase("RO5"))
 	world.hud.breakthrough_seconds = 0
 	world.hud.breakthrough_banner.hide()
-	world.hud.menus.optional_branch = true
 	world.hud.open_menu("Skills")
 	await capture_skill("RO8", "Slimerot-p13-super-branch")
 	unordered.assign(["RO9","RO8","RO5"])

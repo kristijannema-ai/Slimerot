@@ -4,10 +4,12 @@ extends RefCounted
 # Optional presentation resources are cached once, including missing paths.
 # Keep the canonical Slimerot_* stem; PNG/WebP overrides take priority over SVG.
 const ART_ROOT := "res://assets/art/"
+const UI_ICON_ROOT := "res://assets/ui/icons/"
 const AUDIO_ROOT := "res://assets/audio/"
 const ATTACK_SQUASH_SECONDS := 0.12
 const ZONE_IDS := ["backyard", "italian_village", "cursed_forest", "sahara", "brainrot_city", "backrooms", "moon", "brainrot_dimension"]
-const ICON_IDS := ["coins", "rolls", "luck", "hp", "auto", "team", "inventory", "collection", "skills", "settings"]
+const ICON_IDS := ["coins", "roll", "rolls", "luck", "hp", "auto", "team", "inventory", "collection", "potions", "skills", "settings", "map"]
+const UI_ICON_IDS := ["team", "collection", "potions", "skills", "settings", "map", "roll", "coins", "luck"]
 const AUDIO_IDS := ["exploration", "boss", "roll", "rare", "jackpot", "hit", "enemy_death", "purchase", "gate", "breakthrough"]
 static var _textures: Dictionary = {}
 static var _streams: Dictionary = {}
@@ -65,7 +67,10 @@ static func slime(id: String) -> Texture2D:
 	return texture("slimes", id)
 
 static func icon(id: String) -> Texture2D:
-	return texture("ui", id)
+	var canonical := str({"rolls":"roll", "inventory":"team"}.get(id, id))
+	if canonical in UI_ICON_IDS:
+		return optional_texture(resolve_path(UI_ICON_ROOT + "Slimerot_" + canonical, ["png", "webp", "svg"]))
+	return texture("ui", canonical)
 
 static func enemy(zone_id: int, archetype: String) -> Texture2D:
 	return texture("enemies", "z%d_%s" % [zone_id, archetype])

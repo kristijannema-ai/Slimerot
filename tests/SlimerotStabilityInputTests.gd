@@ -50,7 +50,7 @@ func mouse(at: Vector2, pressed: bool, device: int = 0) -> void:
 
 func close_button(node: Node) -> Button:
 	for child in node.get_children():
-		if child is Button and child.text == "Close": return child
+		if child is Button and child.text in ["Close", "Back"]: return child
 		var nested := close_button(child)
 		if nested != null: return nested
 	return null
@@ -168,7 +168,7 @@ func test_close_stack() -> void:
 	emulated_mouse(at, false)
 	check(hud.modal_stack.size() == 2 and hud.menu_title == "Settings" and GameState.menu_paused, "Close pops only the top modal and preserves an underlying Pause")
 	hud.notification(NOTIFICATION_WM_GO_BACK_REQUEST)
-	check(hud.menu_title == "Inventory" and not GameState.menu_paused, "Android Back closes Pause and restores its parent")
+	check(hud.menu_title == "Team" and not GameState.menu_paused, "Android Back closes Settings and restores its Team parent")
 	hud.open_modal("Stats")
 	hud.close_modal("Inventory")
 	check(hud.menu_title == "Stats" and hud.modal_stack.size() == 1, "close_modal(id) removes only the requested layer")

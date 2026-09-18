@@ -36,8 +36,11 @@ func run(world: Node, suite: Node) -> void:
 	alternate.inventory.erase(SlimerotBalance.FIRST_SLIME + ":normal")
 	alternate.inventory[SlimerotBalance.FIRST_SLIME + ":shiny"] = alternate_pair
 	alternate.discoveries[SlimerotBalance.FIRST_SLIME].append("shiny")
+	world.hud.open_menu("Team")
 	SaveManager.apply_snapshot(alternate)
-	suite.check(world.hud.portraits.get_child(0).variant == "shiny", "Loading reused copy IDs refreshes HUD portraits when the saved variant changes")
+	world.hud._process(0.5)
+	var loaded_slot := find_team_slot(world.hud.menu)
+	suite.check(loaded_slot != null and loaded_slot.variant == "shiny", "Loading reused copy IDs refreshes the visible Team portrait when the saved variant changes")
 	SaveManager.enabled = false
 	GameState.structure_unlocked_flags.sell_terminal = true
 	var sale_pair: Dictionary = InventoryManager.inventory[SlimerotBalance.FIRST_SLIME + ":shiny"]
@@ -55,9 +58,17 @@ func run(world: Node, suite: Node) -> void:
 	for suffix in SlimerotSaveFormat.SUFFIXES:
 		if FileAccess.file_exists(SaveManager.save_path + suffix): DirAccess.remove_absolute(SaveManager.save_path + suffix)
 	SaveManager.save_path = original_path
+	world.hud.close_menu()
 	InventoryManager.reset()
 	GameState.reset()
 	RollManager.reset()
 	GameState.menu_paused = false
 	WorldManager.travel(0)
 	await get_tree().process_frame
+
+func find_team_slot(node: Node) -> SlimerotTeamSlot:
+	for child in node.get_children():
+		if child is SlimerotTeamSlot: return child
+		var nested := find_team_slot(child)
+		if nested != null: return nested
+	return null

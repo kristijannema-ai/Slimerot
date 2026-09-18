@@ -12,6 +12,11 @@ func check(condition: bool, description: String) -> void:
 		push_error("Slimerot FAIL: " + description)
 
 func run(world: Node2D) -> void:
+	if "--slimerot-ui-only" in OS.get_cmdline_user_args():
+		await run_mobile_ui(world)
+		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
+		get_tree().quit(0 if failures == 0 else 1)
+		return
 	if "--slimerot-progression-only" in OS.get_cmdline_user_args():
 		await run_progression(world)
 		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
@@ -201,10 +206,16 @@ func run(world: Node2D) -> void:
 	await run_stability(world)
 	await run_rng(world)
 	await run_progression(world)
+	await run_mobile_ui(world)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
 	get_tree().quit(0 if failures == 0 else 1)
+
+func run_mobile_ui(world: Node2D) -> void:
+	var probe := preload("res://tests/SlimerotMobileUITests.gd").new()
+	add_child(probe)
+	await probe.run(world, self)
 
 func run_progression(world: Node2D) -> void:
 	for script in [preload("res://tests/SlimerotProgressionTests.gd"), preload("res://tests/SlimerotProgressionSaveTests.gd")]:

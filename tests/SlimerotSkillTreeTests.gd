@@ -215,11 +215,11 @@ func run(world: Node, owner_suite: Node) -> void:
 	world.hud.breakthrough_seconds = 0
 	world.hud.breakthrough_banner.hide()
 	world.hud.menus.skill_tab = "Roll"
-	world.hud.menus.optional_branch = false
 	world.hud.open_menu("Skills")
+	await get_tree().process_frame
+	world.hud.menus.skill_canvas.focus_node("R03")
 	await capture("Slimerot-stage-3-mainline")
-	world.hud.menus.optional_branch = true
-	world.hud.open_menu("Skills")
+	world.hud.menus.skill_canvas.focus_node("RO5")
 	await capture("Slimerot-stage-3-optional")
 	for row in OPTIONAL:
 		if row[0] not in GameState.purchased_skill_node_ids: SkillTreeManager.purchase(row[0])

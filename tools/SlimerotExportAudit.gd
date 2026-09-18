@@ -53,6 +53,16 @@ func _initialize() -> void:
 		_check(paths.size() == groups[group], "packed %s placeholder count" % group)
 		for path in paths:
 			_check(ResourceLoader.load(path.trim_suffix(".import")) is Texture2D, "packed texture loads: " + path.get_file())
+	var mobile_icons := ["team", "collection", "potions", "skills", "settings", "map", "roll", "coins", "luck"]
+	counts["mobile_ui"] = _imports(files, "res://assets/ui/icons/", ".svg.import").size()
+	_check(counts["mobile_ui"] == mobile_icons.size(), "packed nine original mobile UI icons")
+	for id in mobile_icons:
+		_check(ResourceLoader.load("res://assets/ui/icons/Slimerot_" + id + ".svg") is Texture2D, "packed mobile icon loads: " + id)
+	var mobile_theme := ResourceLoader.load("res://assets/ui/SlimerotTheme.tres") as Theme
+	_check(mobile_theme != null, "packed central mobile Theme")
+	if mobile_theme != null:
+		for variation in ["PrimaryButton", "SecondaryButton", "IconButton", "TabButton", "ModalPanel", "Card", "CurrencyChip", "SkillNode", "LockedSkillNode", "PurchasedSkillNode", "BreakthroughSkillNode"]:
+			_check(not mobile_theme.get_type_variation_base(variation).is_empty(), "packed theme variation: " + variation)
 	var sounds := _imports(files, "res://assets/audio/", ".wav.import")
 	counts["audio"] = sounds.size()
 	_check(sounds.size() == 10, "packed ten audio cues")
