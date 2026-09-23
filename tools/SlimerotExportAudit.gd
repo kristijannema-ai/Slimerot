@@ -41,6 +41,7 @@ func _initialize() -> void:
 		_check(not files.any(func(path: String) -> bool: return path.begins_with("res://" + excluded + "/")), "export excludes " + excluded)
 	for manager in ["GameState", "SlimeDatabase", "SkillTreeManager", "InventoryManager", "WorldManager", "CombatManager", "RollManager", "SaveManager"]:
 		_check(ResourceLoader.exists("res://scripts/managers/Slimerot" + manager + ".gd"), "packed " + manager)
+	_check(ResourceLoader.exists("res://scripts/presentation/SlimerotCombatFeedback.gd"), "packed central combat feedback")
 	for scene in ["Bedroom", "Backyard", "ItalianVillage", "CursedForest", "Sahara", "BrainrotCity", "Backrooms", "Moon", "BrainrotDimension"]:
 		_check(ResourceLoader.exists("res://scenes/zones/Slimerot" + scene + ".tscn"), "packed " + scene)
 	_check(ResourceLoader.exists("res://scenes/Slimerot.tscn"), "packed main scene")
@@ -53,6 +54,17 @@ func _initialize() -> void:
 		_check(paths.size() == groups[group], "packed %s placeholder count" % group)
 		for path in paths:
 			_check(ResourceLoader.load(path.trim_suffix(".import")) is Texture2D, "packed texture loads: " + path.get_file())
+	var environment_zones := ["backyard", "italian_village", "cursed_forest", "sahara", "brainrot_city", "backrooms", "moon", "brainrot_dimension"]
+	var environment_structures := ["boss_portal", "fast_travel_pillar", "gate_closed", "gate_open", "mutation_lab", "portal", "potion_bench", "sell_terminal", "skill_tree_shrine"]
+	counts["environment_zones"] = _imports(files, "res://assets/environment/zones/", ".svg.import").size()
+	counts["environment_structures"] = _imports(files, "res://assets/environment/structures/", ".svg.import").size()
+	_check(counts["environment_zones"] == 32, "packed 32 original zone environment SVGs")
+	_check(counts["environment_structures"] == 9, "packed nine original structure SVGs")
+	for zone_id in environment_zones:
+		for kind in ["obstacle", "rock", "prop", "border"]:
+			_check(ResourceLoader.load("res://assets/environment/zones/Slimerot_" + zone_id + "_" + kind + ".svg") is Texture2D, "packed environment loads: " + zone_id + " " + kind)
+	for structure_id in environment_structures:
+		_check(ResourceLoader.load("res://assets/environment/structures/Slimerot_" + structure_id + ".svg") is Texture2D, "packed structure loads: " + structure_id)
 	var mobile_icons := ["team", "collection", "potions", "skills", "settings", "map", "roll", "coins", "luck"]
 	counts["mobile_ui"] = _imports(files, "res://assets/ui/icons/", ".svg.import").size()
 	_check(counts["mobile_ui"] == mobile_icons.size(), "packed nine original mobile UI icons")

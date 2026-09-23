@@ -6,6 +6,37 @@ var attack_timers: Dictionary = {}
 var invulnerable_remaining := 0.0
 var damage_free_seconds := 0.0
 var death_remaining := 0.0
+const PROJECTILE_CAPACITY := 128
+var projectile_pool: Array[SlimerotProjectile] = []
+var feedback: SlimerotCombatFeedback
+
+func _ready() -> void:
+	feedback = SlimerotCombatFeedback.new()
+	add_child(feedback)
+	for index in PROJECTILE_CAPACITY:
+		var shot := SlimerotProjectile.new()
+		add_child(shot)
+		shot.deactivate()
+		projectile_pool.append(shot)
+
+func acquire_projectile() -> SlimerotProjectile:
+	for shot in projectile_pool:
+		if shot.spent:
+			shot.activate()
+			return shot
+	return null
+
+func active_projectiles() -> Array[SlimerotProjectile]:
+	var result: Array[SlimerotProjectile] = []
+	for shot in projectile_pool:
+		if not shot.spent: result.append(shot)
+	return result
+
+func active_projectile_count() -> int:
+	var count := 0
+	for shot in projectile_pool:
+		if not shot.spent: count += 1
+	return count
 
 func slime_position(slot: int) -> Vector2:
 	if not is_instance_valid(player): return Vector2.ZERO
@@ -42,23 +73,26 @@ func _physics_process(delta: float) -> void:
 			fire_slime_projectile(origin, target, InventoryManager.damage_for_copy(copy_id, target.is_in_group("slimerot_bosses")))
 
 func fire_slime_projectile(origin: Vector2, target: Node2D, damage: float) -> Node2D:
-	var shot := SlimerotProjectile.new()
+	var shot := acquire_projectile()
+	if shot == null: return null
 	shot.position = origin
 	shot.target = target
 	shot.destination = target.global_position
 	shot.damage = damage
-	add_child(shot)
 	slime_attacked.emit(origin, shot.destination)
 	return shot
 
-func fire_enemy_projectile(origin: Vector2, direction: Vector2, damage: float, speed: float = SlimerotBalance.PROJECTILE_SPEED) -> Node2D:
-	var shot := SlimerotProjectile.new()
+func fire_enemy_projectile(origin: Vector2, direction: Vector2, damage: float, speed: float = SlimerotBalance.PROJECTILE_SPEED, source: Node2D = null, allow_friendly_fire: bool = false, style_zone: int = 0) -> Node2D:
+	var shot := acquire_projectile()
+	if shot == null: return null
 	shot.position = origin
 	shot.hostile = true
 	shot.direction = direction.normalized()
 	shot.damage = damage
 	shot.speed = speed
-	add_child(shot)
+	shot.source = source
+	shot.allow_friendly_fire = allow_friendly_fire
+	shot.style_zone = style_zone
 	return shot
 
 func find_target(origin: Vector2) -> Node2D:
@@ -74,6 +108,8 @@ func find_target(origin: Vector2) -> Node2D:
 
 func damage_player(amount: float) -> void:
 	if amount <= 0 or invulnerable_remaining > 0 or GameState.is_paused() or GameState.player_dead: return
+	if is_instance_valid(player) and player.has_method("is_dashing") and player.is_dashing(): return
+	feedback.player_hit(player.global_position if is_instance_valid(player) else Vector2.ZERO)
 	damage_free_seconds = 0
 	GameState.player_hp = maxf(0, GameState.player_hp-amount)
 	if GameState.player_hp == 0:
@@ -83,11 +119,11 @@ func damage_player(amount: float) -> void:
 	GameState.changed.emit()
 
 func clear_projectiles() -> void:
-	for child in get_children():
-		remove_child(child)
-		child.queue_free()
+	for shot in projectile_pool: shot.deactivate()
 
 func reset_combat() -> void:
+	if is_instance_valid(player) and player.has_method("cancel_dash"): player.cancel_dash(true)
+	if is_instance_valid(feedback): feedback.clear()
 	attack_timers.clear()
 	clear_projectiles()
 	damage_free_seconds = 0

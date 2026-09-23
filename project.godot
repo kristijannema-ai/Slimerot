@@ -38,5 +38,11 @@ environment/defaults/default_clear_color=Color(0.043, 0.067, 0.09, 1)
 [input_devices]
 pointing/emulate_touch_from_mouse=true
 
+[input]
+dash={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":81)]
+}
+
 [gui]
 theme/custom="res://assets/ui/SlimerotTheme.tres"

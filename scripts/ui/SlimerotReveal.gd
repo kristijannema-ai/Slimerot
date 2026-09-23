@@ -12,6 +12,7 @@ var duration := 0.0
 var tier := 0
 var active := false
 var first_discovery := false
+var combat_compact := false
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -103,6 +104,18 @@ func show_result(slime_id: String, variant: String, first: bool) -> void:
 
 func layout_card() -> void:
 	if not is_instance_valid(card): return
+	combat_compact = WorldManager.boss_active
+	portrait.visible = tier > 0 and not combat_compact
+	heading.visible = tier >= 2 and not combat_compact
+	details.visible = tier > 0 and not combat_compact
+	skip_hint.visible = tier > 0 and not combat_compact
+	if combat_compact:
+		card.scale = Vector2.ONE
+		label.add_theme_font_size_override("font_size", 18)
+		card.size = Vector2(size.x - 32, 62)
+		card.position = Vector2(16, 138)
+		return
+	label.add_theme_font_size_override("font_size", 19 if tier == 0 else 24)
 	var width := minf(520.0, size.x - 48)
 	var height := 74.0
 	if tier == 1: height = 280
@@ -117,8 +130,6 @@ func layout_card() -> void:
 	card.position = Vector2((size.x - width) * 0.5, 250 if tier == 0 else maxf(270, (size.y - height) * 0.42))
 
 func hide_result() -> void:
-	var camera := get_viewport().get_camera_2d()
-	if camera != null: camera.offset = Vector2.ZERO
 	active = false
 	hide()
 	queue_redraw()
@@ -126,11 +137,8 @@ func hide_result() -> void:
 func _process(delta: float) -> void:
 	if not active or GameState.is_paused(): return
 	time += delta
-	var camera := get_viewport().get_camera_2d()
-	if camera != null:
-		var strength := 5.0 * maxf(0.0, 1.0 - time / 0.75) if tier >= 2 and GameState.settings.screen_shake else 0.0
-		camera.offset = Vector2(sin(time * 67.0), cos(time * 53.0)) * strength
-	if tier > 0:
+	if combat_compact != WorldManager.boss_active: layout_card()
+	if tier > 0 and not combat_compact:
 		card.pivot_offset = card.size * 0.5
 		var bounce := 1.0 + sin(minf(time / 0.2, 1.0) * PI) * 0.04
 		card.scale = Vector2.ONE * minf(bounce, (size.x - 12.0) / card.size.x)
@@ -144,7 +152,8 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _draw() -> void:
-	if not active: return
+	# Combat only uses the compact passive card; no darkening, rays or fireworks.
+	if not active or combat_compact: return
 	if tier == 4:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.04, 0.07, 0.12, 0.93))
 		for index in 12:

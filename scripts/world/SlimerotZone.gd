@@ -5,11 +5,14 @@ extends Node2D
 var obstacles: Array[Rect2] = []
 var navigation := AStarGrid2D.new()
 var ground_texture: Texture2D
+var environment_textures: Dictionary = {}
 var farm_loop := PackedVector2Array([Vector2(500,1150),Vector2(330,1100),Vector2(330,750),Vector2(330,400),Vector2(700,400),Vector2(700,750),Vector2(700,1100),Vector2(500,1150)])
 
 func _ready() -> void:
 	if zone_id == 0: return
 	ground_texture = SlimerotAssets.zone(zone_id)
+	for kind in ["obstacle", "rock", "prop", "border"]:
+		environment_textures[kind] = SlimerotAssets.environment(zone_id, kind)
 	var title := SlimerotUITheme.world_label(self, Rect2(200, 1210, 600, 68), SlimerotCampaign.zone(zone_id).name, 30)
 	title.get_parent().z_index = 2
 	var routes := SlimerotUITheme.world_label(self, Rect2(230, 314, 540, 62), "FARM LOOP  ←    →  MAIN ROUTE", 18)
@@ -68,33 +71,30 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO,SlimerotCampaign.SIZE),Color(colors[0]))
 	if ground_texture != null:
 		draw_texture_rect(ground_texture, Rect2(Vector2.ZERO, SlimerotCampaign.SIZE), true)
-	for y in range(50,1500,50):
-		for x in range(50,1000,50):
-			var color := Color(colors[1],0.18)
-			if zone_id in [2,5,6]: draw_rect(Rect2(x,y,45,45),color,false,1)
-			elif zone_id in [4,7]: draw_arc(Vector2(x,y),9,0,PI,12,color,2)
-			else: draw_line(Vector2(x,y),Vector2(x+6,y-8),color,2)
-	draw_polyline(farm_loop,Color(colors[1],0.55),85,true)
-	draw_line(Vector2(500,1360),Vector2(500,210),Color(colors[1],0.7),100)
+	# Quiet paths keep enemy bullets and telegraphs readable. Props are cached
+	# textures drawn in one CanvasItem, without one node per decoration.
+	draw_polyline(farm_loop,Color(colors[1],0.30),85,true)
+	draw_line(Vector2(500,1360),Vector2(500,210),Color(colors[1],0.38),100)
+	var obstacle_index := 0
 	for rect in obstacles:
-		draw_rect(rect,Color(colors[2]))
-		if rect.size.x <= 32 or rect.size.y <= 32: continue
-		var center := rect.get_center()
-		match zone_id:
-			1,3:
-				draw_circle(center,rect.size.x*0.48,Color(colors[2]).lightened(0.13))
-				draw_line(center,center+Vector2(0,42),Color("40362d"),12)
-			2,5:
-				draw_colored_polygon(PackedVector2Array([rect.position,rect.position+Vector2(rect.size.x,0),center-Vector2(0,rect.size.y*0.8)]),Color(colors[2]).lightened(0.15))
-				draw_rect(Rect2(center-Vector2(15,15),Vector2(30,30)),Color("efd69b"))
-			4:
-				draw_colored_polygon(PackedVector2Array([rect.position+Vector2(0,rect.size.y),rect.end,center-Vector2(0,rect.size.y*0.5)]),Color("d8b57a"))
-			6:
-				draw_rect(rect.grow(-10),Color("b4a16a"),false,4)
-			7:
-				draw_circle(center,rect.size.x*0.38,Color("51566f"))
-				draw_arc(center,rect.size.x*0.4,0,TAU,32,Color("b1b4ca"),3)
-			8:
-				draw_colored_polygon(PackedVector2Array([center-Vector2(0,60),center+Vector2(36,0),center+Vector2(0,50),center-Vector2(36,0)]),Color("b77ce0"))
-	draw_rect(Rect2(395,130,210,95),Color("9bac89"))
-	draw_rect(Rect2(400,1380,200,70),Color("a6a196"))
+		if rect.size.x <= 32 or rect.size.y <= 32:
+			draw_environment_border(rect)
+			continue
+		var kind: String = ["obstacle", "rock", "prop"][obstacle_index % 3]
+		var prop := environment_textures.get(kind) as Texture2D
+		if prop != null: draw_texture_rect(prop, rect.grow(4), false)
+		obstacle_index += 1
+
+func draw_environment_border(rect: Rect2) -> void:
+	var border := environment_textures.get("border") as Texture2D
+	if border == null: return
+	var horizontal := rect.size.x > rect.size.y
+	var length := rect.size.x if horizontal else rect.size.y
+	# Explicit small tiles preserve the authored silhouette on both axes.
+	# This is static geometry and does not create Sprite2D or physics nodes.
+	var offset := 0.0
+	while offset < length:
+		var step := minf(64.0, length - offset)
+		var tile := Rect2(rect.position + (Vector2(offset, 0) if horizontal else Vector2(0, offset)), Vector2(step, rect.size.y) if horizontal else Vector2(rect.size.x, step))
+		draw_texture_rect(border, tile, false)
+		offset += step

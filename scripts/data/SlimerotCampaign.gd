@@ -70,6 +70,8 @@ static func enemy(zone_id: int, archetype: String) -> SlimerotData.EnemyData:
 	result.coin_reward = row[3][index]
 	result.attack_damage = row[4][index]
 	result.move_speed = SPEEDS[index]
+	# Modest data-driven shot cadence variation; HP/rewards/archetypes stay canonical.
+	if archetype == "shooter": result.behavior_modifier = {"projectile_speed": {3:1.10, 4:0.90, 7:1.15, 8:1.10}.get(zone_id, 1.0)}
 	result.attack_interval = INTERVALS[index]
 	return result
 

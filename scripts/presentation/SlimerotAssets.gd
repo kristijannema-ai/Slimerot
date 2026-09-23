@@ -5,6 +5,7 @@ extends RefCounted
 # Keep the canonical Slimerot_* stem; PNG/WebP overrides take priority over SVG.
 const ART_ROOT := "res://assets/art/"
 const UI_ICON_ROOT := "res://assets/ui/icons/"
+const ENVIRONMENT_ROOT := "res://assets/environment/"
 const AUDIO_ROOT := "res://assets/audio/"
 const ATTACK_SQUASH_SECONDS := 0.12
 const ZONE_IDS := ["backyard", "italian_village", "cursed_forest", "sahara", "brainrot_city", "backrooms", "moon", "brainrot_dimension"]
@@ -80,7 +81,13 @@ static func boss(zone_id: int) -> Texture2D:
 	return texture("bosses", str(SlimerotEncounters.BOSSES[zone_id].id))
 
 static func structure(id: String) -> Texture2D:
+	var refreshed := optional_texture(resolve_path(ENVIRONMENT_ROOT + "structures/Slimerot_" + id, ["png", "webp", "svg"]))
+	if refreshed != null: return refreshed
 	return texture("structures", id)
+
+static func environment(zone_id: int, kind: String) -> Texture2D:
+	if zone_id < 1 or zone_id > ZONE_IDS.size(): return null
+	return optional_texture(resolve_path(ENVIRONMENT_ROOT + "zones/Slimerot_" + ZONE_IDS[zone_id - 1] + "_" + kind, ["png", "webp", "svg"]))
 
 static func zone(zone_id: int) -> Texture2D:
 	if zone_id < 1 or zone_id > ZONE_IDS.size(): return null

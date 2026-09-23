@@ -93,9 +93,9 @@ func test_projectile_reclamation() -> void:
 			shot._physics_process(0.01)
 		target.dead = false
 		await settled()
-		for reference in references: all_released = all_released and reference.get_ref() == null
-		no_retained_children = no_retained_children and CombatManager.get_child_count() == 0 and node_count(world) == target_baseline
-	check(all_released, "all 1800 hit, expired and dead-target projectile instances are freed after deferred deletion")
+		for reference in references: all_released = all_released and is_instance_valid(reference.get_ref()) and reference.get_ref().spent
+		no_retained_children = no_retained_children and CombatManager.active_projectile_count() == 0 and node_count(world) == target_baseline
+	check(all_released, "all 1800 hit, expired and dead-target projectile lifetimes return to the bounded reusable pool")
 	check(no_retained_children, "60 mixed projectile batches return both manager and world node counts to baseline")
 	check(exact_hits, "600 committed friendly shots each deal damage once during allocation stress")
 	target.queue_free()
@@ -120,8 +120,8 @@ func test_scene_reclamation() -> void:
 			WorldManager.travel(zone)
 			for enemy in get_tree().get_nodes_in_group("slimerot_enemies"): enemy.set_physics_process(false)
 			await settled()
-			released = released and old_zone.get_ref() == null and old_shot.get_ref() == null
-			clean_transitions = clean_transitions and CombatManager.get_child_count() == 0 and get_tree().get_nodes_in_group("slimerot_enemies").size() == 11
+			released = released and old_zone.get_ref() == null and is_instance_valid(old_shot.get_ref()) and old_shot.get_ref().spent
+			clean_transitions = clean_transitions and CombatManager.active_projectile_count() == 0 and get_tree().get_nodes_in_group("slimerot_enemies").size() == 11
 			if not world_baselines.has(zone): world_baselines[zone] = node_count(world)
 			stable = stable and node_count(world) == world_baselines[zone]
 			if zone in [2, 4, 6, 8]:
@@ -136,11 +136,11 @@ func test_scene_reclamation() -> void:
 				world.arena.end_fight(false, false)
 				await settled()
 				arena_released = arena_released and old_arena.get_ref() == null and old_boss.get_ref() == null and get_tree().get_nodes_in_group("slimerot_bosses").is_empty()
-				stable = stable and node_count(world) == world_baselines[zone] and CombatManager.get_child_count() == 0
+				stable = stable and node_count(world) == world_baselines[zone] and CombatManager.active_projectile_count() == 0
 		WorldManager.travel(0)
 		await settled()
 		stable = stable and node_count(world) == hub_baseline
-	check(released and clean_transitions, "45 zone loads release prior scene/projectiles and retain exactly the current enemy population")
+	check(released and clean_transitions, "45 zone loads release prior scenes, deactivate pooled shots and retain exactly the current enemy population")
 	check(arena_released, "20 boss retreats release boss, arena walls, connections and projectiles")
 	check(stable, "five complete Hub-to-Z8 cycles return every zone and Hub to their original node counts")
 

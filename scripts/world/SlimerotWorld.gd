@@ -11,6 +11,9 @@ var arrival_interaction: SlimerotInteraction
 var arena: SlimerotBossArena
 var rounded_styles: Dictionary = {}
 var gate_state_label: Label
+var pending_unlock := 0
+var gate_animation_remaining := 0.0
+var gate_animation_origin := Vector2.ZERO
 
 func _ready() -> void:
 	configure_input()
@@ -24,6 +27,7 @@ func _ready() -> void:
 	player.joystick = hud.joystick
 	hud.interact_requested.connect(request_interaction)
 	WorldManager.zone_changed.connect(build_zone)
+	WorldManager.zone_unlocked.connect(func(zone: int): pending_unlock = zone)
 	WorldManager.respawn_requested.connect(respawn_player)
 	WorldManager.boss_requested.connect(start_boss_arena)
 	WorldManager.completion_reached.connect(func(): hud.open_menu("Completion"))
@@ -89,11 +93,8 @@ func build_zone(zone_id: int) -> void:
 	else:
 		add_interaction(SlimerotCampaign.RETURN_GATE,"Return to " + SlimerotCampaign.zone(zone_id-1).name,func(): WorldManager.return_through_gate())
 		add_interaction(SlimerotCampaign.EXIT_GATE,WorldManager.gate_prompt(zone_id),func():
-			if not WorldManager.use_exit(): hud.show_notice(WorldManager.gate_blocker(zone_id)))
+			if not WorldManager.use_exit(): hud.show_notice(WorldManager.boss_encounter_prompt(zone_id) if WorldManager.progression_gate_role(zone_id) == "boss" else WorldManager.gate_blocker(zone_id)))
 		interactions[-1].set_meta("gate",zone_id)
-		if not SlimerotCampaign.zone(zone_id).boss_id_or_null.is_empty():
-			add_interaction(Vector2(770,230),"Boss entrance",func():
-				if not WorldManager.start_boss(zone_id): hud.show_notice(WorldManager.boss_encounter_prompt(zone_id)))
 	for row in SlimerotEncounters.STRUCTURES:
 		if row[1] == zone_id:
 			var id: String = row[0]
@@ -104,6 +105,12 @@ func build_zone(zone_id: int) -> void:
 	if WorldManager.arriving_from_next: player.position = SlimerotCampaign.RETURN_ARRIVAL
 	reset_camera()
 	transition_in_flight = false
+	if pending_unlock == zone_id and zone_id > 0:
+		pending_unlock = 0
+		gate_animation_remaining = 1.2
+		gate_animation_origin = SlimerotCampaign.RETURN_GATE
+		CombatManager.feedback.zone_unlocked(player.global_position)
+		hud.show_zone_unlock(zone_id)
 	update_context()
 	queue_redraw()
 
@@ -112,6 +119,8 @@ func reset_camera() -> void:
 		if child is Camera2D: child.reset_smoothing()
 
 func start_boss_arena(zone_id: int) -> void:
+	player.cancel_dash()
+	hud.zone_banner.hide()
 	hud.close_menu()
 	arena = SlimerotBossArena.new()
 	arena.zone_id = zone_id
@@ -122,12 +131,17 @@ func start_boss_arena(zone_id: int) -> void:
 	player.global_position = SlimerotEncounters.ARENA_ORIGIN + SlimerotEncounters.PLAYER_START
 	reset_camera()
 	arena.finished.connect(func(won: bool, died: bool):
+		player.cancel_dash()
 		var old := arena
 		arena = null
 		remove_child(old)
 		old.queue_free()
 		if not died:
-			player.position = Vector2(770,330)
+			player.position = SlimerotCampaign.EXIT_GATE + Vector2(0, 140)
+			if won:
+				gate_animation_remaining = 1.2
+				gate_animation_origin = SlimerotCampaign.EXIT_GATE
+				CombatManager.feedback.burst(SlimerotCampaign.EXIT_GATE, Color("ffda87"), 14, 120, true)
 			reset_camera()
 			hud.show_notice("Boss defeated! First-kill rewards saved." if won else "Boss reset. Your progress is safe.")
 	)
@@ -191,12 +205,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact") and not event.is_echo():
 		request_interaction()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if gate_animation_remaining > 0:
+		gate_animation_remaining = maxf(0, gate_animation_remaining - delta)
+		queue_redraw()
 	update_context()
 
 func update_context() -> void:
 	if is_instance_valid(gate_state_label):
-		gate_state_label.text = "OPEN" if WorldManager.gate_open(GameState.current_zone) else "GATE REQUIREMENTS"
+		gate_state_label.text = "BOSS CHALLENGE" if WorldManager.progression_gate_role(GameState.current_zone) == "boss" else ("OPEN" if WorldManager.gate_open(GameState.current_zone) else "NEXT ZONE")
+	if GameState.current_zone == 2 and not GameState.dash_unlocked and player.position.distance_to(SlimerotCampaign.EXIT_GATE) < 210:
+		if GameState.unlock_dash(): hud.show_notice("DASH UNLOCKED - dodge through the slam! Aim with movement, then tap DASH.")
 	var previous_interaction := current_interaction
 	current_interaction = null
 	if is_instance_valid(arrival_interaction) and not arrival_interaction.is_available(player.global_position):
@@ -238,8 +257,6 @@ func build_world_captions(zone_id: int) -> void:
 		SlimerotUITheme.world_label(captions, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(230, 150), Vector2(460, 55)), next.to_upper(), 25)
 		gate_state_label = SlimerotUITheme.landmark_label(captions, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(65, 72), Vector2(130, 130)), "", 20)
 		SlimerotUITheme.world_label(captions, Rect2(SlimerotCampaign.RETURN_GATE - Vector2(100, 30), Vector2(200, 60)), "← RETURN", 22)
-		if not SlimerotCampaign.zone(zone_id).boss_id_or_null.is_empty():
-			SlimerotUITheme.landmark_label(captions, Rect2(710, 160, 120, 120), "BOSS ENTRANCE", 16)
 	for row in SlimerotEncounters.STRUCTURES:
 		if row[1] != zone_id: continue
 		var id := str(row[0])
@@ -265,14 +282,10 @@ func _draw() -> void:
 		rounded(Rect2(110, 360, 280, 100), Color("9e7858"))
 		rounded(Rect2(408, 1152, 184, 100), Color("b6ed78"), 15)
 	else:
-		var gate := SlimerotAssets.structure("gate_open" if WorldManager.gate_open(GameState.current_zone) else "gate_closed")
+		var gate := SlimerotAssets.structure("boss_portal" if WorldManager.progression_gate_role(GameState.current_zone) == "boss" else ("gate_open" if WorldManager.gate_open(GameState.current_zone) or WorldManager.is_boss_zone_defeated(GameState.current_zone) else "gate_closed"))
 		if gate != null: draw_texture_rect(gate, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(65, 72), Vector2(130, 130)), false)
 		var return_gate := SlimerotAssets.structure("gate_open")
 		if return_gate != null: draw_texture_rect(return_gate, Rect2(SlimerotCampaign.RETURN_GATE - Vector2(50, 65), Vector2(100, 100)), false)
-		if not SlimerotCampaign.zone(GameState.current_zone).boss_id_or_null.is_empty():
-			draw_arc(Vector2(770,230),55,0,TAU,32,Color("c580aa"),12)
-			var portal := SlimerotAssets.structure("boss_portal")
-			if portal != null: draw_texture_rect(portal, Rect2(710, 160, 120, 120), false)
 	for row in SlimerotEncounters.STRUCTURES:
 		if row[1] != GameState.current_zone: continue
 		var at: Vector2 = row[4]
@@ -286,5 +299,8 @@ func _draw() -> void:
 		draw_arc(SlimerotCampaign.EXIT_GATE,70,0,TAU,48,Color("d3a6ff"),14)
 		var portal := SlimerotAssets.structure("portal")
 		if portal != null: draw_texture_rect(portal, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(75, 90), Vector2(150, 150)), false)
+	if gate_animation_remaining > 0.0:
+		var at := gate_animation_origin
+		draw_arc(at, 60 + (1.2 - gate_animation_remaining) * 95, 0, TAU, 48, Color(1, 0.86, 0.5, gate_animation_remaining / 1.2), 7, true)
 	if is_instance_valid(current_interaction):
 		draw_arc(current_interaction.position, 70, 0, TAU, 40, Color(0.8, 0.95, 0.6, 0.65), 2, true)

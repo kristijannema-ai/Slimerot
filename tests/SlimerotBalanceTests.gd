@@ -64,7 +64,6 @@ func step_projectiles() -> void:
 	for shot in CombatManager.get_children():
 		if shot is SlimerotProjectile:
 			shot._physics_process(STEP)
-			if shot.spent: shot.free()
 
 func measure(target: Node2D, limit: float) -> float:
 	var seconds := 0.0
