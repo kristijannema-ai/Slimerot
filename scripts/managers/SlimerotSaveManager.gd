@@ -75,6 +75,7 @@ func snapshot() -> Dictionary:
 		"offline_roll_remainder": GameState.offline_roll_remainder,
 		"first_roll_completed": GameState.lifetime_rolls > 0,
 		"highest_zone_unlocked": GameState.highest_zone_unlocked, "current_zone": GameState.current_zone,
+		"dash_unlocked": GameState.dash_unlocked,
 		"zone_kill_counts": GameState.zone_kill_counts.duplicate(true),
 		"unlocked_gate_flags": GameState.unlocked_gate_flags.duplicate(),
 		"potion_inventory": GameState.potion_inventory.duplicate(), "boss_brew_seconds": GameState.boss_brew_seconds,
@@ -285,6 +286,7 @@ func validate(data: Variant) -> bool:
 		return false
 	if not validate_rng_state(data): return false
 	if not data.get("first_roll_completed") is bool: return false
+	if not data.get("dash_unlocked") is bool: return false
 	for key in ["last_background_timestamp", "offline_roll_remainder"]:
 		if (not data.get(key) is float and not data.get(key) is int) or not is_finite(float(data[key])) or data[key] < 0: return false
 	if data.offline_roll_remainder > SlimerotBalance.ROLL_COOLDOWN: return false
@@ -407,6 +409,7 @@ func apply_snapshot(data: Dictionary) -> void:
 	offline_commit_pending = false
 	last_offline_summary.clear()
 	GameState.highest_zone_unlocked = int(data.highest_zone_unlocked)
+	GameState.dash_unlocked = data.get("dash_unlocked", GameState.highest_zone_unlocked >= 2)
 	GameState.current_zone = int(data.current_zone)
 	GameState.zone_kill_counts = data.zone_kill_counts.duplicate(true)
 	GameState.unlocked_gate_flags = data.unlocked_gate_flags.duplicate()
@@ -444,6 +447,16 @@ func apply_snapshot(data: Dictionary) -> void:
 	GameState.changed.emit()
 
 func migrate(value: Variant) -> Variant:
+	var data: Variant = migrate_versioned(value)
+	# Dash is an additive flag in schema 11. An older save that already reached
+	# Espresso's zone receives the free tutorial ability without losing progress.
+	if data is Dictionary and data.get("schema_version") == SlimerotBalance.SCHEMA_VERSION and not data.has("dash_unlocked"):
+		if not SlimerotSaveFormat.integer(data.get("highest_zone_unlocked")): return {}
+		data = data.duplicate(true)
+		data.dash_unlocked = data.highest_zone_unlocked >= 2
+	return data
+
+func migrate_versioned(value: Variant) -> Variant:
 	if not value is Dictionary or not SlimerotSaveFormat.integer(value.get("schema_version")): return value
 	var version := int(value.schema_version)
 	if version == 10: return migrate_progression(value)
@@ -629,7 +642,7 @@ func _notification(what: int) -> void:
 		var is_inactive := application_paused or focus_lost
 		if is_inactive and not was_inactive:
 			GameState.suspended = true
-			for action in ["move_left", "move_right", "move_up", "move_down", "roll", "interact"]:
+			for action in ["move_left", "move_right", "move_up", "move_down", "roll", "interact", "dash"]:
 				if InputMap.has_action(action): Input.action_release(action)
 			enter_background()
 		elif was_inactive and not is_inactive:

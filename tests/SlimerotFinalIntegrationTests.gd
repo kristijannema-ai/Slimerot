@@ -92,8 +92,8 @@ func run(world: Node, owner_suite: Node) -> void:
 		check(GameState.zone_kill_counts.get(str(zone), 0) == required and GameState.coins == wallet + required * reward, "Z%d real enemy deaths satisfy its kill gate with separate Scavenger rewards" % zone)
 		if SlimerotEncounters.BOSSES.has(zone):
 			wallet = GameState.coins
-			interact_at(world, Vector2(770, 230))
-			check(WorldManager.boss_active and is_instance_valid(world.arena), "Z%d physical boss entrance opens after the required kills" % zone)
+			interact_at(world, SlimerotCampaign.EXIT_GATE)
+			check(WorldManager.boss_active and is_instance_valid(world.arena), "Z%d combined progression gate opens boss encounter after the required kills" % zone)
 			if not is_instance_valid(world.arena): return
 			freeze_combat(world)
 			var boss: SlimerotBoss = world.arena.boss

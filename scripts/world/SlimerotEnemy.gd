@@ -71,7 +71,7 @@ func _physics_process(delta: float) -> void:
 		if data.archetype == "shooter" and distance <= SlimerotCampaign.AGGRO_RANGE:
 			var ray := PhysicsRayQueryParameters2D.create(global_position,player.global_position,1)
 			if get_world_2d().direct_space_state.intersect_ray(ray).is_empty():
-				CombatManager.fire_enemy_projectile(global_position,global_position.direction_to(player.global_position),data.attack_damage,SlimerotCampaign.ENEMY_SHOT_SPEED)
+				CombatManager.fire_enemy_projectile(global_position,global_position.direction_to(player.global_position),data.attack_damage,SlimerotCampaign.ENEMY_SHOT_SPEED * float(data.behavior_modifier.get("projectile_speed", 1.0)),self,true,data.zone)
 				attack_remaining = data.attack_interval
 		elif data.archetype != "shooter" and position.distance_to(player.position) < 45:
 			attack_remaining = data.attack_interval
@@ -81,13 +81,15 @@ func _physics_process(delta: float) -> void:
 func take_damage(amount: float) -> void:
 	if dead:
 		return
-	hp = maxf(0.0, hp - amount)
+	hp = maxf(0.0, hp - maxf(0.0, amount))
 	if amount > 0.0:
 		hit_flash = 0.10
+		CombatManager.feedback.enemy_hit(global_position)
 		var sound := get_node_or_null("/root/SlimerotSound")
 		if sound != null: sound.play_cue("enemy_death" if hp == 0.0 else "hit")
 	if hp == 0.0:
 		dead = true
+		CombatManager.feedback.enemy_died(global_position)
 		collision_layer = 0
 		hide()
 		respawn_remaining = SlimerotCampaign.RESPAWN_SECONDS
@@ -100,7 +102,8 @@ func _draw() -> void:
 	if sprite != null:
 		var width := 74.0 if data.archetype == "tank" else 65.0
 		var bob := sin(animation_time * 4.0 + home.x) * 1.8
-		draw_texture_rect(sprite, Rect2(-width * 0.5, -width * 0.5 + bob - 3, width, width), false, Color(1.5, 1.35, 1.35) if hit_flash > 0.0 else Color.WHITE)
+		var squash := 1.0 + hit_flash * 1.4
+		draw_texture_rect(sprite, Rect2(-width * squash * 0.5, -width / squash * 0.5 + bob - 3, width * squash, width / squash), false, Color(1.5, 1.35, 1.35) if hit_flash > 0.0 else Color.WHITE)
 	else:
 		draw_circle(Vector2.ZERO, 28 if data.archetype == "tank" else 23, tint)
 		if data.archetype == "tank": draw_arc(Vector2.ZERO,29,0,TAU,24,tint.darkened(0.4),5)

@@ -21,6 +21,7 @@ class EnemyData extends Resource:
 	@export var attack_damage: float
 	@export var attack_interval: float
 	@export var coin_reward: int
+	@export var behavior_modifier: Dictionary = {}
 	@export var move_speed: float
 
 class BossData extends Resource:

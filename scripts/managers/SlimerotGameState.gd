@@ -14,6 +14,7 @@ var active_play_seconds := 0.0
 var last_background_timestamp := 0.0
 var offline_roll_remainder := 0.0
 var highest_zone_unlocked := 1
+var dash_unlocked := false
 var zone_kill_counts: Dictionary = {}
 var unlocked_gate_flags: Dictionary = {}
 var boss_defeated_flags: Dictionary = {}
@@ -80,6 +81,7 @@ func reset() -> void:
 	last_background_timestamp = 0.0
 	offline_roll_remainder = 0.0
 	highest_zone_unlocked = 1
+	dash_unlocked = false
 	zone_kill_counts.clear()
 	unlocked_gate_flags.clear()
 	boss_defeated_flags.clear()
@@ -110,6 +112,13 @@ func spend(currency: String, amount: int, notify: bool = true) -> bool:
 		_:
 			return false
 	if notify: changed.emit()
+	return true
+
+func unlock_dash() -> bool:
+	if dash_unlocked: return false
+	dash_unlocked = true
+	changed.emit()
+	critical_change.emit("dash_unlocked")
 	return true
 
 func award_coins(amount: int, notify: bool = true) -> void:

@@ -128,13 +128,13 @@ func run(world: Node, owner_suite: Node) -> void:
 	world.player.position = Vector2(500,1150)
 	CombatManager.clear_projectiles()
 	shooter._physics_process(0.016)
-	check(shooter.velocity.x > 0 and CombatManager.get_child_count() == 1, "Shooter backs away and fires a dodgeable projectile")
-	var shot: SlimerotProjectile = CombatManager.get_child(0)
+	check(shooter.velocity.x > 0 and CombatManager.active_projectile_count() == 1, "Shooter backs away and fires a dodgeable projectile")
+	var shot: SlimerotProjectile = CombatManager.active_projectiles()[0]
 	check(shot.hostile and shot.damage == 6 and shot.speed == SlimerotCampaign.ENEMY_SHOT_SPEED, "Z1 Shooter fires fixed six-damage shot")
 	shooter.position = Vector2(600,1150)
 	world.player.position = Vector2(350,1150)
 	shooter._physics_process(0.016)
-	check(shooter.velocity.x < 0 and CombatManager.get_child_count() == 1, "Shooter approaches outside preferred range without ignoring own attack timer")
+	check(shooter.velocity.x < 0 and CombatManager.active_projectile_count() == 1, "Shooter approaches outside preferred range without ignoring own attack timer")
 	var before := SlimerotCampaign.enemy(8,"tank")
 	GameState.coins = 90000000
 	GameState.highest_zone_unlocked = 8

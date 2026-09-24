@@ -8,6 +8,9 @@ var currency_labels: Dictionary = {}
 var location_label: Label
 var hp_label: Label
 var hp_bar: ProgressBar
+var dash_button: Button
+var zone_banner: Label
+var zone_banner_remaining := 0.0
 var roll_button: Button
 var auto_button: Button
 var interact_button: Button
@@ -82,6 +85,10 @@ func _ready() -> void:
 	roll_button.icon = SlimerotAssets.icon("roll")
 	roll_button.add_theme_font_size_override("font_size", 32)
 	roll_button.add_theme_constant_override("icon_max_width", 34)
+	dash_button = button("DASH", Rect2(), func():
+		if is_instance_valid(CombatManager.player): CombatManager.player.request_dash())
+	dash_button.add_theme_font_size_override("font_size", 23)
+	dash_button.tooltip_text = "Aim with movement - invulnerable only during the burst"
 	auto_button = button("AUTO OFF", Rect2(), toggle_auto)
 	auto_button.add_theme_font_size_override("font_size", 20)
 	super_label = text("", Rect2(), 17, SlimerotUITheme.GOLD)
@@ -89,6 +96,10 @@ func _ready() -> void:
 	notice = text("", Rect2(), 21, SlimerotUITheme.GOLD)
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	zone_banner = text("", Rect2(), 26, SlimerotUITheme.GOLD)
+	zone_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	zone_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	zone_banner.hide()
 	boss_label = text("", Rect2(), 23)
 	boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	boss_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -214,6 +225,8 @@ func apply_layout(override_safe: Rect2 = Rect2()) -> void:
 	place(layout_items.utility, Rect2(20, h - 326, w - 40, 68))
 	place(joystick, Rect2(24, h - 242, 224, 224))
 	place(roll_button, Rect2(w - 292, h - 164, 268, 102))
+	place(dash_button, Rect2(266, h - 156, 142, 86))
+	place(zone_banner, Rect2(24, 322, w - 48, 110))
 	place(auto_button, Rect2(w - 292, h - 240, 268, 64))
 	place(super_label, Rect2(w - 302, h - 52, 288, 38))
 	place(boss_label, Rect2(24, 220, w - 48, 94))
@@ -279,6 +292,7 @@ func refresh() -> void:
 	map_button.visible = GameState.structure_unlocked_flags.get("fast_travel_pillar", false)
 	super_label.visible = stats.super_roll
 	super_label.text = "SUPER ×%d · %s" % [int(stats.super_roll_multiplier), "NEXT ROLL" if RollManager.rolls_until_super() == 1 else "%d left" % RollManager.rolls_until_super()]
+	dash_button.visible = GameState.dash_unlocked
 	auto_button.visible = stats.auto_roll
 	auto_button.disabled = not stats.auto_roll or GameState.is_paused()
 	auto_button.text = "AUTO ON" if GameState.settings.auto_roll_state else "AUTO OFF"
@@ -291,7 +305,7 @@ func compact(value: float) -> String:
 
 func _process(delta: float) -> void:
 	if hud_refresh_pending: refresh()
-	var recede := 0.45 if reveal.active and reveal.tier >= 2 else 1.0
+	var recede := 0.45 if reveal.active and reveal.tier >= 2 and not WorldManager.boss_active else 1.0
 	for control in [layout_items.top, layout_items.currencies]: control.modulate.a = recede
 	var bosses := get_tree().get_nodes_in_group("slimerot_bosses")
 	boss_label.visible = WorldManager.boss_active and not bosses.is_empty() and not is_instance_valid(menu)
@@ -306,6 +320,15 @@ func _process(delta: float) -> void:
 		breakthrough_banner.scale = Vector2.ONE * (1.0 + sin(minf(age / 0.25, 1.0) * PI) * 0.055)
 		breakthrough_banner.modulate.a = minf(1.0, breakthrough_seconds / 0.2)
 		if breakthrough_seconds == 0.0: breakthrough_banner.hide()
+	if is_instance_valid(CombatManager.player):
+		var cooldown: float = CombatManager.player.dash_cooldown_remaining
+		dash_button.text = "%.1fs" % cooldown if cooldown > 0.0 else "DASH"
+		dash_button.disabled = cooldown > 0.0 or GameState.is_paused() or GameState.player_dead
+	zone_banner.visible = zone_banner_remaining > 0 and not WorldManager.boss_active
+	if zone_banner_remaining > 0 and not GameState.is_paused():
+		zone_banner_remaining = maxf(0, zone_banner_remaining - delta)
+		zone_banner.modulate.a = minf(1.0, zone_banner_remaining / 0.4)
+		if zone_banner_remaining == 0: zone_banner.hide()
 	roll_button.text = "ROLL · %.1fs" % RollManager.cooldown_remaining if RollManager.cooldown_remaining > 0.0 else "ROLL"
 	roll_button.disabled = RollManager.cooldown_remaining > 0.0 or GameState.is_paused() or GameState.player_dead
 	auto_button.disabled = not SkillTreeManager.derived_stats().auto_roll or GameState.is_paused()
@@ -335,6 +358,12 @@ func set_interaction(prompt: String) -> void:
 	interact_button.visible = available
 	interaction_label.visible = available
 	interaction_label.text = prompt
+
+func show_zone_unlock(zone_id: int) -> void:
+	zone_banner.text = "ZONE UNLOCKED - %s\nZone Luck x%d" % [SlimerotCampaign.zone(zone_id).name, zone_id]
+	zone_banner_remaining = 2.5
+	zone_banner.modulate.a = 1.0
+	zone_banner.show()
 
 func show_notice(message: String) -> void:
 	notice.text = message
@@ -412,7 +441,7 @@ func _input(event: InputEvent) -> void:
 		managed_touches[event.index] = true
 		get_viewport().set_input_as_handled()
 	elif not GameState.is_paused():
-		for control in [roll_button, auto_button, interact_button, layout_items.settings, layout_items.team, skills_button, map_button]:
+		for control in [roll_button, auto_button, dash_button, interact_button, layout_items.settings, layout_items.team, skills_button, map_button]:
 			if control.is_visible_in_tree() and control.get_global_rect().has_point(event.position):
 				target = control
 				break

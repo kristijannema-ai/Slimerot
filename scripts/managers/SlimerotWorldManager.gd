@@ -1,6 +1,7 @@
 extends Node
 
 signal zone_changed(zone_id: int)
+signal zone_unlocked(zone_id: int)
 signal respawn_requested
 signal boss_requested(zone_id: int)
 signal completion_reached
@@ -38,7 +39,12 @@ func gate_blocker(zone_id: int) -> String:
 	if GameState.coins < data.gate_coin_cost: return "Need %s more Coins" % SlimeDatabase.format_number(data.gate_coin_cost-GameState.coins)
 	return ""
 
+func progression_gate_role(zone_id: int) -> String:
+	if SlimerotEncounters.BOSSES.has(zone_id) and not is_boss_zone_defeated(zone_id): return "boss"
+	return "exit"
+
 func gate_prompt(zone_id: int) -> String:
+	if progression_gate_role(zone_id) == "boss": return boss_encounter_prompt(zone_id)
 	var data := SlimerotCampaign.zone(zone_id)
 	var destination := SlimerotCampaign.zone(zone_id+1).name if zone_id < 8 else "Campaign finale"
 	if gate_open(zone_id): return "Enter " + destination if zone_id < 8 else "Campaign complete"
@@ -50,16 +56,21 @@ func unlock_gate(zone_id: int) -> bool:
 	if GameState.current_zone != zone_id or GameState.player_dead or GameState.is_paused() or gate_open(zone_id) or not gate_blocker(zone_id).is_empty(): return false
 	var data := SlimerotCampaign.zone(zone_id)
 	if not GameState.spend("Coins",data.gate_coin_cost,false): return false
+	var previous_highest := GameState.highest_zone_unlocked
 	GameState.unlocked_gate_flags[str(zone_id)] = true
 	GameState.highest_zone_unlocked = maxi(GameState.highest_zone_unlocked,mini(8,zone_id+1))
 	GameState.changed.emit()
 	GameState.critical_change.emit("gate_purchase")
+	if GameState.highest_zone_unlocked > previous_highest: zone_unlocked.emit(GameState.highest_zone_unlocked)
 	return true
 
 func use_exit() -> bool:
 	var zone := GameState.current_zone
-	if boss_active: return false
+	if boss_active or GameState.is_paused() or GameState.player_dead: return false
 	if zone == 0: return travel(1)
+	if progression_gate_role(zone) == "boss":
+		if zone == 2: GameState.unlock_dash()
+		return start_boss(zone)
 	if zone == 8 and GameState.completion_portal_unlocked: return complete_campaign()
 	if not gate_open(zone) and not unlock_gate(zone): return false
 	return travel(zone+1) if zone < 8 else true
@@ -70,7 +81,7 @@ func return_through_gate() -> bool:
 
 func boss_encounter_prompt(zone_id: int) -> String:
 	var data := SlimerotCampaign.zone(zone_id)
-	if is_boss_zone_defeated(zone_id): return "Boss defeated. Return to the exit gate."
+	if is_boss_zone_defeated(zone_id): return "Boss defeated. This gate now leads onward."
 	if int(GameState.zone_kill_counts.get(str(zone_id),0)) < data.kill_requirement:
 		return "Defeat %d enemies to reach the boss encounter." % data.kill_requirement
 	return "Enter " + str(SlimerotEncounters.BOSSES[zone_id].name)
@@ -78,6 +89,7 @@ func boss_encounter_prompt(zone_id: int) -> String:
 func start_boss(zone_id: int) -> bool:
 	if not SlimerotEncounters.BOSSES.has(zone_id) or GameState.current_zone != zone_id or boss_active or GameState.is_paused() or GameState.player_dead or is_boss_zone_defeated(zone_id): return false
 	if int(GameState.zone_kill_counts.get(str(zone_id),0)) < SlimerotCampaign.zone(zone_id).kill_requirement: return false
+	if zone_id == 2: GameState.unlock_dash()
 	boss_active = true
 	CombatManager.clear_projectiles()
 	boss_requested.emit(zone_id)
