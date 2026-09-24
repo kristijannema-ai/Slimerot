@@ -10,6 +10,10 @@ var farm_loop := PackedVector2Array([Vector2(500,1150),Vector2(330,1100),Vector2
 func _ready() -> void:
 	if zone_id == 0: return
 	ground_texture = SlimerotAssets.zone(zone_id)
+	var title := SlimerotUITheme.world_label(self, Rect2(200, 1210, 600, 68), SlimerotCampaign.zone(zone_id).name, 30)
+	title.get_parent().z_index = 2
+	var routes := SlimerotUITheme.world_label(self, Rect2(230, 314, 540, 62), "FARM LOOP  ←    →  MAIN ROUTE", 18)
+	routes.get_parent().z_index = 2
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	obstacles = [Rect2(0,0,1000,32),Rect2(0,0,32,1500),Rect2(968,0,32,1500),Rect2(0,1468,1000,32),
 		Rect2(140,520,110,110),Rect2(770,660,110,110),Rect2(120,280,130,160),Rect2(780,380,100,120),Rect2(120,790,120,120)]
@@ -94,6 +98,3 @@ func _draw() -> void:
 				draw_colored_polygon(PackedVector2Array([center-Vector2(0,60),center+Vector2(36,0),center+Vector2(0,50),center-Vector2(36,0)]),Color("b77ce0"))
 	draw_rect(Rect2(395,130,210,95),Color("9bac89"))
 	draw_rect(Rect2(400,1380,200,70),Color("a6a196"))
-	var title := SlimerotCampaign.zone(zone_id).name
-	draw_string(ThemeDB.fallback_font,Vector2(270,1260),title,HORIZONTAL_ALIGNMENT_CENTER,460,30,Color("e9f0da"))
-	draw_string(ThemeDB.fallback_font,Vector2(290,350),"FARM LOOP  ←    →  MAIN ROUTE",HORIZONTAL_ALIGNMENT_CENTER,420,18,Color("e9f0da"))

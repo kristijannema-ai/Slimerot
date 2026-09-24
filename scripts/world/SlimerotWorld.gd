@@ -10,6 +10,7 @@ var transition_in_flight := false
 var arrival_interaction: SlimerotInteraction
 var arena: SlimerotBossArena
 var rounded_styles: Dictionary = {}
+var gate_state_label: Label
 
 func _ready() -> void:
 	configure_input()
@@ -60,6 +61,7 @@ func configure_input() -> void:
 func build_zone(zone_id: int) -> void:
 	transition_in_flight = true
 	arrival_interaction = null
+	gate_state_label = null
 	if is_instance_valid(arena):
 		remove_child(arena)
 		arena.queue_free()
@@ -97,6 +99,7 @@ func build_zone(zone_id: int) -> void:
 			var id: String = row[0]
 			add_interaction(row[4],("Variant Shrine" if id == "mutation_lab" else id.replace("_"," ").capitalize())+" · %s Coins" % SlimeDatabase.format_number(row[2]),func(): repair(id))
 			interactions[-1].set_meta("structure",id)
+	build_world_captions(zone_id)
 	respawn_player()
 	if WorldManager.arriving_from_next: player.position = SlimerotCampaign.RETURN_ARRIVAL
 	reset_camera()
@@ -131,7 +134,7 @@ func start_boss_arena(zone_id: int) -> void:
 
 func repair(id: String) -> void:
 	if GameState.structure_unlocked_flags.get(id, false):
-		hud.open_menu({"skill_tree_shrine":"Skills","sell_terminal":"Inventory","potion_bench":"Potions","fast_travel_pillar":"Map","mutation_lab":"Variant Shrine"}[id])
+		hud.open_menu({"skill_tree_shrine":"Skills","sell_terminal":"Team","potion_bench":"Potions","fast_travel_pillar":"Map","mutation_lab":"Variant Shrine"}[id])
 	elif WorldManager.repair(id):
 		hud.show_notice("Repaired! Available from the Slimerot HUD.")
 	else:
@@ -192,6 +195,8 @@ func _process(_delta: float) -> void:
 	update_context()
 
 func update_context() -> void:
+	if is_instance_valid(gate_state_label):
+		gate_state_label.text = "OPEN" if WorldManager.gate_open(GameState.current_zone) else "GATE REQUIREMENTS"
 	var previous_interaction := current_interaction
 	current_interaction = null
 	if is_instance_valid(arrival_interaction) and not arrival_interaction.is_available(player.global_position):
@@ -219,8 +224,29 @@ func rounded(rect: Rect2, color: Color, radius: int = 12) -> void:
 		rounded_styles[key] = appearance
 	draw_style_box(rounded_styles[key], rect)
 
-func label_at(at: Vector2, text: String, size: int = 22, color: Color = Color("e7e9df")) -> void:
-	draw_string(ThemeDB.fallback_font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+func build_world_captions(zone_id: int) -> void:
+	# Captions belong to landmark bounds in the world, not screen-pixel baselines.
+	# Their anchored labels stay centered as the camera or phone aspect changes.
+	var captions := Node2D.new()
+	captions.name = "LandmarkCaptions"
+	captions.z_index = 2
+	zone_root.add_child(captions)
+	if zone_id == 0:
+		SlimerotUITheme.world_label(captions, Rect2(408, 1152, 184, 100), "BACKYARD\n↓", 20)
+	else:
+		var next := SlimerotCampaign.zone(zone_id + 1).name if zone_id < 8 else "FINAL BOSS"
+		SlimerotUITheme.world_label(captions, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(230, 150), Vector2(460, 55)), next.to_upper(), 25)
+		gate_state_label = SlimerotUITheme.landmark_label(captions, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(65, 72), Vector2(130, 130)), "", 20)
+		SlimerotUITheme.world_label(captions, Rect2(SlimerotCampaign.RETURN_GATE - Vector2(100, 30), Vector2(200, 60)), "← RETURN", 22)
+		if not SlimerotCampaign.zone(zone_id).boss_id_or_null.is_empty():
+			SlimerotUITheme.landmark_label(captions, Rect2(710, 160, 120, 120), "BOSS ENTRANCE", 16)
+	for row in SlimerotEncounters.STRUCTURES:
+		if row[1] != zone_id: continue
+		var id := str(row[0])
+		var title := "VARIANT SHRINE" if id == "mutation_lab" else id.replace("_", " ").to_upper()
+		var landmark := Rect2(Vector2(row[4]) - Vector2(64, 74), Vector2(128, 128))
+		var caption := SlimerotUITheme.landmark_label(captions, landmark, title, 18)
+		caption.set_meta("structure_id", id)
 
 func _draw() -> void:
 	if GameState.current_zone == 0:
@@ -238,22 +264,15 @@ func _draw() -> void:
 		rounded(Rect2(753, 666, 55, 27), Color("a0d39d"))
 		rounded(Rect2(110, 360, 280, 100), Color("9e7858"))
 		rounded(Rect2(408, 1152, 184, 100), Color("b6ed78"), 15)
-		label_at(Vector2(438, 1194), "BACKYARD", 20, Color("273f39"))
-		label_at(Vector2(480, 1230), "↓", 32, Color("273f39"))
 	else:
 		var gate := SlimerotAssets.structure("gate_open" if WorldManager.gate_open(GameState.current_zone) else "gate_closed")
 		if gate != null: draw_texture_rect(gate, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(65, 72), Vector2(130, 130)), false)
 		var return_gate := SlimerotAssets.structure("gate_open")
 		if return_gate != null: draw_texture_rect(return_gate, Rect2(SlimerotCampaign.RETURN_GATE - Vector2(50, 65), Vector2(100, 100)), false)
-		var next := SlimerotCampaign.zone(GameState.current_zone+1).name if GameState.current_zone < 8 else "FINAL BOSS"
-		label_at(Vector2(320,100),next.to_upper(),25)
-		label_at(Vector2(360,270),"OPEN" if WorldManager.gate_open(GameState.current_zone) else "GATE REQUIREMENTS",20)
-		label_at(Vector2(385,1430),"← RETURN",22,Color("273f39"))
 		if not SlimerotCampaign.zone(GameState.current_zone).boss_id_or_null.is_empty():
 			draw_arc(Vector2(770,230),55,0,TAU,32,Color("c580aa"),12)
 			var portal := SlimerotAssets.structure("boss_portal")
 			if portal != null: draw_texture_rect(portal, Rect2(710, 160, 120, 120), false)
-			label_at(Vector2(700,310),"BOSS ENTRANCE",16)
 	for row in SlimerotEncounters.STRUCTURES:
 		if row[1] != GameState.current_zone: continue
 		var at: Vector2 = row[4]
@@ -263,7 +282,6 @@ func _draw() -> void:
 		else:
 			rounded(Rect2(at-Vector2(45,45),Vector2(90,80)),Color("727b89"))
 			draw_circle(at-Vector2(0,18),23,Color("b6ed78") if GameState.structure_unlocked_flags.get(row[0],false) else Color("bdabc9"))
-		label_at(at+Vector2(-90,65),str(row[0]).replace("_"," ").to_upper(),17)
 	if GameState.current_zone == 8 and GameState.completion_portal_unlocked:
 		draw_arc(SlimerotCampaign.EXIT_GATE,70,0,TAU,48,Color("d3a6ff"),14)
 		var portal := SlimerotAssets.structure("portal")

@@ -4,12 +4,10 @@ extends CanvasLayer
 signal interact_requested
 var root: Control
 var joystick: SlimerotJoystick
-var wallet: Label
+var currency_labels: Dictionary = {}
 var location_label: Label
 var hp_label: Label
 var hp_bar: ProgressBar
-var team_label: Label
-var tutorial: Label
 var roll_button: Button
 var auto_button: Button
 var interact_button: Button
@@ -26,7 +24,6 @@ var menu_body: VBoxContainer
 var menu_title := ""
 var reveal: SlimerotReveal
 var menus := SlimerotMenus.new()
-var portraits: HBoxContainer
 var menu_dirty := false
 var menu_refresh_seconds := 0.0
 var menu_scroll: ScrollContainer
@@ -35,7 +32,6 @@ var map_button: Button
 var boss_label: Label
 var safe_rect := Rect2()
 var layout_items: Dictionary = {}
-var equipped_signature := ""
 var scroll_touch := -1
 var scroll_start := Vector2.ZERO
 var scroll_last := Vector2.ZERO
@@ -48,6 +44,9 @@ var managed_touches: Dictionary = {}
 var modal_stack: Array[Dictionary] = []
 var modal_generation := 0
 var offline_summary: Dictionary = {}
+var visible_menu_signature := ""
+var menu_build_count := 0
+var hud_refresh_pending := false
 
 func _ready() -> void:
 	layer = 10
@@ -56,91 +55,58 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	root.theme = create_theme()
-	layout_items.control_dock = panel(Rect2())
-	layout_items.control_dock.add_theme_stylebox_override("panel", style(Color("101c2df5")))
-	layout_items.health_panel = panel(Rect2())
-	layout_items.wallet_panel = panel(Rect2())
-	layout_items.brand = text("SLIMEROT", Rect2(), 13, SlimerotPresentation.MINT)
-	layout_items.wallet_heading = text("YOUR WALLET", Rect2(), 13, SlimerotPresentation.MUTED)
-	wallet = text("", Rect2(), 21, SlimerotPresentation.CREAM)
-	for key in ["coins", "rolls", "luck"]:
-		var icon := TextureRect.new()
-		icon.texture = SlimerotAssets.icon(key)
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		root.add_child(icon)
-		layout_items[key + "_icon"] = icon
-	hp_bar = ProgressBar.new()
-	hp_bar.show_percentage = false
-	hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hp_bar.add_theme_stylebox_override("background", meter_style(SlimerotPresentation.INK))
-	hp_bar.add_theme_stylebox_override("fill", meter_style(SlimerotPresentation.MINT))
-	root.add_child(hp_bar)
-	hp_label = text("", Rect2(), 18)
-	location_label = text("", Rect2(), 19)
-	location_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	layout_items.settings = button("Pause", Rect2(), func(): open_menu("Settings"))
-	map_button = button("Fast Travel", Rect2(), func(): open_menu("Map"))
-	map_button.add_theme_font_size_override("font_size", 18)
-	layout_items.potions = button("Potions", Rect2(), func(): open_menu("Potions"))
-	tutorial = text("", Rect2(), 19, SlimerotPresentation.CREAM)
-	tutorial.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tutorial.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tutorial.add_theme_color_override("font_shadow_color", SlimerotPresentation.INK)
-	tutorial.add_theme_constant_override("shadow_outline_size", 5)
-	boss_label = text("", Rect2(), 23)
-	boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	boss_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	notice = text("", Rect2(), 21, Color("fff0bc"))
-	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	interaction_label = text("", Rect2(), 18)
-	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	interaction_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	interact_button = button("INTERACT", Rect2(), func(): interact_requested.emit())
-	interact_button.add_theme_stylebox_override("normal", style(Color("304c44")))
-	interact_button.hide()
+	build_top_bar()
+	var utility := HBoxContainer.new()
+	utility.add_theme_constant_override("separation", 12)
+	utility.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(utility)
+	layout_items.utility = utility
+	layout_items.team = button("TEAM", Rect2(), func(): open_menu("Team"))
+	layout_items.team.reparent(utility)
+	skills_button = button("SKILL TREE", Rect2(), func(): open_menu("Skills"))
+	skills_button.reparent(utility)
+	map_button = button("MAP", Rect2(), func(): open_menu("Map"))
+	map_button.reparent(utility)
+	for control in [layout_items.team, skills_button, map_button]:
+		control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		control.custom_minimum_size.y = 68
+		control.add_theme_font_size_override("font_size", 20)
+	layout_items.team.icon = SlimerotAssets.icon("team")
+	skills_button.icon = SlimerotAssets.icon("skills")
+	map_button.icon = SlimerotAssets.icon("map")
 	joystick = SlimerotJoystick.new()
 	joystick.size = Vector2(224, 224)
 	root.add_child(joystick)
 	roll_button = button("ROLL", Rect2(), func(): RollManager.request_roll())
-	roll_button.add_theme_stylebox_override("normal", style(SlimerotPresentation.MINT))
-	roll_button.add_theme_stylebox_override("hover", style(Color("dcffac")))
-	roll_button.add_theme_stylebox_override("pressed", style(Color("a9dc62")))
-	roll_button.add_theme_stylebox_override("disabled", style(Color("344a3e")))
-	roll_button.add_theme_color_override("font_color", SlimerotPresentation.INK)
-	roll_button.add_theme_color_override("font_hover_color", SlimerotPresentation.INK)
-	roll_button.add_theme_color_override("font_pressed_color", SlimerotPresentation.INK)
-	roll_button.add_theme_color_override("font_disabled_color", Color("d1e4bd"))
+	SlimerotUITheme.apply_button(roll_button, "PrimaryButton")
+	roll_button.icon = SlimerotAssets.icon("roll")
 	roll_button.add_theme_font_size_override("font_size", 32)
-	auto_button = button("Auto · Locked", Rect2(), toggle_auto)
+	roll_button.add_theme_constant_override("icon_max_width", 34)
+	auto_button = button("AUTO OFF", Rect2(), toggle_auto)
 	auto_button.add_theme_font_size_override("font_size", 20)
-	layout_items.inventory = button("Inventory", Rect2(), func(): open_menu("Inventory"))
-	layout_items.inventory.add_theme_font_size_override("font_size", 19)
-	skills_button = button("Skills", Rect2(), func(): open_menu("Skills"))
-	skills_button.add_theme_font_size_override("font_size", 19)
-	layout_items.team_panel = panel(Rect2())
-	layout_items.team_panel.add_theme_stylebox_override("panel", style(SlimerotPresentation.SURFACE))
-	portraits = HBoxContainer.new()
-	portraits.alignment = BoxContainer.ALIGNMENT_CENTER
-	portraits.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	portraits.add_theme_constant_override("separation", 2)
-	root.add_child(portraits)
-	team_label = text("", Rect2(), 16)
-	team_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	super_label = text("", Rect2(), 18, Color("ffdc77"))
+	super_label = text("", Rect2(), 17, SlimerotUITheme.GOLD)
 	super_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	notice = text("", Rect2(), 21, SlimerotUITheme.GOLD)
+	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	boss_label = text("", Rect2(), 23)
+	boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boss_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	interaction_label = text("", Rect2(), 18)
+	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	interaction_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	interact_button = button("INTERACT", Rect2(), func(): interact_requested.emit())
+	interact_button.hide()
 	reveal = SlimerotReveal.new()
 	root.add_child(reveal)
 	breakthrough_banner = panel(Rect2())
 	breakthrough_banner.z_index = 40
-	breakthrough_banner.add_theme_stylebox_override("panel", style(Color("d2ff86")))
+	breakthrough_banner.theme_type_variation = "Card"
 	breakthrough_text = Label.new()
 	breakthrough_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	breakthrough_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	breakthrough_text.add_theme_font_size_override("font_size", 26)
-	breakthrough_text.add_theme_color_override("font_color", SlimerotPresentation.INK)
+	breakthrough_text.add_theme_color_override("font_color", SlimerotUITheme.GOLD)
 	breakthrough_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	breakthrough_banner.add_child(breakthrough_text)
 	breakthrough_banner.hide()
@@ -150,18 +116,80 @@ func _ready() -> void:
 	death_fade.z_index = 100
 	root.add_child(death_fade)
 	SkillTreeManager.purchased.connect(on_skill_purchased)
-	GameState.changed.connect(refresh)
-	GameState.changed.connect(func(): menu_dirty = true)
+	GameState.changed.connect(func(): hud_refresh_pending = true; menu_dirty = true)
 	SaveManager.save_failed.connect(show_notice)
 	SaveManager.offline_summary_ready.connect(show_offline_summary)
 	get_viewport().size_changed.connect(apply_layout)
-	for entry in [[layout_items.settings, "settings"], [layout_items.inventory, "inventory"], [skills_button, "skills"], [auto_button, "auto"], [roll_button, "rolls"]]:
-		entry[0].icon = SlimerotAssets.icon(entry[1])
-		entry[0].expand_icon = true
 	apply_layout()
 	refresh()
 	if not SaveManager.last_error.is_empty(): show_notice(SaveManager.last_error)
 	if not SaveManager.last_offline_summary.is_empty(): show_offline_summary(SaveManager.last_offline_summary)
+
+func build_top_bar() -> void:
+	var top := panel(Rect2())
+	top.theme_type_variation = "Card"
+	layout_items.top = top
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 18)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(row)
+	var health := VBoxContainer.new()
+	health.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	health.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	health.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(health)
+	hp_label = Label.new()
+	hp_label.add_theme_font_size_override("font_size", 20)
+	hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	health.add_child(hp_label)
+	hp_bar = ProgressBar.new()
+	hp_bar.show_percentage = false
+	hp_bar.custom_minimum_size.y = 12
+	hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	health.add_child(hp_bar)
+	location_label = Label.new()
+	location_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	location_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	location_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	location_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	location_label.add_theme_font_size_override("font_size", 22)
+	location_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(location_label)
+	layout_items.settings = button("", Rect2(), func(): open_menu("Settings"))
+	layout_items.settings.reparent(row)
+	SlimerotUITheme.apply_button(layout_items.settings, "IconButton")
+	layout_items.settings.custom_minimum_size = Vector2(68, 68)
+	layout_items.settings.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	layout_items.settings.icon = SlimerotAssets.icon("settings")
+	layout_items.settings.tooltip_text = "Settings"
+	var currencies := HBoxContainer.new()
+	currencies.add_theme_constant_override("separation", 10)
+	currencies.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(currencies)
+	layout_items.currencies = currencies
+	for key in ["coins", "rolls", "luck"]:
+		var chip := PanelContainer.new()
+		chip.theme_type_variation = "CurrencyChip"
+		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		currencies.add_child(chip)
+		var contents := HBoxContainer.new()
+		contents.alignment = BoxContainer.ALIGNMENT_CENTER
+		contents.add_theme_constant_override("separation", 8)
+		contents.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chip.add_child(contents)
+		var icon := TextureRect.new()
+		icon.texture = SlimerotAssets.icon(key)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.custom_minimum_size = Vector2(28, 28)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		contents.add_child(icon)
+		var label := Label.new()
+		label.add_theme_font_size_override("font_size", 21)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		contents.add_child(label)
+		currency_labels[key] = label
 
 func place(control: Control, rect: Rect2) -> void:
 	control.position = rect.position
@@ -173,121 +201,39 @@ func apply_layout(override_safe: Rect2 = Rect2()) -> void:
 	if override_safe.has_area():
 		safe_rect = visible_rect.intersection(override_safe)
 	elif OS.has_feature("mobile"):
-		# Display safe area is in screen pixels; convert through the viewport stretch.
 		var native_safe := Rect2(DisplayServer.get_display_safe_area())
 		native_safe.position -= Vector2(DisplayServer.window_get_position())
-		if native_safe.has_area():
-			safe_rect = visible_rect.intersection(get_viewport().get_screen_transform().affine_inverse() * native_safe)
+		if native_safe.has_area(): safe_rect = visible_rect.intersection(get_viewport().get_screen_transform().affine_inverse() * native_safe)
 	root.position = safe_rect.position
 	root.scale = Vector2.ONE * minf(1.0, safe_rect.size.x / 720.0)
 	root.size = safe_rect.size / root.scale
 	var w := root.size.x
 	var h := root.size.y
-	place(layout_items.control_dock, Rect2(16, h - 302, w - 32, 286))
-	place(layout_items.health_panel, Rect2(16, 16, 230, 166))
-	place(layout_items.wallet_panel, Rect2(256, 16, w - 432, 166))
-	place(layout_items.brand, Rect2(32, 28, 198, 22))
-	place(layout_items.wallet_heading, Rect2(274, 28, w - 468, 22))
-	place(hp_bar, Rect2(32, 57, 198, 10))
-	place(hp_label, Rect2(32, 72, 200, 26))
-	place(location_label, Rect2(32, 104, 198, 70))
-	place(wallet, Rect2(306, 55, w - 498, 110))
-	for index in 3:
-		place(layout_items[["coins_icon", "rolls_icon", "luck_icon"][index]], Rect2(274, 60 + index * 30, 22, 22))
-	place(layout_items.settings, Rect2(w - 166, 16, 150, 62))
-	place(map_button, Rect2(w - 166, 86, 150, 62))
-	place(layout_items.potions, Rect2(w - 166, 156, 150, 62))
-	place(tutorial, Rect2(24, 200, w - 204, 58))
-	place(boss_label, Rect2(32, 266, w - 64, 104))
-	place(notice, Rect2(42, h - 460, w - 84, 82))
-	place(interaction_label, Rect2(42, h - 424, w - 84, 64))
-	place(interact_button, Rect2(w * 0.5 - 105, h - 354, 210, 62))
-	place(joystick, Rect2(30, h - 276, 224, 224))
-	place(roll_button, Rect2(w - 286, h - 208, 250, 102))
-	place(auto_button, Rect2(w - 286, h - 278, 250, 62))
-	place(layout_items.inventory, Rect2(266, h - 278, w - 564, 62))
-	place(skills_button, Rect2(266, h - 208, w - 564, 62))
-	place(layout_items.team_panel, Rect2(254, h - 138, w - 546, 116))
-	place(portraits, Rect2(260, h - 132, w - 558, 46))
-	place(team_label, Rect2(260, h - 77, w - 558, 55))
-	place(super_label, Rect2(w - 286, h - 94, 250, 65))
-	place(breakthrough_banner, Rect2(20, 370, w - 40, 156))
+	place(layout_items.top, Rect2(16, 16, w - 32, 112))
+	place(layout_items.currencies, Rect2(16, 138, w - 32, 62))
+	place(layout_items.utility, Rect2(20, h - 326, w - 40, 68))
+	place(joystick, Rect2(24, h - 242, 224, 224))
+	place(roll_button, Rect2(w - 292, h - 164, 268, 102))
+	place(auto_button, Rect2(w - 292, h - 240, 268, 64))
+	place(super_label, Rect2(w - 302, h - 52, 288, 38))
+	place(boss_label, Rect2(24, 220, w - 48, 94))
+	place(notice, Rect2(40, h - 532, w - 80, 72))
+	place(interaction_label, Rect2(30, h - 448, w - 60, 44))
+	place(interact_button, Rect2(w * 0.5 - 118, h - 400, 236, 64))
+	place(breakthrough_banner, Rect2(20, 328, w - 40, 154))
 	place(death_fade, Rect2(Vector2.ZERO, root.size))
 	place(reveal, Rect2(Vector2.ZERO, root.size))
-	if is_instance_valid(menu): place(menu, Rect2(20, 232, w - 40, h - 526))
+	if is_instance_valid(menu): place(menu, modal_rect())
+
+func modal_rect() -> Rect2:
+	return Rect2(16, 16, root.size.x - 32, root.size.y - 278)
 
 func style(color: Color) -> StyleBoxFlat:
-	var box := StyleBoxFlat.new()
+	var box := SlimerotUITheme.resource().get_stylebox("panel", "Card").duplicate() as StyleBoxFlat
 	box.bg_color = color
-	box.set_corner_radius_all(20)
-	box.border_color = color.lightened(0.10)
-	box.set_border_width_all(1)
-	box.shadow_color = Color(0.015, 0.035, 0.07, 0.24)
-	box.shadow_size = 5
-	box.shadow_offset = Vector2(0, 4)
-	box.content_margin_left = 14
-	box.content_margin_right = 14
-	box.content_margin_top = 10
-	box.content_margin_bottom = 10
 	return box
-
-func meter_style(color: Color) -> StyleBoxFlat:
-	var box := StyleBoxFlat.new()
-	box.bg_color = color
-	box.set_corner_radius_all(5)
-	return box
-
-func selected_style() -> StyleBoxFlat:
-	var box := style(Color("304639"))
-	box.border_color = SlimerotPresentation.MINT
-	return box
-
-func slider_style(color: Color) -> StyleBoxFlat:
-	var box := meter_style(color)
-	box.content_margin_top = 3
-	box.content_margin_bottom = 3
-	return box
-
-func slider_knob(color: Color) -> GradientTexture2D:
-	var texture := GradientTexture2D.new()
-	texture.width = 26
-	texture.height = 26
-	texture.fill = GradientTexture2D.FILL_RADIAL
-	texture.fill_from = Vector2(0.5, 0.5)
-	texture.fill_to = Vector2(1.0, 0.5)
-	texture.gradient = Gradient.new()
-	texture.gradient.offsets = PackedFloat32Array([0.0, 0.72, 0.84, 0.96, 1.0])
-	texture.gradient.colors = PackedColorArray([color.lightened(0.12), color, color.darkened(0.18), color.darkened(0.18), Color(color, 0.0)])
-	return texture
-
 func create_theme() -> Theme:
-	var theme := Theme.new()
-	theme.default_font_size = 22
-	theme.set_stylebox("normal", "Button", style(SlimerotPresentation.TEAL))
-	theme.set_stylebox("hover", "Button", style(Color("30465e")))
-	theme.set_stylebox("pressed", "Button", style(Color("344d42")))
-	theme.set_stylebox("disabled", "Button", style(Color("1b293a")))
-	theme.set_stylebox("panel", "PanelContainer", style(SlimerotPresentation.SURFACE))
-	theme.set_color("font_color", "Label", SlimerotPresentation.CREAM)
-	theme.set_color("font_color", "Button", SlimerotPresentation.CREAM)
-	theme.set_color("font_hover_color", "Button", Color.WHITE)
-	theme.set_color("font_pressed_color", "Button", SlimerotPresentation.MINT)
-	theme.set_color("font_disabled_color", "Button", Color("7e91a3"))
-	theme.set_constant("icon_max_width", "Button", 25)
-	theme.set_constant("h_separation", "Button", 9)
-	theme.set_stylebox("background", "ProgressBar", meter_style(SlimerotPresentation.INK))
-	theme.set_stylebox("fill", "ProgressBar", meter_style(SlimerotPresentation.MINT))
-	theme.set_stylebox("slider", "HSlider", slider_style(SlimerotPresentation.BORDER))
-	theme.set_stylebox("grabber_area", "HSlider", slider_style(Color("668b60")))
-	theme.set_stylebox("grabber_area_highlight", "HSlider", slider_style(SlimerotPresentation.MINT))
-	theme.set_icon("grabber", "HSlider", slider_knob(SlimerotPresentation.CREAM))
-	theme.set_icon("grabber_highlight", "HSlider", slider_knob(SlimerotPresentation.MINT))
-	theme.set_stylebox("scroll", "VScrollBar", meter_style(SlimerotPresentation.INK))
-	var scrollbar := meter_style(SlimerotPresentation.BORDER)
-	scrollbar.content_margin_left = 4
-	scrollbar.content_margin_right = 4
-	theme.set_stylebox("grabber", "VScrollBar", scrollbar)
-	return theme
+	return SlimerotUITheme.resource()
 
 func panel(rect: Rect2) -> PanelContainer:
 	var result := PanelContainer.new()
@@ -310,53 +256,33 @@ func button(value: String, rect: Rect2, action: Callable) -> Button:
 	var result := Button.new()
 	result.text = value
 	place(result, rect)
-	result.focus_mode = Control.FOCUS_NONE
+	SlimerotUITheme.apply_button(result)
 	result.pressed.connect(action)
 	root.add_child(result)
 	return result
 
 func refresh() -> void:
+	hud_refresh_pending = false
 	var stats := SkillTreeManager.derived_stats()
 	if stats.breakthrough_count == 0:
 		breakthrough_seconds = 0.0
 		breakthrough_banner.hide()
-	wallet.text = "Coins  %s\nRolls   %s\nLuck    ×%s" % [compact(GameState.coins), compact(GameState.rolls_balance), compact(RollManager.effective_luck())]
+	currency_labels.coins.text = compact(GameState.coins)
+	currency_labels.rolls.text = compact(GameState.rolls_balance)
+	currency_labels.luck.text = "×" + compact(RollManager.get_effective_luck())
+	for key in currency_labels: currency_labels[key].tooltip_text = key.capitalize()
 	hp_bar.max_value = stats.max_hp
 	hp_bar.value = GameState.player_hp
-	hp_label.text = "HP  %d / %d" % [GameState.player_hp, stats.max_hp]
-	team_label.text = "Team DPS %s\n%d / %d equipped" % [compact(InventoryManager.team_dps()), InventoryManager.equipped_copy_ids.size(), stats.equipped_slots]
-	var identities: Array = []
-	for copy_id in InventoryManager.equipped_copy_ids:
-		var identity := InventoryManager.pair_for_copy(copy_id)
-		identities.append([copy_id, identity.get("slime_id", ""), identity.get("variant", "")])
-	var signature := str(identities)
-	if signature != equipped_signature:
-		equipped_signature = signature
-		for child in portraits.get_children():
-			portraits.remove_child(child)
-			child.queue_free()
-		for copy_id in InventoryManager.equipped_copy_ids:
-			var pair := InventoryManager.pair_for_copy(copy_id)
-			var portrait := SlimerotPortrait.new()
-			portrait.slime_id = pair.slime_id
-			portrait.variant = pair.variant
-			portraits.add_child(portrait)
-			portrait.custom_minimum_size = Vector2(30, 42)
-	var zone := SlimerotCampaign.zone(GameState.current_zone)
-	location_label.text = zone.name + ("\nSafe hub" if zone.id == 0 else "\nLv. %d–%d" % [zone.enemy_level_range.x, zone.enemy_level_range.y])
-	if GameState.lifetime_rolls == 0:
-		tutorial.text = "Welcome to Slimerot!\nMove + ROLL to meet your first slime."
-	elif GameState.current_zone == 0:
-		tutorial.text = "Explore, roll, grow your blob squad!\nApproach the green Backyard exit."
-	else:
-		tutorial.text = SlimerotCampaign.wall_hint(zone.id)
-		if zone.id == 1: tutorial.text = "Keep moving and rolling.\nBedroom Shrine unlocks Skills · 25 Coins."
+	hp_label.text = "HP %d / %d" % [GameState.player_hp, stats.max_hp]
+	location_label.text = SlimerotCampaign.zone(GameState.current_zone).name
 	skills_button.visible = GameState.structure_unlocked_flags.get("skill_tree_shrine", false)
-	map_button.visible = GameState.boss_defeated_flags.get("zone_4", false) or GameState.structure_unlocked_flags.get("fast_travel_pillar", false)
+	map_button.visible = GameState.structure_unlocked_flags.get("fast_travel_pillar", false)
 	super_label.visible = stats.super_roll
-	super_label.text = "SUPER ROLL ×%d\n" % int(stats.super_roll_multiplier) + ("Next roll!" if RollManager.rolls_until_super() == 1 else "In %d rolls" % RollManager.rolls_until_super())
+	super_label.text = "SUPER ×%d · %s" % [int(stats.super_roll_multiplier), "NEXT ROLL" if RollManager.rolls_until_super() == 1 else "%d left" % RollManager.rolls_until_super()]
+	auto_button.visible = stats.auto_roll
 	auto_button.disabled = not stats.auto_roll or GameState.is_paused()
-	auto_button.text = "Auto · Locked" if not stats.auto_roll else ("Auto · ON" if GameState.settings.auto_roll_state else "Auto · OFF")
+	auto_button.text = "AUTO ON" if GameState.settings.auto_roll_state else "AUTO OFF"
+	auto_button.theme_type_variation = "PrimaryButton" if GameState.settings.auto_roll_state else "SecondaryButton"
 
 func compact(value: float) -> String:
 	for row in [[1000000000.0, "B"], [1000000.0, "M"], [1000.0, "K"]]:
@@ -364,8 +290,9 @@ func compact(value: float) -> String:
 	return str(int(value)) if value == floor(value) else "%.2f" % value
 
 func _process(delta: float) -> void:
+	if hud_refresh_pending: refresh()
 	var recede := 0.45 if reveal.active and reveal.tier >= 2 else 1.0
-	for control in [wallet, hp_label, location_label, tutorial, team_label, portraits]: control.modulate.a = recede
+	for control in [layout_items.top, layout_items.currencies]: control.modulate.a = recede
 	var bosses := get_tree().get_nodes_in_group("slimerot_bosses")
 	boss_label.visible = WorldManager.boss_active and not bosses.is_empty() and not is_instance_valid(menu)
 	if boss_label.visible:
@@ -389,8 +316,10 @@ func _process(delta: float) -> void:
 		menu_refresh_seconds += delta
 		if menu_refresh_seconds >= 0.4:
 			menu_refresh_seconds = 0.0
-			if menu_title not in ["Stats", "Settings", "Potions"]:
-				refresh_menu_body()
+			var signature := menus.visible_signature(menu_title)
+			if signature != visible_menu_signature:
+				if not menus.refresh_visible(menu_title): refresh_menu_body()
+				visible_menu_signature = signature
 			menu_dirty = false
 	menus.tick(delta)
 
@@ -483,7 +412,7 @@ func _input(event: InputEvent) -> void:
 		managed_touches[event.index] = true
 		get_viewport().set_input_as_handled()
 	elif not GameState.is_paused():
-		for control in [roll_button, auto_button, interact_button, layout_items.settings, layout_items.potions, layout_items.inventory, skills_button, map_button]:
+		for control in [roll_button, auto_button, interact_button, layout_items.settings, layout_items.team, skills_button, map_button]:
 			if control.is_visible_in_tree() and control.get_global_rect().has_point(event.position):
 				target = control
 				break
@@ -500,7 +429,7 @@ func activate_button(target: Button) -> void:
 	else: target.pressed.emit()
 
 func handle_scroll(event: InputEvent) -> bool:
-	if not is_instance_valid(menu_scroll): return false
+	if not is_instance_valid(menu_scroll) or menu_title == "Skills": return false
 	if event is InputEventScreenTouch:
 		if event.pressed and scroll_touch == -1 and menu_scroll.get_global_rect().has_point(event.position):
 			if menus.is_interacting(): return false
@@ -533,13 +462,16 @@ func handle_scroll(event: InputEvent) -> bool:
 	return false
 
 func touch_target(node: Node, at: Vector2) -> Control:
+	# Clipped graph nodes and offscreen cards are not touch targets. Walking the
+	# tree must honor the same clipping and pointer rules as Godot's GUI picker.
+	if node is Control and node.clip_contents and not node.get_global_rect().has_point(at): return null
 	var children := node.get_children()
 	children.reverse()
 	for child in children:
 		if child is Control and child.is_visible_in_tree():
 			var nested := touch_target(child, at)
 			if nested != null: return nested
-			if (child is BaseButton or child is Slider) and child.get_global_rect().has_point(at): return child
+			if (child is BaseButton or child is Slider) and child.mouse_filter != Control.MOUSE_FILTER_IGNORE and child.get_global_rect().has_point(at): return child
 	return null
 
 func handle_back() -> void:
@@ -555,6 +487,7 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST and is_instance_valid(root): handle_back()
 	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED]:
 		menus.cancel_hold()
+		if is_instance_valid(menus.skill_canvas): menus.skill_canvas.cancel_gesture()
 		active_touches.clear()
 		cancel_pointer_buttons()
 		pointer_buttons.clear()
@@ -574,6 +507,7 @@ func cancel_pointer_buttons() -> void:
 		capture.canceled = true
 
 func dispose_menu() -> void:
+	menus.remember_skill_view()
 	modal_generation += 1
 	menus.cancel_hold()
 	cancel_pointer_buttons()
@@ -587,12 +521,14 @@ func dispose_menu() -> void:
 	menu_scroll = null
 	menu_body = null
 	menu_title = ""
+	layout_items.utility.show()
 
 func remember_modal_scroll() -> void:
 	if not modal_stack.is_empty() and is_instance_valid(menu_scroll):
 		modal_stack[-1].scroll = menu_scroll.scroll_vertical
 
 func open_modal(id: String) -> void:
+	id = canonical_menu(id)
 	if offline_input_locked() and id != "AFK Summary": return
 	if id == "Skills" and not GameState.structure_unlocked_flags.get("skill_tree_shrine", false):
 		show_notice("Repair the Skill Tree Shrine in the Bedroom Hub.")
@@ -614,6 +550,7 @@ func close_top_modal() -> void:
 	else: build_modal(modal_stack[-1].id, int(modal_stack[-1].scroll))
 
 func close_modal(id: String) -> void:
+	id = canonical_menu(id)
 	for index in modal_stack.size():
 		if modal_stack[index].id != id: continue
 		if index == modal_stack.size() - 1: close_top_modal()
@@ -638,7 +575,7 @@ func menu_button(value: String, action: Callable, disabled: bool = false) -> But
 	var control := Button.new()
 	control.text = value
 	control.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	control.custom_minimum_size.y = SlimerotPresentation.TOUCH_TARGET
+	SlimerotUITheme.apply_button(control)
 	control.focus_mode = Control.FOCUS_NONE
 	control.disabled = disabled
 	control.pressed.connect(action)
@@ -646,6 +583,7 @@ func menu_button(value: String, action: Callable, disabled: bool = false) -> But
 	return control
 
 func open_menu(title: String) -> void:
+	title = canonical_menu(title)
 	if offline_input_locked(): return
 	if title == "Skills" and not GameState.structure_unlocked_flags.get("skill_tree_shrine", false):
 		show_notice("Repair the Skill Tree Shrine in the Bedroom Hub.")
@@ -653,9 +591,12 @@ func open_menu(title: String) -> void:
 	if menu_title == title and is_instance_valid(menu):
 		refresh_menu_body()
 		return
+	if title.begins_with("Skill:"):
+		open_modal(title)
+		return
 	if title.begins_with("Copies:") or title == "Sell Duplicates":
-		if modal_stack.is_empty() or modal_stack[0].id != "Inventory":
-			modal_stack.assign([{"id": "Inventory", "scroll": 0}])
+		if modal_stack.is_empty() or modal_stack[0].id != "Team":
+			modal_stack.assign([{"id": "Team", "scroll": 0}])
 		open_modal(title)
 		return
 	# Navigation tabs replace the root screen; only explicit subviews/modal calls
@@ -667,69 +608,64 @@ func build_modal(title: String, previous_scroll: int = 0) -> void:
 	dispose_menu()
 	menu_title = title
 	update_modal_pause()
-	menu = panel(Rect2(20, 232, root.size.x - 40, root.size.y - 526))
-	var menu_style := style(SlimerotPresentation.INK)
-	menu_style.border_color = SlimerotPresentation.BORDER
-	menu_style.content_margin_left = 20
-	menu_style.content_margin_right = 20
-	menu_style.content_margin_top = 18
-	menu_style.content_margin_bottom = 18
-	menu.add_theme_stylebox_override("panel", menu_style)
+	layout_items.utility.hide()
+	menu = panel(modal_rect())
+	menu.theme_type_variation = "ModalPanel"
 	menu.z_index = 20
 	menu.mouse_filter = Control.MOUSE_FILTER_STOP
 	var layout := VBoxContainer.new()
-	layout.add_theme_constant_override("separation", 16)
+	layout.add_theme_constant_override("separation", 14)
 	menu.add_child(layout)
 	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
 	layout.add_child(header)
 	var heading := Label.new()
-	heading.text = "Owned copies" if title.begins_with("Copies:") else title
-	heading.add_theme_font_size_override("font_size", 30)
+	heading.text = "TEAM" if title in ["Team", "Collection", "Potions"] else ("SLIME COPIES" if title.begins_with("Copies:") else ("UPGRADE" if title.begins_with("Skill:") else ("SKILL TREE" if title == "Skills" else title.to_upper())))
+	heading.theme_type_variation = "TitleLabel"
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	header.add_child(heading)
-	var brand := Label.new()
-	brand.text = "SLIMEROT"
-	brand.add_theme_font_size_override("font_size", 13)
-	brand.add_theme_color_override("font_color", SlimerotPresentation.MINT)
-	header.add_child(brand)
-	var navigation := GridContainer.new()
-	navigation.columns = 4
-	navigation.add_theme_constant_override("h_separation", 8)
-	navigation.add_theme_constant_override("v_separation", 8)
-	layout.add_child(navigation)
-	for entry in ["Inventory", "Team", "Collection", "Skills", "Roll Settings", "Stats", "Settings", "Close"]:
-		var tab := Button.new()
-		tab.text = entry
-		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tab.add_theme_font_size_override("font_size", 17)
-		tab.custom_minimum_size.y = 62
-		var icon_id: String = {"Inventory": "inventory", "Team": "team", "Collection": "collection", "Skills": "skills", "Roll Settings": "rolls", "Settings": "settings"}.get(entry, "")
-		if not icon_id.is_empty():
-			tab.icon = SlimerotAssets.icon(icon_id)
-			tab.expand_icon = true
+	var close := Button.new()
+	close.text = "Back" if modal_stack.size() > 1 else "Close"
+	SlimerotUITheme.apply_button(close, "SecondaryButton")
+	close.custom_minimum_size.x = 104
+	close.disabled = offline_input_locked()
+	close.pressed.connect(close_top_modal)
+	header.add_child(close)
+	if title in ["Team", "Collection", "Potions"]:
+		var tabs := HBoxContainer.new()
+		tabs.add_theme_constant_override("separation", 8)
+		layout.add_child(tabs)
+		for entry in [["Team", "TEAM", "team"], ["Collection", "COLLECTION", "collection"], ["Potions", "ITEMS", "potions"]]:
+			var tab := Button.new()
+			tab.text = entry[1]
+			tab.icon = SlimerotAssets.icon(entry[2])
+			SlimerotUITheme.apply_button(tab, "TabButton")
+			tab.add_theme_font_size_override("font_size", 18)
 			tab.add_theme_constant_override("icon_max_width", 22)
-		tab.focus_mode = Control.FOCUS_NONE
-		tab.disabled = (entry == "Skills" and not GameState.structure_unlocked_flags.get("skill_tree_shrine", false)) or entry == title
-		if entry == title:
-			tab.add_theme_stylebox_override("disabled", selected_style())
-			tab.add_theme_color_override("font_disabled_color", SlimerotPresentation.MINT)
-		if offline_input_locked(): tab.disabled = true
-		if entry == "Close":
-			tab.add_theme_color_override("font_color", SlimerotPresentation.MUTED)
-		tab.pressed.connect(close_top_modal if entry == "Close" else func(): open_menu(entry))
-		navigation.add_child(tab)
+			tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			tab.disabled = title == entry[0]
+			tab.pressed.connect(func(): open_menu(entry[0]))
+			tabs.add_child(tab)
 	menu_scroll = ScrollContainer.new()
 	menu_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	menu_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED if title == "Skills" else ScrollContainer.SCROLL_MODE_AUTO
 	menu_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	menu_scroll.scroll_deadzone = int(SlimerotPresentation.SCROLL_DEADZONE)
 	layout.add_child(menu_scroll)
 	menu_body = VBoxContainer.new()
 	menu_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	menu_body.size_flags_vertical = Control.SIZE_EXPAND_FILL if title == "Skills" else Control.SIZE_FILL
 	menu_body.add_theme_constant_override("separation", 14)
 	menu_scroll.add_child(menu_body)
 	build_menu_content(title)
 	if previous_scroll > 0: menu_scroll.set_deferred("scroll_vertical", previous_scroll)
 	menu_dirty = false
+
+func canonical_menu(title: String) -> String:
+	if title == "Inventory": return "Team"
+	if title == "Roll Settings": return "Settings"
+	return title
 
 func refresh_menu_body() -> void:
 	if not is_instance_valid(menu_body): return
@@ -742,7 +678,9 @@ func refresh_menu_body() -> void:
 	menu_dirty = false
 
 func build_menu_content(title: String) -> void:
+	menu_build_count += 1
 	menus.build(self, title)
+	visible_menu_signature = menus.visible_signature(title)
 	if title != "AFK Summary": return
 	var seconds := maxi(0, int(offline_summary.get("seconds_away", 0)))
 	menu_label("Welcome back!", 28)

@@ -23,13 +23,17 @@ var live_seconds := 0.0
 var sliders: Array[HSlider] = []
 var slider_touch := -1
 var active_slider: HSlider
+var skill_canvas: SlimerotSkillTreeCanvas
+var skill_views: Dictionary = {}
+var skill_balance_labels: Dictionary = {}
+var skill_zoom_label: Label
 
-const INK := Color("f0f5ed")
-const MUTED := Color("9fb1bd")
-const PAPER := Color("1d2e43")
-const MINT := Color("203c37")
-const GOLD := Color("3d3324")
-const ROSE := Color("402b36")
+const INK := SlimerotUITheme.CREAM
+const MUTED := SlimerotUITheme.MUTED
+const PAPER := SlimerotUITheme.SURFACE
+const MINT := Color("344437")
+const GOLD := Color("504027")
+const ROSE := Color("4a293f")
 
 func build(owner_hud: SlimerotHUD, title: String) -> void:
 	hud = owner_hud
@@ -43,17 +47,23 @@ func build(owner_hud: SlimerotHUD, title: String) -> void:
 	luck_status = null
 	super_status = null
 	luck_breakdown_status = null
+	skill_balance_labels.clear()
+	skill_zoom_label = null
+	skill_canvas = null
 	slider_dragging = false
+	if title.begins_with("Skill:"):
+		skill_details(title.trim_prefix("Skill:"))
+		return
 	if title.begins_with("Copies:"):
 		copies(title.trim_prefix("Copies:"))
 		return
 	match title:
-		"Inventory": inventory()
+		"Inventory": team()
 		"Collection": collection()
 		"Team": team()
 		"Sell Duplicates": selling()
 		"Skills": skills()
-		"Roll Settings": roll_settings()
+		"Roll Settings": settings()
 		"Stats": stats()
 		"Settings": settings()
 		"Potions": potions()
@@ -115,37 +125,46 @@ func inventory() -> void:
 	var pairs := InventoryManager.sorted_pairs(sort_order)
 	var total := 0
 	for pair in pairs: total += int(pair.quantity)
-	hud.menu_label("%d slime copies · %d slime + variant groups" % [total, pairs.size()], 19)
+	hud.menu_label("YOUR SLIMES", 24)
+	hud.menu_label("%s copies · %d unique stacks" % [SlimeDatabase.format_number(total), pairs.size()], 18)
 	var sorting := HBoxContainer.new()
 	sorting.add_theme_constant_override("separation", 8)
 	hud.menu_body.add_child(sorting)
 	for order in ["DPS", "Rarity", "Name"]:
-		var option := Button.new()
-		option.text = order
-		option.custom_minimum_size.y = 62
-		option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		option.disabled = order == sort_order
+		var option := action_in(sorting, order, func(): sort_order = order; hud.open_menu("Team"), order == sort_order)
+		option.theme_type_variation = "TabButton"
 		style_selection(option, order == sort_order)
-		option.pressed.connect(func(): sort_order = order; hud.open_menu("Inventory"))
-		sorting.add_child(option)
-	var can_sell: bool = GameState.structure_unlocked_flags.get("sell_terminal", false)
-	hud.menu_button("Sell Duplicates" if can_sell else "Sell Duplicates · Terminal locked", func(): hud.open_menu("Sell Duplicates"), not can_sell)
-	if not can_sell: hud.menu_label("Repair the Bedroom Sell Terminal to sell spare copies.", 18)
+	var stats := SkillTreeManager.derived_stats()
 	for pair in pairs:
 		var key: String = pair.slime_id + ":" + pair.variant
+		var equipped: Array[String] = []
+		for copy_id in InventoryManager.equipped_copy_ids:
+			if InventoryManager.pair_contains_copy(pair, copy_id): equipped.append(copy_id)
+		var candidate := ""
+		for copy_id in InventoryManager.first_candidates(pair, SlimerotBalance.MAX_SLOTS):
+			if copy_id not in InventoryManager.equipped_copy_ids:
+				candidate = copy_id
+				break
 		var data := SlimeDatabase.get_slime(pair.slime_id)
-		var box := card(data.display_name + " · " + SlimerotVariants.label(pair.variant), "Effective rarity: 1 in " + SlimeDatabase.format_number(SlimeDatabase.get_effective_rarity(pair.slime_id, pair.variant)) + "\nOwned %d · DPS %.1f · Sell %s Coins" % [pair.quantity, InventoryManager.damage_for_pair(pair) / SkillTreeManager.derived_stats().attack_interval, SlimeDatabase.format_number(InventoryManager.sell_value(key))], pair.slime_id, pair.variant)
+		var damage := InventoryManager.damage_for_pair(pair)
+		var box := card(data.display_name + "  x" + SlimeDatabase.format_number(pair.quantity), "%s · %d equipped\n%s damage · %.1f DPS\n1 in %s" % [SlimerotVariants.label(pair.variant), equipped.size(), SlimeDatabase.format_number(int(damage)), damage / stats.attack_interval, SlimeDatabase.format_number(SlimeDatabase.get_effective_rarity(pair.slime_id, pair.variant))], pair.slime_id, pair.variant)
+		box.add_to_group("slimerot_inventory_stack")
+		box.set_meta("stack_key", key)
 		var actions := HBoxContainer.new()
 		actions.add_theme_constant_override("separation", 8)
 		box.get_child(0).add_child(actions)
-		var favorite := action_in(actions, "Favorited" if pair.favorite else "Favorite", func(): InventoryManager.toggle_favorite(key); hud.open_menu("Inventory"))
+		var favorite := action_in(actions, "★ Favorite" if pair.favorite else "☆ Favorite", func(): InventoryManager.toggle_favorite(key); hud.open_menu("Team"))
 		style_selection(favorite, pair.favorite)
-		action_in(actions, "Equip / copies", func(): copy_page = 0; hud.open_menu("Copies:" + key))
+		action_in(actions, "Equip", func(): InventoryManager.equip(candidate); hud.open_menu("Team"), candidate.is_empty() or InventoryManager.equipped_copy_ids.size() >= stats.equipped_slots)
+		if not equipped.is_empty():
+			action_in(actions, "Unequip", func(): InventoryManager.unequip(equipped.back()); hud.open_menu("Team"))
+		action_in(box.get_child(0), "Manage copies", func(): copy_page = 0; hud.open_modal("Copies:" + key))
 	if pairs.is_empty():
-		card("Meet your first blob!", "Close this menu and tap ROLL.\nEvery roll is free.", SlimerotBalance.FIRST_SLIME, "normal", true)
+		card("Meet your first blob!", "Tap ROLL to start your team.\nEvery roll is free.", SlimerotBalance.FIRST_SLIME, "normal", true)
+	if GameState.structure_unlocked_flags.get("sell_terminal", false):
+		hud.menu_button("Sell spare copies", func(): hud.open_modal("Sell Duplicates"))
 
 func copies(key: String) -> void:
-	hud.menu_button("‹ Back to Inventory", func(): hud.open_menu("Inventory"))
 	if not InventoryManager.inventory.has(key):
 		hud.menu_label("This group has no owned copies.")
 		return
@@ -213,19 +232,10 @@ func team() -> void:
 		var state := label_in(column, "Locked" if locked else ("Empty" if portrait.empty_slot else "Ready"), 15)
 		state.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		state.add_theme_color_override("font_color", MUTED if locked or portrait.empty_slot else SlimerotPresentation.MINT)
-	hud.menu_button("Auto Equip Strongest", func():
+	var best := hud.menu_button("Equip Best", func():
 		if InventoryManager.auto_equip_strongest(): hud.open_menu("Team"))
-	for copy_id in InventoryManager.equipped_copy_ids:
-		var pair := InventoryManager.pair_for_copy(copy_id)
-		var box := card(SlimeDatabase.get_slime(pair.slime_id).display_name + " · " + SlimerotVariants.label(pair.variant), "%s damage / hit · every %.2fs" % [SlimeDatabase.format_number(int(InventoryManager.damage_for_copy(copy_id))), SkillTreeManager.derived_stats().attack_interval], pair.slime_id, pair.variant)
-		action_in(box.get_child(0), "Unequip", func(): InventoryManager.unequip(copy_id); hud.open_menu("Team"))
-	hud.menu_label("Grow the gang", 23)
-	for id in SkillTreeManager.nodes:
-		var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]
-		if data.effect_type != "slot_set": continue
-		var owned: bool = id in GameState.purchased_skill_node_ids
-		hud.menu_label("Slot %d · %s · %s Coins\n%s" % [int(data.effect_value), id, SlimeDatabase.format_number(data.cost), "Unlocked" if owned else SkillTreeManager.purchase_blocker(id)], 18)
-	hud.menu_button("Open Coin Tree", func(): skill_tab = "Coin"; hud.open_menu("Skills"), not GameState.structure_unlocked_flags.get("skill_tree_shrine", false))
+	best.theme_type_variation = "PrimaryButton"
+	inventory()
 
 func selling() -> void:
 	hud.menu_label("Keeps every equipped/favorited copy and at least one copy of each slime + variant. Discovery history is permanent.")
@@ -239,77 +249,103 @@ func skills() -> void:
 	tabs.add_theme_constant_override("separation", 8)
 	hud.menu_body.add_child(tabs)
 	for tab in ["Roll", "Coin"]:
-		var tab_button := action_in(tabs, "%s Tree\n%s %s" % [tab, SlimeDatabase.format_number(GameState.rolls_balance if tab == "Roll" else GameState.coins), "Rolls" if tab == "Roll" else "Coins"], func(): skill_tab = tab; hud.open_menu("Skills"), tab == skill_tab)
+		var tab_button := action_in(tabs, tab.to_upper() + " TREE", func():
+			remember_skill_view()
+			skill_tab = tab
+			hud.open_menu("Skills"), tab == skill_tab)
+		tab_button.theme_type_variation = "TabButton"
 		style_selection(tab_button, tab == skill_tab)
 		set_icon(tab_button, "rolls" if tab == "Roll" else "coins")
-	if skill_tab == "Roll":
-		hud.menu_label("Luck ×%.2f · Cooldown %.2fs\nBreakthroughs %d / 3 · every one multiplies TOTAL luck ×20" % [RollManager.effective_luck(), SkillTreeManager.derived_stats().roll_cooldown, SkillTreeManager.derived_stats().breakthrough_count], 19)
-		hud.menu_button("Show mainline" if optional_branch else "Show optional branches", func(): optional_branch = not optional_branch; hud.open_menu("Skills"))
-		hud.menu_label("Optional branches never gate a Breakthrough." if optional_branch else "Start · R01 → R03 Auto Roll → R02 Luck I\nBreakthroughs · R08 → R13 → R18", 18)
-	hud.menu_label("Follow the connecting paths. Mint = prerequisite owned · Slate = prerequisite locked.", 18)
-	var graph := SlimerotSkillConnections.new()
-	graph.add_to_group("slimerot_skill_graph")
-	hud.menu_body.add_child(graph)
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 24)
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	graph.add_child(list)
-	var displayed: Array[String] = []
-	for id in SkillTreeManager.nodes:
-		var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]
-		if data.tree_type != skill_tab: continue
-		if skill_tab == "Roll" and data.optional != optional_branch: continue
-		displayed.append(id)
-	# Show prerequisite cards before their children, including the Super Roll branch
-	# and Fleet Feet III, while keeping persistent IDs independent of screen order.
-	displayed = progression_order(displayed)
-	# Off-tab prerequisites get a real source card and connecting path, never a missing edge.
-	for id in displayed:
-		var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]
-		for prerequisite in data.prerequisite_ids:
-			if prerequisite in displayed or graph.anchors.has(prerequisite): continue
-			var source: SlimerotData.SkillNodeData = SkillTreeManager.nodes[prerequisite]
-			var source_button := action_in(list, "%s · %s\n%s" % [prerequisite, source.display_name, "Owned prerequisite" if prerequisite in GameState.purchased_skill_node_ids else "View prerequisite in " + source.tree_type + " Tree"], func():
-				skill_tab = source.tree_type
-				optional_branch = source.optional
-				hud.open_menu("Skills"))
-			graph.add_anchor(prerequisite, source_button)
-	for id in displayed:
-		var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]
-		var box := PanelContainer.new()
-		var is_breakthrough := data.effect_type == "checkpoint_luck"
-		var owned: bool = id in GameState.purchased_skill_node_ids
-		var appearance := hud.style(GOLD if is_breakthrough else (MINT if owned else PAPER))
-		appearance.set_border_width_all(1)
-		appearance.border_width_top = 4 if is_breakthrough else 2
-		appearance.border_color = SlimerotPresentation.GOLD if is_breakthrough else (Color("74995e") if owned else SlimerotPresentation.BORDER)
-		box.add_theme_stylebox_override("panel", appearance)
-		box.add_to_group("slimerot_skill_node")
-		box.set_meta("skill_id", id)
-		list.add_child(box)
-		graph.add_anchor(id, box)
-		for prerequisite in data.prerequisite_ids:
-			graph.add_edge(prerequisite, id)
-		var column := VBoxContainer.new()
-		column.add_theme_constant_override("separation", 12)
-		box.add_child(column)
-		if is_breakthrough: label_in(column, "TOTAL LUCK ×20", 29, SlimerotPresentation.GOLD)
-		label_in(column, id + " · " + data.display_name, 23)
-		var detail := label_in(column, data.description, 19, MUTED)
-		for prerequisite in data.prerequisite_ids:
-			detail.text += "\nRequires " + prerequisite + (" · Owned" if prerequisite in GameState.purchased_skill_node_ids else " · Locked")
-		if data.prerequisite_ids.is_empty(): detail.text += "\nStart of branch"
-		if data.required_boss_zone > 0:
-			detail.text += "\nRequires Z%d boss" % data.required_boss_zone
-		if data.required_zone > 1: detail.text += "\nRequires Z%d unlocked" % data.required_zone
-		if not data.required_structure.is_empty(): detail.text += "\nRequires repaired Sell Terminal"
-		var blocker := SkillTreeManager.purchase_blocker(id)
-		var buy := action_in(column, "Owned" if owned else "%s · %s %s" % ["BREAK THROUGH" if is_breakthrough else "Buy", SlimeDatabase.format_number(data.cost), data.currency_type], func(): SkillTreeManager.purchase(id); hud.open_menu("Skills"), not blocker.is_empty())
-		set_icon(buy, "rolls" if data.currency_type == "Rolls" else "coins")
-		if owned: style_selection(buy, true)
-		buy.tooltip_text = blocker
-		if not blocker.is_empty() and blocker != "Owned":
-			label_in(column, blocker, 18, Color("eeb0ad"))
+	var toolbar := HBoxContainer.new()
+	toolbar.add_theme_constant_override("separation", 8)
+	hud.menu_body.add_child(toolbar)
+	skill_balance_labels.balance = label_in(toolbar, "", 20, SlimerotUITheme.GOLD)
+	var minus := action_in(toolbar, "−", func(): skill_canvas.zoom_by(1.0 / 1.2); refresh_skill_labels())
+	minus.custom_minimum_size.x = 64
+	minus.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	minus.tooltip_text = "Zoom out"
+	skill_zoom_label = label_in(toolbar, "", 17)
+	skill_zoom_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	skill_zoom_label.custom_minimum_size.x = 54
+	skill_zoom_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var plus := action_in(toolbar, "+", func(): skill_canvas.zoom_by(1.2); refresh_skill_labels())
+	plus.custom_minimum_size.x = 64
+	plus.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plus.tooltip_text = "Zoom in"
+	var fit := action_in(toolbar, "FIT", func(): skill_canvas.fit_tree(); refresh_skill_labels())
+	fit.custom_minimum_size.x = 80
+	fit.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	skill_canvas = SlimerotSkillTreeCanvas.new()
+	skill_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skill_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	skill_canvas.custom_minimum_size.y = 280
+	hud.menu_body.add_child(skill_canvas)
+	skill_canvas.configure(skill_tab)
+	skill_canvas.node_selected.connect(func(id: String):
+		remember_skill_view()
+		hud.open_modal("Skill:" + id))
+	if skill_views.has(skill_tab): skill_canvas.restore_view(skill_views[skill_tab])
+	label_in(hud.menu_body, "DRAG TO PAN · PINCH TO ZOOM · TAP A SKILL", 16, MUTED)
+	refresh_skill_labels()
+
+func remember_skill_view() -> void:
+	if is_instance_valid(skill_canvas): skill_views[skill_canvas.tree_type] = skill_canvas.capture_view()
+
+func refresh_skill_labels() -> void:
+	if is_instance_valid(skill_balance_labels.get("balance")):
+		skill_balance_labels.balance.text = "%s %s" % [SlimeDatabase.format_number(GameState.rolls_balance if skill_tab == "Roll" else GameState.coins), "Rolls" if skill_tab == "Roll" else "Coins"]
+	if is_instance_valid(skill_canvas) and is_instance_valid(skill_zoom_label):
+		skill_zoom_label.text = "%d%%" % roundi(skill_canvas.zoom_level * 100.0)
+
+func skill_details(id: String) -> void:
+	var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes.get(id)
+	if data == null:
+		hud.menu_label("This skill is unavailable.")
+		return
+	var owned: bool = id in GameState.purchased_skill_node_ids
+	var section := section_box(GOLD if data.effect_type == "checkpoint_luck" else PAPER)
+	label_in(section, data.display_name, 30, SlimerotUITheme.GOLD if data.effect_type == "checkpoint_luck" else INK)
+	label_in(section, id + " · " + data.tree_type.to_upper() + " TREE", 17, MUTED)
+	label_in(section, data.description, 23)
+	label_in(section, "%s %s" % [SlimeDatabase.format_number(data.cost), data.currency_type], 25, SlimerotUITheme.GOLD)
+	var requirements := PackedStringArray()
+	for prerequisite in data.prerequisite_ids:
+		var source: SlimerotData.SkillNodeData = SkillTreeManager.nodes.get(prerequisite)
+		requirements.append((source.display_name if source != null else prerequisite) + (" ✓" if prerequisite in GameState.purchased_skill_node_ids else ""))
+	if data.required_zone > 1: requirements.append("Zone %d unlocked" % data.required_zone)
+	if data.required_boss_zone > 0: requirements.append("Zone %d boss defeated" % data.required_boss_zone)
+	if not data.required_structure.is_empty(): requirements.append(data.required_structure.replace("_", " ").capitalize() + " repaired")
+	label_in(section, "REQUIRES\n" + ("Start of branch" if requirements.is_empty() else "\n".join(requirements)), 19, MUTED)
+	var preview := label_in(section, skill_preview(id), 22, SlimerotUITheme.LIME)
+	preview.name = "SkillPreview"
+	var blocker := SkillTreeManager.purchase_blocker(id)
+	var buy := action_in(section, "PURCHASED" if owned else "BUY · %s %s" % [SlimeDatabase.format_number(data.cost), data.currency_type], func():
+		if SkillTreeManager.purchase(id): hud.close_top_modal(), not blocker.is_empty())
+	buy.name = "SkillBuy"
+	buy.theme_type_variation = "PrimaryButton"
+	set_icon(buy, "rolls" if data.currency_type == "Rolls" else "coins")
+	if not blocker.is_empty() and not owned: label_in(section, blocker, 19, SlimerotUITheme.GOLD)
+
+func skill_preview(id: String) -> String:
+	if id in GameState.purchased_skill_node_ids: return "Already part of your build."
+	var next_ids: Array = GameState.purchased_skill_node_ids.duplicate()
+	next_ids.append(id)
+	var before := SkillTreeManager.derived_stats()
+	var after := SkillTreeManager.derived_stats(next_ids)
+	var lines := PackedStringArray()
+	var current_luck := RollManager.get_effective_luck()
+	var new_luck := RollManager.get_effective_luck({"node_ids": next_ids})
+	if not is_equal_approx(current_luck, new_luck): lines.append("Luck  ×%.2f → ×%.2f" % [current_luck, new_luck])
+	var labels := {"roll_cooldown": "Roll cooldown", "max_hp": "Max HP", "move_speed": "Move speed", "attack_interval": "Attack interval", "attack_range": "Attack range", "damage_multiplier": "Team damage multiplier", "boss_damage_bonus": "Boss damage bonus", "equipped_slots": "Team slots", "auto_roll": "Auto Roll", "variant_sense": "Variant Sense", "skip_common": "Skip Common", "auto_sell": "Auto Sell", "filter_1": "Filter I", "filter_2": "Filter II", "super_roll_interval": "Super Roll interval", "super_roll_multiplier": "Super Roll multiplier", "coin_scavenger": "Normal Coin bonus", "duplicate_dealer": "Duplicate sale bonus"}
+	for key in labels:
+		if before[key] == after[key]: continue
+		lines.append("%s  %s → %s" % [labels[key], preview_value(before[key]), preview_value(after[key])])
+	return "CURRENT → NEW\n" + ("No additional stat change" if lines.is_empty() else "\n".join(lines))
+
+func preview_value(value: Variant) -> String:
+	if value is bool: return "ON" if value else "OFF"
+	if value is int: return str(value)
+	return "%.2f" % float(value)
 
 func progression_order(ids: Array[String]) -> Array[String]:
 	var ordered: Array[String] = []
@@ -331,10 +367,17 @@ func progression_order(ids: Array[String]) -> Array[String]:
 		pending.remove_at(ready)
 	return ordered
 
+func toggle_auto_setting() -> void:
+	if not SkillTreeManager.derived_stats().auto_roll: return
+	GameState.settings.auto_roll_state = not GameState.settings.auto_roll_state
+	GameState.critical_change.emit("settings")
+	GameState.changed.emit()
+	refresh_live()
+
 func roll_settings() -> void:
-	hud.menu_label("Rolling is free. Each completed roll grants +1 Rolls.", 20)
+	hud.menu_label("Every roll is free and earns +1 Rolls.", 18)
 	luck_status = label_in(hud.menu_body, "", 20, SlimerotPresentation.CREAM)
-	auto_status = hud.menu_button("Auto Roll · " + ("ON" if GameState.settings.auto_roll_state else "OFF"), hud.toggle_auto, not SkillTreeManager.derived_stats().auto_roll)
+	auto_status = hud.menu_button("Auto Roll · " + ("ON" if GameState.settings.auto_roll_state else "OFF"), toggle_auto_setting, not SkillTreeManager.derived_stats().auto_roll)
 	set_icon(auto_status, "auto")
 	if not SkillTreeManager.derived_stats().auto_roll:
 		hud.menu_label("After Quick Hands I, buy R03 Auto Roll for 40 Rolls.", 18)
@@ -342,7 +385,7 @@ func roll_settings() -> void:
 		hud.menu_label("Luck Cap · affects rolling only", 20)
 		for cap in SlimerotBalance.LUCK_CAPS:
 			var selected: bool = GameState.settings.luck_cap == SlimerotBalance.LUCK_CAPS[cap]
-			var cap_button := hud.menu_button(cap + (" ✓" if selected else ""), func(): RollManager.set_luck_cap(SlimerotBalance.LUCK_CAPS[cap]); hud.open_menu("Roll Settings"))
+			var cap_button := hud.menu_button(cap + (" ✓" if selected else ""), func(): RollManager.set_luck_cap(SlimerotBalance.LUCK_CAPS[cap]); hud.open_menu("Settings"))
 			style_selection(cap_button, selected)
 	else:
 		hud.menu_label("Luck Cap unlocks with Breakthrough I. Default: MAX.", 18)
@@ -350,7 +393,7 @@ func roll_settings() -> void:
 	if stats.super_roll:
 		super_status = label_in(hud.menu_body, "", 19)
 	if stats.auto_sell:
-		hud.menu_button("Auto-sell Normal duplicates · " + ("ON" if GameState.settings.auto_sell_settings.enabled else "OFF"), func(): InventoryManager.set_auto_sell(not GameState.settings.auto_sell_settings.enabled); hud.open_menu("Roll Settings"))
+		hud.menu_button("Auto-sell Normal duplicates · " + ("ON" if GameState.settings.auto_sell_settings.enabled else "OFF"), func(): InventoryManager.set_auto_sell(not GameState.settings.auto_sell_settings.enabled); hud.open_menu("Settings"))
 		hud.menu_label("Only new Normal duplicates at or below the selected threshold. Keeps one copy per pair; favorites and equipped copies are always protected.", 18)
 		var picker := OptionButton.new()
 		picker.custom_minimum_size.y = 64
@@ -365,16 +408,14 @@ func roll_settings() -> void:
 		hud.menu_label("Filter II: discovered thresholds available." if stats.filter_2 else ("Filter I: 20 / 100 / 1,000." if stats.filter_1 else "Default: 100. Unlock Filter I or II for more choices."), 18)
 	else:
 		hud.menu_label("Auto-sell unlocks with RO2 after Breakthrough I.", 18)
-	hud.menu_label("All 24 bases can roll from the start. Unlocked gameplay zones multiply luck by ×%d. Variant rolls are independent and may combine." % RollManager.zone_luck_multiplier(), 19)
-	for flag in SlimerotVariants.FLAGS:
-		var probability := SlimerotVariants.probability(flag, InventoryManager.shrine_count(flag), SlimerotBalance.VARIANT_SENSE_MULTIPLIER if stats.variant_sense else 1.0)
-		hud.menu_label("%s: %.4f%% · Shrine ×%.3f" % [SlimerotVariants.label(flag), probability * 100.0, InventoryManager.shrine_multiplier(flag)], 19)
-	hud.menu_label("Skip Common shortens common toasts after RO1. First-discovery jackpots always play in full.", 18)
+	hud.menu_label("Common reveals are quicker with Skip Common. New discoveries always get their full reveal.", 18)
 	if OS.is_debug_build() and "--slimerot-playtest" in OS.get_cmdline_user_args():
 		luck_breakdown_status = label_in(hud.menu_body, "", 18, MUTED)
 	refresh_live()
 
 func stats() -> void:
+	hud.menu_label("SLIMEROT · Your adventure", 24)
+	hud.menu_label("Build a wonderfully weird team. Roll, explore and grow.", 18)
 	for key in ["Lifetime Rolls", "Coins Earned", "Coins Spent", "Rarest Threshold Reached", "Collection", "Bosses Defeated", "Playtime", "Highest Luck", "Best Team DPS"]:
 		var box := section_box(PAPER)
 		label_in(box, key, 18, MUTED)
@@ -382,11 +423,7 @@ func stats() -> void:
 	refresh_live()
 
 func settings() -> void:
-	hud.menu_button("Resume", hud.close_menu)
-	save_status = Label.new()
-	save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	save_status.add_theme_font_size_override("font_size", 18)
-	hud.menu_body.add_child(save_status)
+	hud.menu_label("GENERAL", 25)
 	for key in ["screen_shake", "vibration"]:
 		hud.menu_button(key.replace("_", " ").capitalize() + (" · ON" if GameState.settings[key] else " · OFF"), func(): GameState.settings[key] = not GameState.settings[key]; GameState.critical_change.emit("settings"); hud.open_menu("Settings"))
 	for key in ["master_audio", "music_audio", "sfx_audio"]:
@@ -403,6 +440,11 @@ func settings() -> void:
 		slider.drag_ended.connect(func(_changed): slider_dragging = false; GameState.critical_change.emit("settings"))
 		hud.menu_body.add_child(slider)
 		sliders.append(slider)
+	hud.menu_label("ROLLING", 25)
+	roll_settings()
+	hud.menu_label("SAVE / SYSTEM", 25)
+	save_status = label_in(hud.menu_body, "", 18, MUTED)
+	hud.menu_button("Stats / About", func(): hud.open_modal("Stats"))
 	hud.menu_label("Reset permanently erases this local save. Hold continuously for 3 seconds. Moving off the button cancels.", 18)
 	reset_button = hud.menu_button("Hold 3 seconds to reset Slimerot", func(): pass)
 	reset_button.add_theme_stylebox_override("normal", hud.style(ROSE))
@@ -488,6 +530,10 @@ func is_interacting() -> bool:
 	return holding or slider_dragging or slider_touch >= 0
 
 func handle_input(event: InputEvent) -> bool:
+	if hud != null and hud.menu_title == "Skills" and is_instance_valid(skill_canvas):
+		var handled := skill_canvas.handle_input(event)
+		if handled: refresh_skill_labels()
+		return handled
 	if hud == null or hud.menu_title != "Settings" or not is_instance_valid(hud.menu_scroll): return false
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -529,7 +575,8 @@ func move_slider(at: Vector2) -> void:
 
 func section_box(color: Color) -> VBoxContainer:
 	var panel := PanelContainer.new()
-	var appearance := hud.style(color)
+	var appearance := SlimerotUITheme.resource().get_stylebox("panel", "Card").duplicate() as StyleBoxFlat
+	appearance.bg_color = color
 	appearance.set_border_width_all(1)
 	appearance.border_color = SlimerotPresentation.BORDER
 	appearance.content_margin_left = 18
@@ -559,7 +606,7 @@ func action_in(parent: Node, value: String, action: Callable, disabled: bool = f
 	var result := Button.new()
 	result.text = value
 	result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	result.custom_minimum_size.y = 62
+	SlimerotUITheme.apply_button(result)
 	result.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	result.focus_mode = Control.FOCUS_NONE
 	result.disabled = disabled
@@ -574,16 +621,17 @@ func set_icon(button: Button, id: String) -> void:
 
 func style_selection(button: Button, selected: bool) -> void:
 	if not selected: return
-	var selected_style := hud.style(SlimerotPresentation.MINT)
-	selected_style.border_color = SlimerotPresentation.MINT.lightened(0.12)
+	var selected_style := SlimerotUITheme.resource().get_stylebox("normal", "PrimaryButton").duplicate() as StyleBoxFlat
+	selected_style.border_color = SlimerotUITheme.LIME.lightened(0.12)
 	for state in ["normal", "disabled", "hover"]:
 		button.add_theme_stylebox_override(state, selected_style)
 	for color in ["font_color", "font_disabled_color", "font_hover_color", "font_pressed_color"]:
-		button.add_theme_color_override(color, SlimerotPresentation.INK)
-	button.add_theme_stylebox_override("pressed", hud.style(SlimerotPresentation.MINT.darkened(0.12)))
+		button.add_theme_color_override(color, SlimerotUITheme.INK)
+	button.add_theme_stylebox_override("pressed", SlimerotUITheme.resource().get_stylebox("pressed", "PrimaryButton"))
 
 func compact_style(color: Color) -> StyleBoxFlat:
-	var result := hud.style(color)
+	var result := SlimerotUITheme.resource().get_stylebox("panel", "Card").duplicate() as StyleBoxFlat
+	result.bg_color = color
 	result.content_margin_left = 5
 	result.content_margin_right = 5
 	result.set_border_width_all(1)
@@ -594,7 +642,7 @@ func card(title: String, subtitle: String, slime_id: String, variant: String, si
 	var panel := PanelContainer.new()
 	var accent: Color = SlimerotVariants.color(variant)
 	if silhouette: accent = SlimerotPresentation.BORDER
-	var appearance := hud.style(PAPER)
+	var appearance := SlimerotUITheme.resource().get_stylebox("panel", "Card").duplicate() as StyleBoxFlat
 	appearance.set_border_width_all(1)
 	appearance.border_width_top = 3
 	appearance.border_color = accent.darkened(0.24) if not silhouette else accent
@@ -611,7 +659,8 @@ func card(title: String, subtitle: String, slime_id: String, variant: String, si
 	row.add_theme_constant_override("separation", 18)
 	column.add_child(row)
 	var preview := PanelContainer.new()
-	var preview_style := hud.style(Color("132237"))
+	var preview_style := SlimerotUITheme.resource().get_stylebox("panel", "Card").duplicate() as StyleBoxFlat
+	preview_style.bg_color = SlimerotUITheme.INK
 	preview_style.set_border_width_all(1)
 	preview_style.border_color = accent.darkened(0.55) if not silhouette else accent
 	preview_style.set_corner_radius_all(14)
@@ -634,3 +683,47 @@ func card(title: String, subtitle: String, slime_id: String, variant: String, si
 	label_in(detail, title, 23, MUTED if silhouette else INK)
 	label_in(detail, subtitle, 18, MUTED)
 	return panel
+
+func visible_signature(title: String) -> String:
+	match title:
+		"Team", "Inventory":
+			return str([inventory_signature(), InventoryManager.equipped_copy_ids, SkillTreeManager.derived_stats(), sort_order, GameState.structure_unlocked_flags.get("sell_terminal", false)])
+		"Collection":
+			var variants: Array = []
+			for row in SlimerotRoster.ROWS: variants.append(InventoryManager.best_variant_owned(str(row[0])))
+			return str([InventoryManager.discoveries, variants])
+		"Potions":
+			return str([GameState.potion_inventory, GameState.coins, GameState.current_zone, WorldManager.boss_active, GameState.structure_unlocked_flags, GameState.boss_defeated_flags, GameState.active_potion_multiplier, GameState.potion_remaining_seconds > 0])
+		"Settings", "Roll Settings":
+			return str([GameState.settings, GameState.purchased_skill_node_ids, InventoryManager.discoveries])
+		"Stats": return "live-stats"
+		"Skills":
+			return str([GameState.coins, GameState.rolls_balance, GameState.purchased_skill_node_ids, GameState.highest_zone_unlocked, GameState.structure_unlocked_flags, GameState.boss_defeated_flags])
+		"Map":
+			return str([GameState.current_zone, GameState.highest_zone_unlocked, WorldManager.boss_active, GameState.structure_unlocked_flags.get("fast_travel_pillar", false)])
+	if title.begins_with("Skill:"): return str([visible_signature("Skills"), GameState.active_potion_multiplier])
+	if title.begins_with("Copies:"):
+		var pair: Dictionary = InventoryManager.inventory.get(title.trim_prefix("Copies:"), {})
+		var page: Array[String] = []
+		if not pair.is_empty(): page = InventoryManager.copies_page(pair, copy_page * 12, 12)
+		var favorites: Array = []
+		for copy_id in page: favorites.append(InventoryManager.copy_is_favorite(pair, copy_id))
+		return str([pair.get("quantity", 0), page, favorites, InventoryManager.equipped_copy_ids, GameState.purchased_skill_node_ids])
+	return str([inventory_signature(), GameState.current_zone, GameState.structure_unlocked_flags, GameState.purchased_skill_node_ids, WorldManager.boss_active])
+
+func inventory_signature() -> Array:
+	var stacks: Array = []
+	for key in InventoryManager.inventory:
+		var pair: Dictionary = InventoryManager.inventory[key]
+		stacks.append([key, pair.quantity, pair.favorite])
+	return stacks
+
+func refresh_visible(title: String) -> bool:
+	if title == "Skills" and is_instance_valid(skill_canvas):
+		skill_canvas.refresh_states()
+		refresh_skill_labels()
+		return true
+	if title == "Stats":
+		refresh_live()
+		return true
+	return false
