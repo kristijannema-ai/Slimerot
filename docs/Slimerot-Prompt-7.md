@@ -1,5 +1,7 @@
 # Slimerot Prompt 7 implementation
 
+> **Historical record — Prompt 16:** Historical Prompt 7 presentation report. Current RNG/variants/Shrine, Team and Settings navigation, 2D skill tree, combat/gates and save behavior are defined by Prompts 11–16. The old navigation/mutation references and test counts below describe that stage only.
+
 Continued from `main` commit `c87e9a9aa438d33d9c4ee141b9bc356e65092867` (Prompt 6 merge). The origin was verified as `https://github.com/kristijannema-ai/Slimerot.git`; a fresh fetch before handoff confirmed main had not advanced. Gameplay progression, currency/rolling math, roster, saves, combat, zones and boss mechanics remain intact. No Prompt 8 feature was added.
 
 ## New files

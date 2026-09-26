@@ -103,6 +103,10 @@ func refresh() -> void:
 		SlimeDatabase.format_number(state.effective_luck), SlimeDatabase.format_number(state.rolling_luck), "MAX" if state.luck_cap == 0 else str(state.luck_cap),
 		_slime_label(state.strongest_owned), _slime_label(state.strongest_equipped), state.observed_boss_dps, state.observed_boss_active_seconds,
 		state.gate.state, logger.events.size(), logger.samples.size(), logger.dropped_events, logger.dropped_samples]
+	metrics.text += "\nChaser %s sec · Coins/min %.1f · Rolls/min %.1f\nBest 1/%s · raw damage %s · last unlock %.1fs" % [
+		"—" if state.current_zone_chaser_ttk_seconds == null else "%.1f" % state.current_zone_chaser_ttk_seconds,
+		state.coins_per_minute, state.rolls_per_minute, SlimeDatabase.format_number(state.best_effective_rarity),
+		SlimeDatabase.format_number(state.best_raw_damage), state.seconds_since_meaningful_unlock]
 	panel.visible = expanded
 	toggle_button.text = "Hide log" if expanded else "Show log"
 	panel.size.y = 0
