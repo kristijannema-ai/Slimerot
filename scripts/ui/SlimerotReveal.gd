@@ -83,6 +83,11 @@ func show_result(slime_id: String, variant: String, first: bool) -> void:
 		if RollManager.active_reveal.get("super_roll", false): details.text += "\nSUPER ROLL · LUCK ×%d" % int(RollManager.active_reveal.get("super_roll_multiplier", SlimerotRollTree.SUPER_ROLL_MULTIPLIER))
 		if RollManager.active_reveal.get("auto_sold_coins", 0) > 0: details.text += "\nAuto-sold duplicate · +%d Coins" % RollManager.active_reveal.auto_sold_coins
 	label.add_theme_font_size_override("font_size", 19 if tier == 0 else 24)
+	var record_count := int(RollManager.active_reveal.get("summarized_best_count", 0))
+	if record_count > 0:
+		heading.text = "%d POWER RECORDS" % record_count
+		label.text = "%d RECORDS: %s" % [record_count, data.display_name]
+		details.text = "Recorded during your roll streak\n" + details.text
 	details.add_theme_color_override("font_color", SlimerotBalance.VARIANT_DATA[variant].color)
 	skip_hint.visible = tier > 0
 	skip_hint.text = "First discovery · enjoy the moment" if tier == 4 and first_discovery else "Tap this card to skip"

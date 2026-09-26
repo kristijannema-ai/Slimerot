@@ -1,5 +1,7 @@
 # Slimerot Prompt 11: stability and Android AFK
 
+> **Historical record — Prompt 16:** Historical Prompt 11 report. Schema 9 is the migration stage introduced here, not the current format: schema 11 now includes multi-variants, pity, Shrine sets, Super scheduling and additive Dash. The old mutation and navigation terms below describe the pre-Prompt-12/14 implementation; those behaviors have been superseded. Its stability/AFK invariants remain required.
+
 Slimerot retains its existing Godot autoload architecture, offline world, progression data and local `user://Slimerot-save.json` profile. This stage addresses input reliability, inventory scale and background Auto Roll; it adds no background combat or network dependency.
 
 The initial `git status --short` was empty. Origin was verified as `https://github.com/kristijannema-ai/Slimerot.git`, latest main was fetched at `ae29c6e` (merged UI polish), and work is isolated on `slimerot/stage-11-stability`. No player save or user edit was reset.

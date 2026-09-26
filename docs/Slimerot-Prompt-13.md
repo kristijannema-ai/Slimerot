@@ -1,5 +1,7 @@
 # Slimerot Prompt 13 — skill tree and progression
 
+> **Historical record — Prompt 16:** Historical Prompt 13 report. The node-ID migration and exact luck invariants below remain authoritative. Prompt 14 replaces separate Roll Settings with Settings → Rolling and old skill lists with the 2D canvas. Prompt 16 contains current balance evaluation and acceptance; earlier totals are historical validation only.
+
 Prompt 13 builds on merged Prompt 12 (`d316b038398a0dd9fb4f4928c8944e06fbdccf7a`). Auto Roll unlocks after 65 total Rolls, Super Roll has three tiers, and six Coin nodes add permanent luck, damage, normal-enemy Coins and movement speed. There are **54 nodes: 27 Roll and 27 Coin**. Existing node IDs and all previous Coin nodes remain intact.
 
 ## Exact node delta

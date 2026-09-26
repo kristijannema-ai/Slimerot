@@ -1,5 +1,7 @@
 # Slimerot Prompt 12 — RNG and presentation
 
+> **Historical record — Prompt 16:** Historical Prompt 12 report. Schema 10 is the migration stage introduced here; current saves are schema 11 plus additive Dash. Prompt 13 extends the tree through clean luck/Super hooks, Prompt 14 consolidates navigation, and Prompt 15 makes rare reveals compact during boss combat. The RNG/variant/damage/Shrine invariants below remain authoritative; later final results and any provisional tuning are in Prompt 16.
+
 Implemented on `slimerot/stage-12-rng`, based on merged Prompt 11 `97093cd` (PR #13). Origin was verified as `https://github.com/kristijannema-ai/Slimerot.git` and main was fetched before branching. Prompt 13 and campaign price/HP retuning are outside this change.
 
 ## Gameplay and architecture

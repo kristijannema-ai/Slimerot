@@ -1,10 +1,10 @@
-# Slimerot local persistence — through Prompt 13
+# Slimerot local persistence — through Prompt 16
 
 Slimerot writes one logical save under `user://Slimerot-save.json`. All runtime assets and progression are local. No account, network service or remote clock is required. Prompt 11 reconciles local wall-clock time for Auto Roll on launch/resume.
 
 ## Authority and schema
 
-Schema 11 persists wallets and Coin statistics, Lifetime Rolls, historical Roll spending, active playtime, current/highest zone, kills, gates, boss/structure flags, completion, purchased node IDs, inventory pair quantities and stable copy IDs, group/per-copy favorites, ordered equipment, discovery history, potion bottles and active seconds, audio/accessibility settings, Auto Roll, sale filters, Luck Cap, remaining roll cooldown and the next Super Roll Lifetime trigger.
+Schema 11 persists wallets and Coin statistics, Lifetime Rolls, historical Roll spending, active playtime, current/highest zone, kills, gates, boss/structure flags, permanent `dash_unlocked`, completion, purchased node IDs, inventory pair quantities and stable copy IDs, group/per-copy favorites, ordered equipment, discovery history, potion bottles and active seconds, audio/accessibility settings, Auto Roll, sale filters, Luck Cap, remaining roll cooldown and the next Super Roll Lifetime trigger.
 
 `first_roll_completed` must agree with `lifetime_rolls > 0`; Lifetime Rolls remains the runtime authority. `equipped_slot_count` is a validated compatibility field derived from purchases. Luck, potion multipliers, maximum HP, speed, damage, slots and cooldown limits are rebuilt from canonical recipes/nodes, never reapplied to previous values. Potion type and remaining seconds are authoritative; the obsolete saved potion multiplier is ignored during migration. Boss Brew has its own active timer. Loading returns to the saved zone entrance at full derived HP and clears transient attacks, reveal playback and encounter state; it never reruns rewards or roll transactions.
 
@@ -64,3 +64,11 @@ Historical R01+R02 ownership remains valid without R03: Luck I stays active and 
 Unknown nonempty purchased IDs are retained and ignored by derived effects. Any valid recorded Roll spend for an unknown ID still counts toward `Lifetime Rolls = Rolls + recorded spend`. Duplicate IDs, malformed entries and invalid ledgers fail safely; unknown IDs alone do not crash or block a compatible load. All known slot effects still derive a maximum of five.
 
 `SlimerotProgressionSaveTests.gd` covers both old purchase orders, later Auto purchase, repeated Breakthrough loads, unknown retired IDs, arbitrary tier-II phases, invalid triggers, integer limits and complete Prompt 12 state preservation. The actual offline restart probe now persists a tier-III trigger 17 rolls away, verifies 100 offline completions and the resulting trigger, then checks a second independent reopen for no replay: **13 checks per reader**. The ordinary save restart reader remains **11 checks**. See [the Prompt 13 report](Slimerot-Prompt-13.md) for the node table and final results.
+
+## Prompts 14–16 compatibility
+
+The UI reorganization does not change saved progression. Prompt 15 adds `dash_unlocked` within schema 11: a missing flag derives true for legacy saves that already reached Z2, and false for earlier saves; an explicit boolean is preserved. Invalid non-booleans fail validation. Unlocking at the Z2 boss gate emits an immediate durable checkpoint. Dash movement/cooldown, projectile pools, combat feedback and reveal playback are transient.
+
+Combined gates derive their role from the existing first-kill boss flags; no replacement gate-save format or second boss reward is introduced. The one-time zone-unlock presentation follows an increase of the saved highest zone and never writes accumulated luck. New Coin/Super nodes remain unpurchased in an old save unless their actual persistent IDs were already present. Existing IDs, exact equipment/copy identities, favorites and historical spends survive migration.
+
+Migration chain: schemas 1–8 legacy structure/skill/persistence migration → schema 9 offline timestamp/remainder defaults plus compact identities → schema 10 independent variant masks, historical-best pity and empty Shrine sets → schema 11 persisted Super trigger → additive Dash default within schema 11. Each stage validates before replacing an original generation. See the [Prompt 16 requirement matrix](Slimerot-Prompt-16-Matrix.md) for end-to-end acceptance and [Android](Slimerot-Android.md) for the eight device force-close cases. Current automated totals are in [Testing](Slimerot-Testing.md); historical probe counts above describe those stages only.

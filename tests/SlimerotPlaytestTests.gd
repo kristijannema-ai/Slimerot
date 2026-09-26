@@ -286,7 +286,7 @@ func test_non_interference_and_export() -> void:
 	check(exported.ok and FileAccess.file_exists(exported.json_path) and FileAccess.file_exists(exported.text_path), "explicit export writes separate readable JSON and text diagnostics")
 	check(runtime_state() == before, "start, observation, JSON/text building and export leave save data, currencies, RNG, cooldowns and combat unchanged")
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(exported.json_path))
-	check(parsed is Dictionary and parsed.schema == "Slimerot.playtest" and parsed.schema_version == 1 and parsed.run_id == summary.run_id, "JSON export reads back with stable schema and unique run identity")
+	check(parsed is Dictionary and parsed.schema == "Slimerot.playtest" and parsed.schema_version == logger.SCHEMA_VERSION and parsed.run_id == summary.run_id, "JSON export reads back with current schema and unique run identity")
 	check(parsed.model.fingerprint_sha256.length() == 64 and parsed.model.source_sha256.has("SlimerotCampaign.gd"), "export includes a constants source fingerprint for comparing balance versions")
 	check(parsed.latest.lifetime_rolls == GameState.lifetime_rolls and parsed.latest.spendable_rolls == GameState.rolls_balance, "JSON latest state preserves both Roll counters")
 	var text := FileAccess.get_file_as_string(exported.text_path)

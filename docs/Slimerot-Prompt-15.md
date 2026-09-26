@@ -1,5 +1,7 @@
 # Prompt 15 — combat, Dash, bosses and world presentation
 
+> **Historical record — Prompt 16:** Historical Prompt 15 report. Its implementation is the Prompt 16 integration baseline. Current balance changes, complete requirements, performance results and unresolved Android acceptance are recorded in Prompt 16; the counts and branch/PR state below describe Prompt 15 publication.
+
 Built on Prompt 14 (`c649bda804e62998b10dc31232a38f46e7eff945`, PR #16). That UI PR was still open at publication preparation; this branch includes its changes. Prompts 11–13 managers remain the authority for inventory, rolling, progression and luck. No slime artwork, RNG formulas, skill prices, currencies, XP, boss HP or rewards were replaced.
 
 ## Boss-by-boss changes

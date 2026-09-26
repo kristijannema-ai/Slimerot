@@ -352,7 +352,7 @@ func validate(data: Variant) -> bool:
 		if int(paid) > SlimerotSaveFormat.MAX_EXACT_INTEGER - recorded_spend: return false
 		recorded_spend += int(paid)
 		if SkillTreeManager.nodes.has(id):
-			var maximum_paid: int = maxi(SkillTreeManager.nodes[id].cost, 75 if id == "R03" else 0)
+			var maximum_paid: int = maxi(SkillTreeManager.nodes[id].cost, int(SlimerotRollTree.HISTORICAL_PRICES.get(id, 0)))
 			if paid > maximum_paid: return false
 	for id in data.purchased_skill_node_ids:
 		if SkillTreeManager.nodes.has(id) and SkillTreeManager.nodes[id].currency_type == "Rolls" and not data.roll_skill_spend.has(id): return false
@@ -557,7 +557,7 @@ func migrate_roll_tree(data: Dictionary) -> Dictionary:
 			if data.get("roll_skill_spend", {}).has(old_id): paid_costs[id] = data.roll_skill_spend[old_id]
 			continue
 		if SkillTreeManager.nodes[id].currency_type == "Rolls":
-			var historical_cost: int = 40 if id == "R02" else 75 if id == "R03" else SkillTreeManager.nodes[id].cost
+			var historical_cost: int = 40 if id == "R02" else int(SlimerotRollTree.HISTORICAL_PRICES.get(id, SkillTreeManager.nodes[id].cost))
 			paid_costs[id] = SlimerotRollTree.LEGACY_NODES.get(old_id, {}).get("paid", data.get("roll_skill_spend", {}).get(id, historical_cost))
 		if SlimerotRollTree.LEGACY_NODES.has(old_id):
 			# Grandfather the required ancestors, preserving an already unlocked Auto Roll.

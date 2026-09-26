@@ -182,7 +182,7 @@ func test_janitor_teleport() -> void:
 func test_admin_phases() -> void:
 	var boss := begin(8)
 	boss.take_damage(float(boss.data.hp) * 0.6)
-	check(boss.enraged and boss.hp == 800000, "Admin enters final phase at exactly 40 percent HP")
+	check(boss.enraged and boss.hp == 240000, "Admin enters final phase at exactly 40 percent HP")
 	boss.step(1.8)
 	check(boss.phase == "fan_warning" and boss.fan_count == 7 and CombatManager.active_projectile_count() == 0, "final phase accelerates cadence with seven telegraphed fan lanes")
 	boss.step(0.0)

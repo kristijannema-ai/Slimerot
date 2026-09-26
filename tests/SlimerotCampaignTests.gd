@@ -1,11 +1,11 @@
 extends Node
 
 var suite: Node
-const HP := [[45,70,130],[180,280,520],[700,1100,2000],[2600,4000,7500],[9000,14000,26000],[15000,24000,45000],[35000,55000,105000],[65000,104000,195000]]
-const COINS := [[5,7,10],[18,25,40],[65,90,150],[250,350,600],[900,1300,2200],[3500,5000,8500],[14000,20000,34000],[55000,80000,140000]]
+const HP := [[45,70,130],[180,280,520],[700,1100,2000],[1900,3000,5500],[4000,6500,12000],[6500,10500,20000],[13000,21000,40000],[20000,32000,60000]]
+const COINS := [[5,7,10],[18,25,40],[130,180,300],[500,700,1200],[1800,2600,4400],[7000,10000,17000],[28000,40000,68000],[55000,80000,140000]]
 const HITS := [[8,6,12],[12,10,18],[18,15,26],[26,22,38],[38,32,55],[55,45,80],[75,65,110],[100,85,150]]
-const KILLS := [12,20,40,30,60,40,90,100]
-const GATES := [1000,4000,30000,18000,200000,1000000,5000000,0]
+const KILLS := [12,20,25,30,40,40,45,30]
+const GATES := [150,1000,4000,9000,45000,180000,900000,0]
 const LEVELS := [[1,3],[4,7],[8,12],[13,18],[19,26],[27,36],[37,48],[49,65]]
 
 func check(value: bool, label: String) -> void:
@@ -54,19 +54,19 @@ func run(world: Node, owner_suite: Node) -> void:
 	WorldManager.travel(1)
 	world.player.position = SlimerotCampaign.EXIT_GATE + Vector2(0,50)
 	world._process(0)
-	check(world.current_interaction.prompt.contains(SlimeDatabase.format_number(1000)) and world.current_interaction.prompt.contains("220 / 12"), "physical gate UI exposes currency and current kills")
+	check(world.current_interaction.prompt.contains(SlimeDatabase.format_number(GATES[0])) and world.current_interaction.prompt.contains("220 / 12"), "physical gate UI exposes currency and current kills")
 	RollManager.finish_reveal()
 	world.reset_camera()
 	await suite.capture("Slimerot-stage-5-backyard-gate")
 	world.interact()
-	check(GameState.current_zone == 2 and WorldManager.gate_open(1) and GameState.coins == 0 and GameState.highest_zone_unlocked == 2, "Z1 to Z2 end-to-end pays 1000 once and permanently unlocks zone")
+	check(GameState.current_zone == 2 and WorldManager.gate_open(1) and GameState.coins == 1000 - GATES[0] and GameState.highest_zone_unlocked == 2, "Z1 to Z2 end-to-end pays the 150-Coin gate once and permanently unlocks zone")
 	check(SlimeDatabase.eligible(2).size() == 24 and RollManager.zone_luck_multiplier() == 2 and RollManager.select_base(800,1,GameState.highest_zone_unlocked) == "tralalero_tralala", "gate unlock raises zone luck while all 24 bases stay eligible")
 	WorldManager.return_through_gate()
 	check(GameState.current_zone == 1 and world.player.position == SlimerotCampaign.RETURN_ARRIVAL and GameState.highest_zone_unlocked == 2, "backtracking arrives at far gate and never shrinks pool")
 	world.player.position = SlimerotCampaign.EXIT_GATE
 	world._process(0)
 	world.interact()
-	check(GameState.current_zone == 2 and GameState.coins == 0, "unlocked gate traverses freely with zero wallet")
+	check(GameState.current_zone == 2 and GameState.coins == 1000 - GATES[0], "unlocked gate traverses without charging a second time")
 	GameState.coins = 4000
 	check(not WorldManager.unlock_gate(2), "Coins alone cannot bypass kill requirement")
 	GameState.zone_kill_counts["2"] = 20
@@ -107,7 +107,7 @@ func run(world: Node, owner_suite: Node) -> void:
 		world.hud.breakthrough_banner.hide()
 		GameState.changed.emit()
 		await suite.capture("Slimerot-stage-5-zone-%d" % zone)
-	check(GameState.highest_zone_unlocked == 8 and SlimeDatabase.eligible(8).size() == 24 and WorldManager.gate_prompt(8) == "Campaign complete", "final gate completes at 100 kills plus boss and never creates a ninth zone")
+	check(GameState.highest_zone_unlocked == 8 and SlimeDatabase.eligible(8).size() == 24 and WorldManager.gate_prompt(8) == "Campaign complete", "final gate completes at 30 kills plus boss and never creates a ninth zone")
 	SaveManager.enabled = true
 	check(SaveManager.save_game() and SaveManager.load_game() and GameState.current_zone == 8 and WorldManager.gate_open(7), "schema 5 saves late current zone, kill counts and permanent gates")
 	SaveManager.enabled = false

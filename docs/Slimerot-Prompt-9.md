@@ -1,5 +1,7 @@
 # Slimerot Prompt 9 — balance and playtest instrumentation
 
+> **Historical record — Prompt 16:** Historical Prompt 9 tuning evidence. Its 20–30-minute farming walls, 210-minute campaign target and old RNG/variant assumptions are superseded by Prompt 16 constant-pace acceptance. Do not use the targets or estimates below as the current design; use the Prompt 16 report, requirement matrix and provisional inventory. Historical measurements and the reasons for those former edits are retained.
+
 The integration pass adds an opt-in developer observer, reproducible pacing estimates, and measured combat fixtures. It reduces late-game enemy sponginess and adjusts six gates plus two Breakthrough prices. The final 12-seed mainline estimate reaches the final boss at **210.57 active minutes median (207.40–213.87)**. This is a model result, not a completed human campaign; the remaining acceptance gaps are explicit below.
 
 ## Repository and scope

@@ -1,5 +1,7 @@
 # Slimerot UI polish
 
+> **Historical record — Prompt 16:** Historical pre-Prompt-11 UI polish report. Prompt 14 supersedes the navigation, theme and skill-list layout: Team → Team/Collection/Items, Settings → Rolling and a pannable 2D SkillTreeCanvas are the current UI. Prompt 15 adds Dash and compact combat reveals. Old mutation/card/navigation references below are historical only.
+
 This visual pass starts from merged Prompt 10 (`6b1b273`) on `slimerot/ui-polish`.
 
 - A shared navy, cream and lime palette gives the HUD, menus and roll cards a consistent appearance.

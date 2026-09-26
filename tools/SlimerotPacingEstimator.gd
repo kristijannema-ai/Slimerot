@@ -20,6 +20,22 @@ func _initialize() -> void:
 		push_error("Slimerot pacing estimation is available only in a developer build.")
 		quit(1)
 		return
+	# SceneTree._initialize precedes autoload _ready. The central luck helper
+	# requires those definitions; never estimate silently with an empty tree.
+	_run_estimate.call_deferred()
+
+func _run_estimate() -> void:
+	var skills := root.get_node_or_null("SkillTreeManager")
+	var rolls := root.get_node_or_null("RollManager")
+	if skills == null or rolls == null or skills.nodes.size() != 54:
+		push_error("Slimerot estimator requires all 54 live skill definitions to be ready.")
+		quit(1)
+		return
+	var preflight: Dictionary = rolls.get_luck_breakdown({"node_ids":["R02", "R08", "R13", "R18", "C20", "C21", "C22"], "highest_zone_unlocked":8, "active_potion_multiplier":3.0, "super_roll_multiplier":20.0})
+	if not is_equal_approx(preflight.total, 1.10 * 8000.0 * 8.0 * 1.725 * 3.0 * 20.0):
+		push_error("Slimerot estimator central-luck preflight failed.")
+		quit(1)
+		return
 	var configuration: Dictionary = {}
 	var output := ""
 	for argument in OS.get_cmdline_user_args():
@@ -35,6 +51,7 @@ func _initialize() -> void:
 			configuration.travel_seconds = float(argument.trim_prefix("--slimerot-estimate-travel-seconds="))
 	var model = MODEL.new()
 	var report: Dictionary = model.run(configuration)
+	report.central_luck_preflight = preflight
 	var summary: String = model.text_summary(report)
 	print(summary)
 	if not output.is_empty():

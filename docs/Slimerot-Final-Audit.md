@@ -1,5 +1,7 @@
 # Slimerot v0.3 final integration audit
 
+> **Historical record — Prompt 16:** Historical Prompt 10 audit, not the current acceptance report. Its four-exclusive-variant model, five-Normals mutation recipe, 46-node tree, separate Inventory/Potions/Roll Settings navigation, schema 8 and old balance targets are superseded by Prompts 11–16. Current variants are three independent flags/eight masks; the Variant Shrine consumes one protected-checked copy for one chosen category; the tree has 54 nodes; Team and Settings own the consolidated screens; saves use schema 11 with additive Dash. Historical measurements below are retained as evidence only.
+
 This pass continues merged Prompt 9 from `main` at `f49c8cd` on `slimerot/stage-10-final`. The existing campaign and Prompt 9 tuning remain the baseline. The Android application version is now `0.3.0`, code `10`; the save schema remains `8`. No new progression system or content tier is introduced.
 
 ## Current game loop

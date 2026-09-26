@@ -97,7 +97,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	world.hud.close_menu()
 	# Isolated boss patterns and their actual arena lifecycle.
 	fresh(world)
-	var hp_values := [3000,50000,260000,2000000]
+	var hp_values := [3000,50000,150000,600000]
 	var rewards := [1000,20000,350000,6000000]
 	var contacts := [16,35,65,110]
 	for index in 4:
@@ -158,7 +158,7 @@ func run(world: Node, owner_suite: Node) -> void:
 			boss.step(SlimerotBoss.BURST_WARNING_SECONDS)
 			check(CombatManager.active_projectile_count() == 6 and boss.phase == "burst_release", "Admin follows animated teleport with two warned aimed bursts")
 			boss.take_damage(float(boss.data.hp)*0.60)
-			check(boss.enraged and boss.hp == 800000, "Admin phase two starts at exactly 40 percent HP")
+			check(boss.enraged and boss.hp == 240000, "Admin phase two starts at exactly 40 percent HP")
 			GameState.player_hp = 1000
 			boss.aoe_clock = 4.0
 			boss.enter_phase("recovery")
