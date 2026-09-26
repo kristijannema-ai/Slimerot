@@ -5,10 +5,11 @@ extends Node
 signal updated
 signal exported(result: Dictionary)
 
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 2
 const SAMPLE_SECONDS := 30.0
 const MAX_EVENTS := 2048
 const MAX_SAMPLES := 1024
+const MAX_MILESTONES := 384 # 192 rarity classes plus finite nodes, zones, bosses and structures.
 const DEFAULT_DIRECTORY := "user://Slimerot-playtests"
 const MODEL_SOURCES := [
 	"res://scripts/data/SlimerotBalance.gd", "res://scripts/data/SlimerotCampaign.gd",
@@ -50,6 +51,15 @@ var _boss_initial_hp := 0.0
 var _boss_elapsed := 0.0
 var _boss_tracking := false
 var _boss_node: WeakRef
+var milestones: Dictionary = {}
+var _best_ever := 0
+var _seen_multi := false
+var _highest_zone := 1
+var _dash_seen := false
+var _last_meaningful_active := 0.0
+var _rate_active := 0.0
+var _rate_coins := 0
+var _rate_rolls := 0
 
 func _init() -> void:
 	set_process(false)
@@ -93,6 +103,8 @@ func start(directory: String = DEFAULT_DIRECTORY, explicit_opt_in: bool = false)
 	_boss_elapsed = 0.0
 	_boss_damage = 0.0
 	model = _model_fingerprint()
+	milestones.clear()
+	_reset_cadence_baseline()
 	active = true
 	GameState.changed.connect(_on_state_changed)
 	GameState.critical_change.connect(_on_critical_change)
@@ -176,7 +188,30 @@ func _begin_segment(reason: String, previous_active_play_seconds: float) -> void
 	_boss_previous_hp = 0.0
 	_boss_damage = 0.0
 	_boss_elapsed = 0.0
+	_reset_cadence_baseline()
 	record_event("active_clock_boundary", {"reason": reason, "previous_active_play_seconds": previous_active_play_seconds, "segment": _segment})
+
+func _reset_cadence_baseline() -> void:
+	_best_ever = GameState.best_ever_effective_rarity
+	_seen_multi = false
+	for variants in InventoryManager.discoveries.values():
+		for variant in variants:
+			var flags := SlimerotVariants.mask(variant)
+			if flags > 0 and flags & (flags - 1) != 0: _seen_multi = true
+	_highest_zone = GameState.highest_zone_unlocked
+	_dash_seen = GameState.dash_unlocked
+	_last_meaningful_active = GameState.active_play_seconds
+	_rate_active = GameState.active_play_seconds
+	_rate_coins = GameState.coins_earned
+	_rate_rolls = GameState.lifetime_rolls
+
+func _milestone(id: String, details: Dictionary = {}) -> void:
+	# A finite index survives bounded event eviction; imported saves establish a baseline.
+	_last_meaningful_active = GameState.active_play_seconds
+	if not milestones.has(id) and milestones.size() < MAX_MILESTONES:
+		milestones[id] = {"active_play_seconds": GameState.active_play_seconds,
+			"run_active_seconds": _run_active, "segment": _segment, "details": details.duplicate(true)}
+	record_event("meaningful_unlock", {"id": id, "details": details})
 
 func strongest(equipped_only: bool = false) -> Dictionary:
 	var best: Dictionary = {}
@@ -195,7 +230,9 @@ func _pick_stronger(best: Dictionary, pair: Dictionary) -> Dictionary:
 	var data := SlimeDatabase.get_slime(pair.slime_id)
 	if data == null: return best
 	var candidate := {"id": str(pair.slime_id), "name": data.display_name, "variant": str(pair.variant),
-		"damage": InventoryManager.damage_for_pair(pair), "rarity_threshold": data.rarity_threshold}
+		"damage": InventoryManager.damage_for_pair(pair), "rarity_threshold": data.rarity_threshold,
+		"effective_rarity": SlimeDatabase.get_effective_rarity(pair.slime_id, pair.variant),
+		"raw_damage": SlimerotRoster.damage(SlimeDatabase.get_effective_rarity(pair.slime_id, pair.variant))}
 	if best.is_empty() or candidate.damage > best.damage or (candidate.damage == best.damage and _identity(candidate) < _identity(best)):
 		return candidate
 	return best
@@ -218,13 +255,22 @@ func snapshot() -> Dictionary:
 	var stats := SkillTreeManager.derived_stats()
 	var boss_team_damage := 0.0
 	for copy_id in InventoryManager.equipped_copy_ids: boss_team_damage += InventoryManager.damage_for_copy(copy_id, true)
+	var dps := InventoryManager.team_dps()
+	var rate_seconds := maxf(0.0, GameState.active_play_seconds - _rate_active)
+	var chaser_hp := float(SlimerotCampaign.enemy(GameState.current_zone, "chaser").max_hp) if GameState.current_zone > 0 else 0.0
 	return {"utc": Time.get_datetime_string_from_system(true) + "Z",
 		"active_play_seconds": GameState.active_play_seconds,
 		"run_active_seconds": _run_active + maxf(0.0, GameState.active_play_seconds - _last_active),
 		"segment": _segment, "segment_active_seconds": maxf(0.0, GameState.active_play_seconds - _start_active),
 		"lifetime_rolls": GameState.lifetime_rolls, "spendable_rolls": GameState.rolls_balance,
 		"coins": GameState.coins, "coins_earned": GameState.coins_earned, "coins_spent": GameState.coins_spent,
-		"team_dps": InventoryManager.team_dps(), "slots": stats.equipped_slots,
+		"team_dps": dps, "slots": stats.equipped_slots,
+		"current_zone_chaser_ttk_seconds": chaser_hp / dps if dps > 0.0 and chaser_hp > 0.0 else null,
+		"coins_per_minute": maxf(0.0, GameState.coins_earned - _rate_coins) * 60.0 / rate_seconds if rate_seconds > 0.0 else 0.0,
+		"rolls_per_minute": maxf(0.0, GameState.lifetime_rolls - _rate_rolls) * 60.0 / rate_seconds if rate_seconds > 0.0 else 0.0,
+		"rate_window_seconds": rate_seconds, "best_effective_rarity": GameState.best_ever_effective_rarity,
+		"best_raw_damage": SlimerotRoster.damage(GameState.best_ever_effective_rarity) if GameState.best_ever_effective_rarity > 0 else 0,
+		"seconds_since_meaningful_unlock": maxf(0.0, GameState.active_play_seconds - _last_meaningful_active),
 		"equipped_count": InventoryManager.equipped_copy_ids.size(), "effective_luck": RollManager.effective_luck(),
 		"rolling_luck": RollManager.rolling_luck(), "luck_cap": GameState.settings.luck_cap,
 		"next_roll_luck_breakdown": RollManager.get_luck_breakdown({"super_roll_multiplier": RollManager.next_roll_multiplier(), "apply_cap": true}),
@@ -260,15 +306,23 @@ func _record_sample(reason: String) -> void:
 		samples.remove_at(1)
 		dropped_samples += 1
 	samples.append({"reason": reason, "state": snapshot()})
+	_rate_active = GameState.active_play_seconds
+	_rate_coins = GameState.coins_earned
+	_rate_rolls = GameState.lifetime_rolls
 	updated.emit()
 
 func _on_roll(result: Dictionary) -> void:
 	if bool(result.get("first_roll", false)): record_event("first_roll", result)
+	var flags := SlimerotVariants.mask(result.get("variant_flags", result.get("variant", "normal")))
+	if not _seen_multi and flags > 0 and flags & (flags - 1) != 0:
+		_seen_multi = true
+		_milestone("first_multi_variant", {"slime_id": result.slime_id, "variant_flags": flags})
 	_observe_inventory()
 
 func _on_purchase(id: String, previous_luck: float, new_luck: float) -> void:
 	var node: SlimerotData.SkillNodeData = SkillTreeManager.nodes.get(id)
 	if node == null: return
+	_milestone("skill:" + id, {"effect": node.effect_type, "value": node.effect_value})
 	record_event("skill_purchased", {"id": id, "name": node.display_name, "currency": node.currency_type, "cost": node.cost})
 	if node.effect_type == "checkpoint_luck":
 		record_event("breakthrough", {"id": id, "name": node.display_name, "previous_luck": previous_luck, "new_luck": new_luck,
@@ -292,6 +346,12 @@ func _on_state_changed() -> void:
 	_observe_flags(GameState.structure_unlocked_flags, _seen_structures, "structure_repaired")
 	_observe_boss()
 	_observe_flags(GameState.boss_defeated_flags, _seen_bosses, "boss_defeated")
+	if GameState.highest_zone_unlocked > _highest_zone:
+		for zone in range(_highest_zone + 1, GameState.highest_zone_unlocked + 1): _milestone("zone:%d" % zone)
+		_highest_zone = GameState.highest_zone_unlocked
+	if GameState.dash_unlocked and not _dash_seen:
+		_dash_seen = true
+		_milestone("dash")
 	if _boss_tracking and WorldManager.is_boss_zone_defeated(_boss_zone):
 		_boss_tracking = false
 		record_event("boss_attempt_ended", {"zone": _boss_zone, "reason": "defeated"})
@@ -303,6 +363,8 @@ func _observe_flags(current: Dictionary, seen: Dictionary, kind: String) -> void
 	for key in keys:
 		if bool(current[key]) and not bool(seen.get(key, false)):
 			seen[key] = true
+			_milestone(kind + ":" + str(key))
+			if kind == "boss_defeated" and str(key) == "zone_8": _milestone("final_boss")
 			record_event(kind, {"id": str(key)})
 
 func _on_critical_change(reason: String) -> void:
@@ -312,6 +374,10 @@ func _on_critical_change(reason: String) -> void:
 func _observe_inventory() -> void:
 	var owned := strongest(false)
 	var equipped := strongest(true)
+	if GameState.best_ever_effective_rarity > _best_ever:
+		_best_ever = GameState.best_ever_effective_rarity
+		_milestone("best:%d" % _best_ever, {"slime": owned, "effective_rarity": _best_ever})
+		record_event("new_all_time_best", {"slime": owned, "effective_rarity": _best_ever})
 	if _identity(owned) != _strongest_owned:
 		_strongest_owned = _identity(owned)
 		record_event("strongest_owned_changed", {"slime": owned})
@@ -371,6 +437,7 @@ func _on_boss_exiting() -> void:
 func _on_completion() -> void:
 	if _completed: return
 	_completed = true
+	_milestone("campaign_completed")
 	record_event("campaign_completed")
 
 func _model_fingerprint() -> Dictionary:
@@ -385,14 +452,16 @@ func export_summary() -> Dictionary:
 	return {"schema": "Slimerot.playtest", "schema_version": SCHEMA_VERSION, "run_id": run_id,
 		"started_utc": started_utc, "exported_utc": Time.get_datetime_string_from_system(true) + "Z",
 		"model": model.duplicate(true), "sample_interval_active_seconds": SAMPLE_SECONDS,
-		"limits": {"events": MAX_EVENTS, "samples": MAX_SAMPLES},
+		"limits": {"events": MAX_EVENTS, "samples": MAX_SAMPLES, "milestones": MAX_MILESTONES},
 		"drops": {"events": dropped_events, "samples": dropped_samples, "missed_sample_intervals": missed_sample_intervals},
 		"notes": ["Observed gameplay only; this logger never simulates progression.",
 			"Active time is the saved game clock; run_active_seconds accumulates observations across explicitly numbered reset/load segments.",
 			"Every applied save starts a segment before arena cleanup, including identical clocks; a backward clock also starts a reset segment. Imported progress is a baseline, not earned milestones.",
 			"Boss DPS is observed HP loss divided by active encounter seconds, including movement and death downtime.",
+			"Throughput uses earned Coins and committed Lifetime Rolls since the previous sample; spending does not make the rate negative. Chaser TTK divides current-zone HP by team DPS, without travel or misses.",
+			"The bounded milestone index retains first observed Auto Roll, every skill/slot/Fortune/Super/Breakthrough, zone, boss, Shrine, Dash and new rarity record across event eviction. Imported progress is never timestamped as a fresh unlock.",
 			"Gate blocker describes objective requirements, not an assertion that the player is stuck."],
-		"latest": snapshot(), "events": events.duplicate(true), "samples": samples.duplicate(true)}
+		"milestones": milestones.duplicate(true), "latest": snapshot(), "events": events.duplicate(true), "samples": samples.duplicate(true)}
 
 func text_summary(data: Dictionary) -> String:
 	var lines := PackedStringArray(["Slimerot playtest | schema_version=%d" % SCHEMA_VERSION,

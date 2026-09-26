@@ -1,5 +1,7 @@
 # Slimerot Prompt 14 — mobile interface
 
+> **Historical record — Prompt 16:** Historical Prompt 14 report. Its UI map and backend-authority rules remain current; Prompt 15 adds the separate Dash control, combined gates and compact boss-combat reveals. Current final acceptance is recorded in Prompt 16; test counts below describe Prompt 14 only.
+
 Prompt 14 replaces the crowded HUD, global eight-button menu navigation and vertical skill lists with a compact HUD, a Team hub, consolidated Settings and a pannable 2D skill tree. It builds on merged Prompt 13 (`3a340b483959813c28d0a2f58e6346bdce5cd304`). Backend manager and data files from Prompts 11–13 are unchanged; saves remain schema 11.
 
 ## Old screen → new screen

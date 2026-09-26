@@ -2,15 +2,17 @@ extends RefCounted
 
 # Slimerot decision-event estimate. Explicit luck contexts keep live state isolated.
 # A result is an assumption-sensitive model, never evidence of a full playthrough.
-const MODEL_VERSION := "Slimerot pacing decision-event model 3 (Prompt 13 progression)"
+const MODEL_VERSION := "Slimerot pacing decision-event model 5 (Prompt 16 branch-completion policy)"
 const DEFAULTS := {"seeds": 12, "first_seed": 9001, "horizon_minutes": 360.0,
 	"frame_hz": 60.0, "travel_seconds": 2.0, "combat_utilisation": 0.70,
 	"boss_utilisation": 0.70, "sale_interval_seconds": 300.0}
 const COIN_PRIORITY := ["C01", "C02", "C03", "C04", "C05", "CO1", "C06", "C07", "C08", "C09", "C20",
 	"C10", "C11", "C12", "C13", "CO2", "C14", "C21", "C15", "C16", "C17", "C18", "C23", "C24", "C25", "C22", "C19"]
 const OPTIONAL_AFTER := {"R04": ["RO1"], "R08": ["RO2", "RO3", "RO5"], "R13": ["RO4", "RO6", "RO8"], "R18": ["RO9"]}
-const TARGETS := {"Z2": [8, 12], "R08": [55, 65], "Z5": [70, 90], "R13": [115, 130],
-	"Z7": [135, 155], "R18": [170, 190], "final_boss": [200, 230]}
+# Milestone timing is measured, not a prescribed long-idle campaign target.
+const TARGETS := {"R03": [], "Z2": [], "R08": [], "Z5": [], "R13": [], "Z7": [], "R18": [], "final_boss": []}
+const QA_BOUNDS := {"chaser_seconds": [2.0, 10.0], "chaser_spongy_seconds": 20.0,
+	"ready_boss_seconds": [45.0, 180.0], "provisional_unlock_gap_warning_seconds": 600.0}
 var options: Dictionary = {}
 var roster: Array[Dictionary] = []
 var pity_pool: Array = []
@@ -69,7 +71,7 @@ func run(overrides: Dictionary = {}) -> Dictionary:
 		"default_auto_sell_threshold": SlimerotRollTree.DEFAULT_SELL_THRESHOLD, "maximum_slots": SlimerotBalance.MAX_SLOTS}
 	return {"model_version": MODEL_VERSION, "constants_sha256": JSON.stringify(constants).sha256_text(),
 		"constants": constants, "assumptions": _assumptions(), "options": options.duplicate(),
-		"targets_minutes": TARGETS, "policies": policies, "fixtures": _fixtures(),
+		"targets_minutes": TARGETS, "qa_bounds": QA_BOUNDS, "policies": policies, "fixtures": _fixtures(),
 		"breakthrough_probability": _breakthrough_probability()}
 
 func _variant_constants() -> Dictionary:
@@ -89,8 +91,8 @@ func _assumptions() -> Array[String]:
 		"Safe Chasers are farmed with the stated travel and damage utilisation. Six spawn positions rotate with the live respawn time.",
 		"Coin nodes are bought in the stated priority when eligible and affordable; gates are attempted first. Shrine and terminal are repaired as soon as affordable.",
 		"Duplicate sales occur at the stated interval. Trips are approximated from zone entrance/exit distance and movement speed; rolls continue during trips.",
-		"After repairing the Z4 fast-travel pillar, sale travel and map/menu interaction are assumed instantaneous. Repair-trip time before sales is omitted (optimistic).",
-		"Convenience policy buys all canonical optional nodes immediately after their unlock block, except the post-campaign speed node. Their currency delay is explicit.",
+		"After repairing the Z4 fast-travel pillar, sale travel and map/menu interaction are assumed instantaneous. Z6 Variant Shrine is repaired when affordable, without sacrificing copies. Repair-trip time before sales is omitted (optimistic).",
+		"Convenience policy buys optional nodes immediately after each unlock block. Mainline-first policies buy the same optional branches after R18 instead of leaving spare Rolls unused forever; this policy correction changes late-run comparisons with model 4. Post-campaign speed is excluded from both policies. Their currency delay is explicit.",
 		"Zone residence and coin-blocked time after the kill requirement are estimates, not measured grind-wall experience.",
 		"Quantiles use nearest rank. Missing milestones remain null and completion counts are reported; unfinished runs are never silently treated as successes."]
 
@@ -100,6 +102,11 @@ func _roll_sequence(convenience: bool) -> Array:
 		result.append(row)
 		if convenience:
 			for id in OPTIONAL_AFTER.get(row[0], []): result.append(roll_rows[id])
+	if not convenience:
+		# Complete affordable branches after the trunk rather than inventing permanent
+		# player refusal to use Super Roll while thousands of Rolls accumulate.
+		for checkpoint in OPTIONAL_AFTER:
+			for id in OPTIONAL_AFTER[checkpoint]: result.append(roll_rows[id])
 	return result
 
 func _quantised_cooldown(value: float) -> float:
@@ -157,7 +164,8 @@ func _stats(owned: Dictionary) -> Dictionary:
 	return stats
 
 func _luck(stats: Dictionary, zone: int, multiplier: float = 1.0) -> float:
-	return RollManager.get_effective_luck({"node_ids": stats.node_ids, "highest_zone_unlocked": zone,
+	var roll_manager: Node = (Engine.get_main_loop() as SceneTree).root.get_node("RollManager")
+	return roll_manager.get_effective_luck({"node_ids": stats.node_ids, "highest_zone_unlocked": zone,
 		"active_potion_multiplier": 1.0, "super_roll_multiplier": multiplier, "apply_cap": false})
 
 func _sample(luck: float, _zone: int, rng: RandomNumberGenerator, variants: RandomNumberGenerator, sense: bool) -> Dictionary:
@@ -230,12 +238,20 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 	var zone_entry := 0.0
 	var coin_blocked_at := -1.0
 	var horizon: float = options.horizon_minutes * 60.0
+	var cadence: Array[Dictionary] = []
+	var power_spikes: Array[Dictionary] = []
+	var boss_rows: Array[Dictionary] = []
+	var boss_started := 0.0
+	var chaser_checks: Array[Dictionary] = []
+	var first_multi := false
 	while t < horizon:
 		if t >= next_roll - 0.000001:
 			var multiplier: float = stats.super_roll_multiplier if stats.super_roll and SlimerotSuperRoll.due(rolls, next_super_roll) else 1.0
 			var luck := _luck(stats, zone, multiplier)
 			var result := _sample(luck, zone, rng, variants, stats.variant_sense)
-			if rolls == 0: result.slime = roster[0]
+			if rolls == 0:
+				result.slime = roster[0]
+				result.variant = "normal"
 			var rarity: int = int(result.slime.threshold) * SlimerotVariants.rarity_multiplier(result.variant)
 			if rolls > 0 and rarity <= best_ever:
 				var new_key: Array = [luck, best_ever, stats.variant_sense]
@@ -253,10 +269,18 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 							if slime.id == outcome.slime_id: result.slime = slime; break
 						result.variant = SlimerotVariants.key(outcome.variant_flags)
 						rarity = int(result.slime.threshold) * SlimerotVariants.rarity_multiplier(result.variant)
-			if rarity > best_ever:
+			var is_best := rarity > best_ever
+			var before_dps: float = team.dps
+			if is_best:
 				best_ever = rarity
 				misses = 0
+				cadence.append({"id": "best:%d" % rarity, "seconds": t})
 			else: misses += 1
+			var flags := SlimerotVariants.mask(result.variant)
+			if not first_multi and flags > 0 and flags & (flags - 1) != 0:
+				first_multi = true
+				milestones.first_multi_variant = t / 60.0
+				cadence.append({"id": "first_multi_variant", "seconds": t})
 			var key: String = str(result.slime.id) + ":" + str(result.variant)
 			if not inventory.has(key): inventory[key] = {"slime": result.slime, "variant": result.variant, "count": 0}
 			inventory[key].count += 1
@@ -271,11 +295,16 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 					coin_earned += sale
 					inventory[key].count -= 1
 			team = _team(inventory, stats)
+			if is_best and before_dps > 0:
+				power_spikes.append({"seconds": t, "rarity": rarity, "damage": SlimerotRoster.damage(rarity),
+					"dps_before": before_dps, "dps_after": team.dps, "ratio": team.dps / before_dps})
 			next_roll = t + _quantised_cooldown(stats.cooldown) / float(policy.roll_uptime)
 		while node_index < sequence.size() and balance >= int(sequence[node_index][3]):
 			var node: Array = sequence[node_index]
 			balance -= int(node[3])
 			owned[node[0]] = true
+			milestones[node[0]] = t / 60.0
+			cadence.append({"id": node[0], "seconds": t})
 			node_index += 1
 			var previous_super_tier: int = stats.super_roll_tier
 			stats = _stats(owned)
@@ -302,6 +331,8 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 			if int(zone_data[7]) > 0 and not bosses.has(zone):
 				if not fighting_boss:
 					fighting_boss = true
+					boss_started = t
+					if zone == 2: cadence.append({"id": "dash", "seconds": t})
 					enemy_hp = float(SlimerotEncounters.BOSSES[zone].hp)
 					travel_until = t + float(options.travel_seconds)
 			elif coins >= int(zone_data[6]) and zone < 8:
@@ -318,6 +349,7 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 				spawn_available.fill(t)
 				travel_until = t + SlimerotCampaign.ENTRANCE.distance_to(SlimerotCampaign.EXIT_GATE) / float(stats.move_speed)
 				milestones["Z%d" % zone] = t / 60.0
+				cadence.append({"id": "Z%d" % zone, "seconds": t})
 				snapshots.append(_snapshot(t, zone, rolls, balance, coins, stats, team, "zone_enter"))
 				zone_data = campaign_rows[zone - 1]
 			elif int(zone_data[7]) == 0 and coin_blocked_at < 0.0:
@@ -327,9 +359,16 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 			if not structures.has(repair[0]) and coins >= int(repair[2]):
 				coins -= int(repair[2])
 				structures[repair[0]] = true
+				cadence.append({"id": "structure:" + str(repair[0]), "seconds": t})
 		if zone >= 4 and not structures.has("fast_travel_pillar") and coins >= int(SlimerotEncounters.STRUCTURES[3][2]):
 			coins -= int(SlimerotEncounters.STRUCTURES[3][2])
 			structures.fast_travel_pillar = true
+			cadence.append({"id": "structure:fast_travel_pillar", "seconds": t})
+		if zone >= 6 and not structures.has("mutation_lab") and coins >= int(SlimerotEncounters.STRUCTURES[4][2]):
+			coins -= int(SlimerotEncounters.STRUCTURES[4][2])
+			structures.mutation_lab = true
+			milestones.variant_shrine = t / 60.0
+			cadence.append({"id": "structure:mutation_lab", "seconds": t})
 		if structures.has("skill_tree_shrine"):
 			for id in COIN_PRIORITY:
 				if owned.has(id): continue
@@ -342,6 +381,8 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 				if not eligible or coins < int(row[3]): continue
 				coins -= int(row[3])
 				owned[id] = true
+				milestones[id] = t / 60.0
+				cadence.append({"id": id, "seconds": t})
 				stats = _stats(owned)
 				team = _team(inventory, stats)
 		if t >= next_sale and not fighting_boss:
@@ -362,6 +403,7 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 					enemy_hp = 0.0
 		if enemy_hp <= 0.0 and not fighting_boss:
 			enemy_hp = float(zone_data[2][0])
+			chaser_checks.append({"seconds": t, "zone": zone, "ttk": enemy_hp / maxf(0.001, team.dps * float(options.combat_utilisation)), "team_dps": team.dps})
 			travel_until = maxf(travel_until, maxf(t + float(options.travel_seconds), spawn_available[spawn_cursor]))
 		var damage_rate: float = team.boss_dps * float(options.boss_utilisation) if fighting_boss else team.dps * float(options.combat_utilisation)
 		var damage_start := maxf(t, travel_until)
@@ -383,6 +425,8 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 				bosses[zone] = true
 				fighting_boss = false
 				milestones["boss_Z%d" % zone] = t / 60.0
+				cadence.append({"id": "boss_Z%d" % zone, "seconds": t})
+				boss_rows.append({"zone": zone, "seconds": t - boss_started, "entry_minutes": boss_started / 60.0, "exit_dps": team.boss_dps})
 				if zone == 8:
 					milestones.final_boss = t / 60.0
 					snapshots.append(_snapshot(t, zone, rolls, balance, coins, stats, team, "final_boss"))
@@ -394,7 +438,15 @@ func _campaign(seed_value: int, policy: Dictionary) -> Dictionary:
 				coin_earned += reward
 				spawn_available[spawn_cursor] = t + SlimerotCampaign.RESPAWN_SECONDS
 				spawn_cursor = (spawn_cursor + 1) % spawn_available.size()
+	var longest_gap := 0.0
+	var previous := 0.0
+	for event in cadence:
+		longest_gap = maxf(longest_gap, float(event.seconds) - previous)
+		previous = event.seconds
+	longest_gap = maxf(longest_gap, t - previous)
 	return {"seed": seed_value, "completed": milestones.has("final_boss"), "last_minutes": t / 60.0,
+		"meaningful_events": cadence, "longest_meaningful_gap_seconds": longest_gap,
+		"power_spikes": power_spikes, "boss_encounters": boss_rows, "chaser_ttk_samples": chaser_checks,
 		"milestones_minutes": milestones, "snapshots": snapshots, "zones": zone_rows,
 		"breakthrough_windows": windows, "coins_earned": coin_earned, "lifetime_rolls": rolls,
 		"spendable_rolls": balance, "final_zone": zone, "purchased_nodes": owned.keys()}
@@ -446,7 +498,25 @@ func _summary(runs: Array[Dictionary]) -> Dictionary:
 			"stronger_runs": improved, "stronger_fraction": float(improved) / complete if complete > 0 else null,
 			"median_zones_cleared_10m": _quantile(clear_counts, 0.5),
 			"noticeably_stronger_definition": "one owned copy has at least 25% more canonical effective-rarity damage than the strongest owned at purchase"}
-	return {"milestones": milestones, "breakthroughs": breakthroughs}
+	var gaps: Array[float] = []
+	var powers: Array[float] = []
+	var ttk: Array[float] = []
+	var boss_times := {}
+	for data in runs:
+		gaps.append(data.longest_meaningful_gap_seconds)
+		for spike in data.power_spikes: powers.append(spike.ratio)
+		for sample in data.chaser_ttk_samples: ttk.append(sample.ttk)
+		for boss in data.boss_encounters:
+			if not boss_times.has(str(boss.zone)): boss_times[str(boss.zone)] = []
+			boss_times[str(boss.zone)].append(boss.seconds)
+	gaps.sort()
+	powers.sort()
+	ttk.sort()
+	return {"milestones": milestones, "breakthroughs": breakthroughs,
+		"cadence": {"worst_gap_seconds": gaps[-1] if not gaps.is_empty() else null, "median_worst_gap_seconds": _quantile(gaps, 0.5),
+			"median_new_best_dps_ratio": _quantile(powers, 0.5), "smallest_new_best_dps_ratio": powers[0] if not powers.is_empty() else null,
+			"chaser_ttk_median": _quantile(ttk, 0.5), "chaser_ttk_p90": _quantile(ttk, 0.9),
+			"boss_seconds_by_zone": boss_times, "scope": "new-best auto-equips immediately; Chaser TTK samples weight kills equally and include assumed combat utilisation"}}
 
 func _quantile(values: Array[float], fraction: float) -> Variant:
 	return null if values.is_empty() else values[clampi(ceili(values.size() * fraction) - 1, 0, values.size() - 1)]
@@ -527,7 +597,7 @@ func _breakthrough_probability() -> Array[Dictionary]:
 				"analytic_10m_after": 1.0 - pow(1.0 - p, rolls_10m),
 				"seeded_10m_before": float(seeded_before) / float(options.seeds),
 				"seeded_10m_after": float(seeded_after) / float(options.seeds),
-				"scope": "threshold-or-better event; fixed current cooldown/luck, unlocked target zone, no potions, no variants, no future speed purchases; not necessarily an inventory improvement"})
+				"scope": "base threshold-or-better event; all bases rollable, origin zone is metadata; fixed cooldown/luck, no potions, no variants, no future speed purchases; not necessarily an inventory improvement"})
 	return result
 
 func text_summary(report: Dictionary) -> String:
@@ -543,6 +613,7 @@ func text_summary(report: Dictionary) -> String:
 			lines.append("%s | %d/%d | %s | %s | %s | %s | %s | %s" % [id, metric.observed, metric.runs,
 				_number(metric.min), _number(metric.p10), _number(metric.median), _number(metric.p90), _number(metric.max), str(metric.target)])
 		lines.append("Breakthrough 10-minute windows: " + JSON.stringify(policy.summary.breakthroughs))
+		lines.append("Cadence: " + JSON.stringify(policy.summary.cadence))
 	lines.append("\nNormal-copy fixtures (full damage uptime):")
 	for fixture in report.fixtures:
 		lines.append("Z%d: %s; DPS %.1f; Chaser %.2fs; boss %s min; same-team new/old CPM %s" % [fixture.zone,

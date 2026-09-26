@@ -43,3 +43,14 @@ func get_effective_rarity(base_id: String, variant_flags: Variant = 0) -> int:
 func get_base_combat_damage(base_id: String, variant_flags: Variant = 0) -> int:
 	var rarity := get_effective_rarity(base_id, variant_flags)
 	return roundi(6.0 * pow(float(rarity), 0.32)) if rarity > 0 else 0
+
+func power_audit_rows() -> Array[Dictionary]:
+	# Diagnostic data uses the same canonical helpers as inventory and combat.
+	var rows: Array[Dictionary] = []
+	for slime in eligible():
+		for flags in 8:
+			rows.append({"base_id":slime.id, "base_threshold":slime.rarity_threshold,
+				"origin_zone":slime.zone_unlock, "variant_mask":flags, "variant":SlimerotVariants.key(flags),
+				"effective_rarity":get_effective_rarity(slime.id, flags), "raw_damage":get_base_combat_damage(slime.id, flags)})
+	rows.sort_custom(func(a, b): return a.effective_rarity < b.effective_rarity)
+	return rows

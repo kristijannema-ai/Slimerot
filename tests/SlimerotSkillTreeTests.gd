@@ -1,10 +1,10 @@
 extends Node
 
 var suite: Node
-const COSTS := [25,40,75,125,175,275,350,900,350,400,550,550,1300,700,700,900,900,1300]
+const COSTS := [25,40,75,30,45,70,90,225,90,100,140,140,325,175,175,225,225,325]
 const MAINLINE_ORDER := ["R01","R03","R02","R04","R05","R06","R07","R08","R09","R10","R11","R12","R13","R14","R15","R16","R17","R18"]
 const SPEEDS := {"R01":2.2,"R04":1.9,"R06":1.55,"R09":1.25,"R11":1.0,"R14":0.8,"R16":0.65,"RO7":0.5}
-const OPTIONAL := [["RO1",["R04"],150],["RO2",["R08"],450],["RO3",["R08"],300],["RO4",["R13"],500],["RO5",["R08"],650],["RO6",["R13"],700],["RO7",["R18"],1400],["RO8",["RO5","R13"],900],["RO9",["RO8","R18"],1500]]
+const OPTIONAL := [["RO1",["R04"],40],["RO2",["R08"],115],["RO3",["R08"],75],["RO4",["R13"],125],["RO5",["R08"],165],["RO6",["R13"],175],["RO7",["R18"],350],["RO8",["RO5","R13"],225],["RO9",["RO8","R18"],375]]
 
 func check(value: bool, label: String) -> void:
 	suite.check(value, label)
@@ -40,7 +40,7 @@ func run(world: Node, owner_suite: Node) -> void:
 		if node.tree_type == "Roll": roll_nodes += 1
 	check(roll_nodes == 27, "exactly 18 canonical mainline and nine optional Roll nodes")
 	check(not SkillTreeManager.nodes.has("auto_roll") and not SkillTreeManager.nodes.has("luck_1"), "provisional IDs removed from purchasable tree")
-	check(COSTS.slice(0,8).reduce(func(a,b):return a+b,0) == 1965 and COSTS.slice(8,13).reduce(func(a,b):return a+b,0) == 3150 and COSTS.slice(13,18).reduce(func(a,b):return a+b,0) == 4500, "Prompt 13 preserves mainline spend blocks 1965 / 3150 / 4500")
+	check(COSTS.slice(0,8).reduce(func(a,b):return a+b,0) == 600 and COSTS.slice(8,13).reduce(func(a,b):return a+b,0) == 795 and COSTS.slice(13,18).reduce(func(a,b):return a+b,0) == 1125, "Prompt 16 tempo prices total 600 / 795 / 1125 Rolls across the three blocks")
 	for index in MAINLINE_ORDER.size():
 		var id: String = MAINLINE_ORDER[index]
 		var data: SlimerotData.SkillNodeData = SkillTreeManager.nodes[id]
