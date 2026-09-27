@@ -1,0 +1,4 @@
+# Development-only soundtrack renderer; these packages are not shipped with Slimerot.
+numpy==2.5.3
+scipy==1.18.1
+soundfile==0.14.0

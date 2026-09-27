@@ -11,7 +11,7 @@ const ATTACK_SQUASH_SECONDS := 0.12
 const ZONE_IDS := ["backyard", "italian_village", "cursed_forest", "sahara", "brainrot_city", "backrooms", "moon", "brainrot_dimension"]
 const ICON_IDS := ["coins", "roll", "rolls", "luck", "hp", "auto", "team", "inventory", "collection", "potions", "skills", "settings", "map"]
 const UI_ICON_IDS := ["team", "collection", "potions", "skills", "settings", "map", "roll", "coins", "luck"]
-const AUDIO_IDS := ["exploration", "boss", "roll", "rare", "jackpot", "hit", "enemy_death", "purchase", "gate", "breakthrough"]
+const AUDIO_IDS := ["roll", "rare", "jackpot", "hit", "enemy_death", "purchase", "gate", "breakthrough"]
 static var _textures: Dictionary = {}
 static var _streams: Dictionary = {}
 static var _paths: Dictionary = {}
@@ -59,7 +59,14 @@ static func optional_audio(path: String, looping: bool = false) -> AudioStream:
 	return result
 
 static func audio(id: String, looping: bool = false) -> AudioStream:
+	if SlimerotMusicLibrary.has_track(id): return music(id)
 	return optional_audio(resolve_path(AUDIO_ROOT + "Slimerot_" + id, ["ogg", "mp3", "wav"]), looping)
+
+static func music(id: String) -> AudioStream:
+	# Restrict music lookups to the eleven catalog entries. ResourceLoader keeps the
+	# compressed Ogg packets cached; only the two live players own decoder/playback state.
+	if not SlimerotMusicLibrary.has_track(id): return null
+	return optional_audio(SlimerotMusicLibrary.track_path(id), true)
 
 static func slime_path(id: String) -> String:
 	return texture_path("slimes", id)

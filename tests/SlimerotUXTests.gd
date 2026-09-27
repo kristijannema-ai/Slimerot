@@ -395,10 +395,11 @@ func test_optional_audio() -> void:
 	for zone in [2, 4, 6, 8]: check(SlimerotAssets.boss(zone) != null, "Z%d boss sprite loads" % zone)
 	for row in SlimerotEncounters.STRUCTURES: check(SlimerotAssets.structure(row[0]) != null, "%s has a distinct structure sprite" % row[0])
 	for id in SlimerotAssets.ICON_IDS: check(SlimerotAssets.icon(id) != null, "%s HUD/menu icon loads" % id)
-	for id in SlimerotAssets.AUDIO_IDS: check(SlimerotAssets.audio(id) != null, "%s audio placeholder loads" % id)
+	for id in SlimerotAssets.AUDIO_IDS: check(SlimerotAssets.audio(id) != null, "%s sound effect loads" % id)
 	check(SlimerotAssets.optional_texture("res://assets/Slimerot_missing_optional.png") == null and SlimerotAssets.optional_audio("res://assets/Slimerot_missing_optional.ogg") == null, "missing optional art/audio returns safe null fallbacks")
 	check(not sound.play_cue("Slimerot_missing_optional"), "missing optional cue never interrupts gameplay")
 	var original := GameState.settings.duplicate(true)
+	sound.advance_crossfade(SlimerotMusicLibrary.CROSSFADE_SECONDS)
 	GameState.settings.master_audio = 0.0
 	sound.apply_settings()
 	check(is_zero_approx(sound.music.volume_linear) and is_zero_approx(sound.voices[0].volume_linear), "master zero mutes music and effects")
@@ -407,8 +408,8 @@ func test_optional_audio() -> void:
 	GameState.settings.sfx_audio = 0.6
 	sound.apply_settings()
 	check(is_equal_approx(sound.music.volume_linear, 0.2) and is_equal_approx(sound.voices[0].volume_linear, 0.3), "music and effect sliders independently multiply master gain")
-	sound.set_track("boss")
-	check(sound.current_track == "boss" and sound.music.stream != null and sound.music.stream.loop_mode == AudioStreamWAV.LOOP_FORWARD, "boss track supports continuous looping")
+	sound.set_track("battle")
+	check(sound.current_track == "battle" and sound.music.stream is AudioStreamOggVorbis and sound.music.stream.loop, "boss soundtrack supports continuous compressed looping")
 	GameState.settings = original
 	sound.apply_settings()
-	sound.set_track("exploration")
+	sound.refresh_track()

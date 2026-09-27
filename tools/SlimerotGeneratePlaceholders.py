@@ -176,18 +176,7 @@ def wav(name, samples):
         output.writeframes(b''.join(struct.pack('<h', round(max(-0.95, min(0.95, value)) * 32767)) for value in samples))
 
 
-for name, beat, sequence, bassline in [
-    ('exploration', 0.4, [72, 76, 79, 74, 76, 81, 79, 76, 72, 76, 79, 83, 81, 79, 76, 74, 69, 72, 76, 79, 76, 74, 72, 76, 67, 71, 74, 79, 76, 74, 71, 74], [48, 53, 45, 43]),
-    ('boss', 0.3, [60, 67, 63, 70, 60, 67, 63, 72, 56, 63, 60, 67, 56, 63, 60, 70, 58, 65, 62, 69, 58, 65, 62, 70, 55, 62, 59, 65, 55, 62, 59, 67], [36, 32, 34, 31]),
-]:
-    samples = [0.0] * round(32 * beat * SAMPLE_RATE)
-    for i, note in enumerate(sequence):
-        tone(samples, i * beat, beat * 0.75, 440 * 2 ** ((note - 69) / 12), 0.10)
-        if i % 2 == 0:
-            tone(samples, i * beat, beat * 1.6, 440 * 2 ** ((bassline[i // 8] - 69) / 12), 0.13)
-        tone(samples, i * beat, 0.08, 95 if i % 2 == 0 else 220, 0.045, -500)
-    wav(name, samples)
-
+# World music is authored separately by tools/SlimerotComposeSoundtrack.py.
 cues = {
     'roll': (0.10, [(0, 0.07, 620, 0.24, -3500)]),
     'rare': (0.65, [(0, 0.22, 523, 0.18, 0), (0.13, 0.23, 659, 0.18, 0), (0.27, 0.33, 784, 0.20, 0)]),
