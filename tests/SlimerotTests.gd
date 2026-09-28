@@ -12,6 +12,11 @@ func check(condition: bool, description: String) -> void:
 		push_error("Slimerot FAIL: " + description)
 
 func run(world: Node2D) -> void:
+	if "--slimerot-music-only" in OS.get_cmdline_user_args():
+		await run_music(world)
+		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
+		get_tree().quit(0 if failures == 0 else 1)
+		return
 	if "--slimerot-final-only" in OS.get_cmdline_user_args():
 		await run_final_qa(world)
 		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
@@ -219,6 +224,7 @@ func run(world: Node2D) -> void:
 	await run_mobile_ui(world)
 	await run_combat_presentation(world)
 	await run_final_qa(world)
+	await run_music(world)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
@@ -229,6 +235,11 @@ func run_final_qa(world: Node2D) -> void:
 		var probe: Node = load(path).new()
 		add_child(probe)
 		await probe.run(world, self)
+
+func run_music(world: Node2D) -> void:
+	var probe := preload("res://tests/SlimerotMusicTests.gd").new()
+	add_child(probe)
+	await probe.run(world, self)
 
 func run_combat_presentation(world: Node2D) -> void:
 	for path in ["res://tests/SlimerotDashTests.gd", "res://tests/SlimerotCombatPresentationTests.gd", "res://tests/SlimerotBossPresentationTests.gd"]:

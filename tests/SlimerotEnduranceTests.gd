@@ -203,15 +203,15 @@ func test_audio_reuse() -> void:
 	var nodes_before := node_count(sound)
 	# Warm the finite asset namespace before measuring repeat cache allocation.
 	for cue in SlimerotAssets.AUDIO_IDS: SlimerotAssets.audio(cue)
-	for cue in ["exploration", "boss"]: SlimerotAssets.audio(cue, true)
+	for track in SlimerotMusicLibrary.TRACK_IDS: SlimerotAssets.music(track)
 	SlimerotAssets.optional_texture("res://assets/Slimerot_endurance_missing.png")
 	SlimerotAssets.optional_audio("res://assets/Slimerot_endurance_missing.ogg")
 	var cache_before := [SlimerotAssets._textures.size(), SlimerotAssets._streams.size(), SlimerotAssets._paths.size()]
 	for iteration in 1000:
 		sound.play_cue(SlimerotAudio.CUE_IDS[iteration % SlimerotAudio.CUE_IDS.size()])
-		sound.set_track("boss" if iteration % 2 else "exploration")
+		sound.set_track(SlimerotMusicLibrary.TRACK_IDS[iteration % SlimerotMusicLibrary.TRACK_IDS.size()])
 		SlimerotAssets.optional_texture("res://assets/Slimerot_endurance_missing.png")
 		SlimerotAssets.optional_audio("res://assets/Slimerot_endurance_missing.ogg")
-	check(node_count(sound) == nodes_before and sound.voices.size() == SlimerotAudio.MAX_VOICES, "1000 effect/track switches reuse the fixed audio voice pool")
+	check(node_count(sound) == nodes_before and sound.voices.size() == SlimerotAudio.MAX_VOICES and sound.music_players.size() == 2, "1000 effect/track switches reuse two music channels and the fixed effect voice pool")
 	check(cache_before == [SlimerotAssets._textures.size(), SlimerotAssets._streams.size(), SlimerotAssets._paths.size()], "repeated cue and missing-asset lookups do not grow warmed resource caches")
-	sound.set_track("exploration")
+	sound.refresh_track()

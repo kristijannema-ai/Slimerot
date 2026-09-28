@@ -76,10 +76,17 @@ func _initialize() -> void:
 		for variation in ["PrimaryButton", "SecondaryButton", "IconButton", "TabButton", "ModalPanel", "Card", "CurrencyChip", "SkillNode", "LockedSkillNode", "PurchasedSkillNode", "BreakthroughSkillNode"]:
 			_check(not mobile_theme.get_type_variation_base(variation).is_empty(), "packed theme variation: " + variation)
 	var sounds := _imports(files, "res://assets/audio/", ".wav.import")
-	counts["audio"] = sounds.size()
-	_check(sounds.size() == 10, "packed ten audio cues")
+	var music := _imports(files, "res://assets/audio/music/", ".ogg.import")
+	counts["audio"] = sounds.size() + music.size()
+	counts["music"] = music.size()
+	_check(sounds.size() == 8, "packed eight sound effect cues")
+	_check(music.size() == 11, "packed nine world tracks and two boss tracks")
 	for path in sounds:
 		_check(ResourceLoader.load(path.trim_suffix(".import")) is AudioStream, "packed audio loads: " + path.get_file())
+	for id in ["bedroom", "backyard", "italian_village", "cursed_forest", "sahara", "brainrot_city", "backrooms", "moon", "brainrot_dimension", "battle", "final_battle"]:
+		var stream := ResourceLoader.load("res://assets/audio/music/Slimerot_" + id + ".ogg") as AudioStreamOggVorbis
+		_check(stream != null and stream.get_length() >= 30.0 and stream.loop, "packed world music loads and loops: " + id)
+	_check(not ResourceLoader.exists("res://assets/audio/Slimerot_exploration.wav") and not ResourceLoader.exists("res://assets/audio/Slimerot_boss.wav"), "packed soundtrack excludes replaced short music loops")
 	_check(ResourceLoader.load("res://assets/Slimerot.svg") is Texture2D, "packed Slimerot app icon")
 	var class_cache := ConfigFile.new()
 	_check(class_cache.load("res://.godot/global_script_class_cache.cfg") == OK, "packed global class cache")

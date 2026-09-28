@@ -12,6 +12,8 @@ Prompt 16 reduces measured grind walls through provisional HP, gate, income and 
 
 ## Play and controls
 
+Slimerot now has [eleven original chiptune tracks](docs/Slimerot-Soundtrack.md): one for the Hub, one for each of eight worlds, a regular boss theme and a final-boss theme. Gate travel and encounters switch music with smooth crossfades; all music remains bundled and offline.
+
 Import `project.godot` and press F5. Touch: drag the 90 px joystick and tap ROLL with another finger. Desktop: WASD/arrows move, Space rolls, E interacts, Q Dashes once unlocked, Escape / Android Back returns from copy management to Team, closes an open menu, or opens Pause from gameplay. Rolling remains in the world during movement, combat, and non-pausing menus. Settings pauses active gameplay. Dash unlocks free at the Z2 boss gate before the fight; aim with movement or your last facing, then tap DASH. It travels up to 240px over 0.16 seconds, respects walls and has a one-second cooldown.
 
 New saves have zero currencies, 100 HP, 180 px/s movement, x1 luck, a 2.4-second cooldown, and one slot. The first base result is always Tung Tung Tung Sahur and auto-equips. Like every roll, its variant is drawn separately. Normal Tung Tung now has the canonical 7 damage and 5 base sell value.
