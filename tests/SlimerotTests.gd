@@ -12,6 +12,11 @@ func check(condition: bool, description: String) -> void:
 		push_error("Slimerot FAIL: " + description)
 
 func run(world: Node2D) -> void:
+	if "--slimerot-bedroom-only" in OS.get_cmdline_user_args():
+		await run_bedroom(world)
+		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
+		get_tree().quit(0 if failures == 0 else 1)
+		return
 	if "--slimerot-music-only" in OS.get_cmdline_user_args():
 		await run_music(world)
 		print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
@@ -66,7 +71,7 @@ func run(world: Node2D) -> void:
 	await get_tree().physics_frame
 	await capture("Slimerot-bedroom")
 	check(GameState.coins == 0 and GameState.rolls_balance == 0 and GameState.lifetime_rolls == 0, "fresh wallets")
-	check(GameState.current_zone == 0 and world.player.position.distance_to(Vector2(500, 1190)) <= 110, "Bedroom spawn beside Backyard exit")
+	check(GameState.current_zone == 0 and world.player.position == world.zone_root.spawn_position, "Bedroom spawn on open center floor")
 	var stats := SkillTreeManager.derived_stats()
 	check(stats.luck == 1.0 and stats.roll_cooldown == 2.4 and stats.equipped_slots == 1 and not stats.auto_roll, "canonical derived stats")
 	check(GameState.player_hp == 100 and stats.move_speed == 180 and stats.attack_interval == 1.0, "canonical HP, movement and attack interval")
@@ -86,13 +91,13 @@ func run(world: Node2D) -> void:
 		await get_tree().physics_frame
 	Input.action_release("move_right")
 	check(world.player.position.x > before_roll.x + 15, "movement continues through reveal")
-	world.player.position = Vector2(935, 1100)
+	world.player.position = Vector2(world.zone_root.room_size.x - 96, 1100)
 	Input.action_press("move_right")
 	for index in 20:
 		await get_tree().physics_frame
 	Input.action_release("move_right")
-	check(world.player.position.x <= 950, "solid world collision")
-	world.player.position = SlimerotBalance.ENTRANCES[0]
+	check(world.player.position.x <= world.zone_root.room_size.x - 40, "solid world collision")
+	world.player.position = world.zone_root.interaction_position("backyard") - Vector2(0, 100)
 	await get_tree().process_frame
 	world._process(0.0)
 	world.interact()
@@ -225,6 +230,7 @@ func run(world: Node2D) -> void:
 	await run_combat_presentation(world)
 	await run_final_qa(world)
 	await run_music(world)
+	await run_bedroom(world)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	print("Slimerot RESULT: %d checks; %d failures" % [checks, failures])
@@ -238,6 +244,11 @@ func run_final_qa(world: Node2D) -> void:
 
 func run_music(world: Node2D) -> void:
 	var probe := preload("res://tests/SlimerotMusicTests.gd").new()
+	add_child(probe)
+	await probe.run(world, self)
+
+func run_bedroom(world: Node2D) -> void:
+	var probe := preload("res://tests/SlimerotBedroomTests.gd").new()
 	add_child(probe)
 	await probe.run(world, self)
 

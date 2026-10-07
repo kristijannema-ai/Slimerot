@@ -59,7 +59,8 @@ func run(owner_world: Node, owner_suite: Node) -> void:
 	check(not SaveManager.validate(malformed), "non-boolean Dash flags cannot silently grant the ability")
 	fresh()
 	GameState.unlock_dash()
-	player.position = Vector2(400, 1000)
+	player.position = world.zone_root.spawn_position - Vector2(100, 0)
+	var dash_start := player.position
 	player.facing = Vector2.RIGHT
 	player.force_update_transform()
 	await get_tree().physics_frame
@@ -69,7 +70,7 @@ func run(owner_world: Node, owner_suite: Node) -> void:
 	check(GameState.player_hp == hp_before, "active Dash is invulnerable through the shared combat damage hook")
 	check(not player.request_dash(), "Dash cannot restart while the current burst is active")
 	await frames(10)
-	check(not player.is_dashing() and is_equal_approx(player.position.x, 640.0) and is_zero_approx(player.global_rotation), "unobstructed velocity burst travels 240 pixels without rotating the player")
+	check(not player.is_dashing() and is_equal_approx(player.position.x - dash_start.x, 240.0) and is_zero_approx(player.global_rotation), "unobstructed velocity burst travels 240 pixels without rotating the player")
 	CombatManager.damage_player(10)
 	check(GameState.player_hp == hp_before - 10 and player.dash_cooldown_remaining > 0.0, "Dash i-frames end with movement rather than lasting through cooldown")
 	check(not player.request_dash(), "cooldown blocks repeated Dash after movement has finished")

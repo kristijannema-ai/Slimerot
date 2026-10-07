@@ -47,7 +47,7 @@ func run(world: Node, owner_suite: Node) -> void:
 		check(WorldManager.repair(row[0]) and GameState.coins == 0 and GameState.coins_spent == spent+row[2] and not WorldManager.repair(row[0]), row[0]+" permanent unlock spends exactly once")
 	GameState.highest_zone_unlocked = 4
 	check(not WorldManager.fast_travel(5) and not WorldManager.fast_travel(-1) and not WorldManager.fast_travel(9), "Fast Travel rejects locked and invalid targets")
-	check(WorldManager.fast_travel(0) and world.player.position == SlimerotBalance.ENTRANCES[0] and WorldManager.fast_travel(4) and world.player.position == SlimerotBalance.ENTRANCES[4], "Fast Travel goes only to Hub/unlocked entrances")
+	check(WorldManager.fast_travel(0) and world.player.position == world.zone_root.spawn_position and WorldManager.fast_travel(4) and world.player.position == SlimerotBalance.ENTRANCES[4], "Fast Travel goes only to Hub/unlocked entrances")
 	world.hud.open_menu("Map")
 	await suite.capture("Slimerot-stage-6-map")
 	world.hud.close_menu()

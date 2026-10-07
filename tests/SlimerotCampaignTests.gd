@@ -34,7 +34,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	# Walk to and use the actual Hub context exit, with an ordinary guaranteed starter.
 	RollManager.variant_rng.seed = 1234
 	check(RollManager.request_roll() and InventoryManager.equipped_copy_ids.size() == 1, "campaign fresh start preserves guaranteed starter equip")
-	world.player.position = Vector2(500,1090)
+	world.player.position = world.zone_root.interaction_position("backyard") - Vector2(0, 100)
 	world._process(0)
 	world.interact()
 	check(GameState.current_zone == 1 and GameState.coins == 0, "actual Hub interaction enters Backyard without charging currency")

@@ -82,14 +82,11 @@ func build_zone(zone_id: int) -> void:
 	add_child(zone_root)
 	zone_root.z_index = -1
 	if zone_id == 0:
-		wall(Rect2(0,0,1000,32))
-		wall(Rect2(0,0,32,1400))
-		wall(Rect2(968,0,32,1400))
-		wall(Rect2(0,1368,1000,32))
-		wall(Rect2(110,650,175,250))
-		wall(Rect2(720,680,175,100))
-		wall(Rect2(110,360,280,100))
-		add_interaction(Vector2(500,1190),"Enter Backyard",func(): WorldManager.use_exit())
+		# The existing Bedroom scene owns its modular art, collision and exit path.
+		zone_root.backyard_requested.connect(enter_backyard)
+		add_interaction(zone_root.interaction_position("bed"), "Rest & Save", save_at_bed)
+		add_interaction(zone_root.interaction_position("collection"), "View Your Slimes", func(): hud.open_menu("Collection"))
+		add_interaction(zone_root.interaction_position("backyard"), "To Backyard", enter_backyard)
 	else:
 		add_interaction(SlimerotCampaign.RETURN_GATE,"Return to " + SlimerotCampaign.zone(zone_id-1).name,func(): WorldManager.return_through_gate())
 		add_interaction(SlimerotCampaign.EXIT_GATE,WorldManager.gate_prompt(zone_id),func():
@@ -98,12 +95,14 @@ func build_zone(zone_id: int) -> void:
 	for row in SlimerotEncounters.STRUCTURES:
 		if row[1] == zone_id:
 			var id: String = row[0]
-			add_interaction(row[4],("Variant Shrine" if id == "mutation_lab" else id.replace("_"," ").capitalize())+" · %s Coins" % SlimeDatabase.format_number(row[2]),func(): repair(id))
+			var at: Vector2 = zone_root.interaction_position(id) if zone_id == 0 else row[4]
+			add_interaction(at,("Variant Shrine" if id == "mutation_lab" else id.replace("_"," ").capitalize())+" · %s Coins" % SlimeDatabase.format_number(row[2]),func(): repair(id))
 			interactions[-1].set_meta("structure",id)
 	build_world_captions(zone_id)
 	respawn_player()
 	if WorldManager.arriving_from_next: player.position = SlimerotCampaign.RETURN_ARRIVAL
 	reset_camera()
+	if zone_id == 0: zone_root.bind_player(player)
 	transition_in_flight = false
 	if pending_unlock == zone_id and zone_id > 0:
 		pending_unlock = 0
@@ -116,7 +115,25 @@ func build_zone(zone_id: int) -> void:
 
 func reset_camera() -> void:
 	for child in player.get_children():
-		if child is Camera2D: child.reset_smoothing()
+		if child is Camera2D:
+			# Retain the existing follow speed and zoom. Only the room has local bounds.
+			var in_bedroom := GameState.current_zone == 0 and is_instance_valid(zone_root)
+			child.limit_left = 0 if in_bedroom else -10000000
+			child.limit_top = 0 if in_bedroom else -10000000
+			child.limit_right = int(zone_root.room_size.x) if in_bedroom else 10000000
+			child.limit_bottom = int(zone_root.camera_bottom) if in_bedroom else 10000000
+			child.reset_smoothing()
+
+func enter_backyard() -> void:
+	if transition_in_flight or GameState.current_zone != 0: return
+	if WorldManager.use_exit():
+		# Walking through the path receives the same arrival protection as Interact.
+		arrival_interaction = current_interaction
+
+func save_at_bed() -> void:
+	# Rest keeps the existing passive regeneration. This is the shared save writer.
+	var saved := SaveManager.save_game()
+	hud.show_notice("Progress saved. Rest here a while." if saved else "Could not save. " + SaveManager.last_error)
 
 func start_boss_arena(zone_id: int) -> void:
 	player.cancel_dash()
@@ -156,7 +173,7 @@ func repair(id: String) -> void:
 	queue_redraw()
 
 func respawn_player() -> void:
-	player.position = SlimerotBalance.ENTRANCES[GameState.current_zone]
+	player.position = zone_root.spawn_position if GameState.current_zone == 0 and is_instance_valid(zone_root) else SlimerotBalance.ENTRANCES[GameState.current_zone]
 	player.velocity = Vector2.ZERO
 	for child in player.get_children():
 		if child is Camera2D:
@@ -244,19 +261,17 @@ func rounded(rect: Rect2, color: Color, radius: int = 12) -> void:
 	draw_style_box(rounded_styles[key], rect)
 
 func build_world_captions(zone_id: int) -> void:
+	if zone_id == 0: return # Bedroom signs are part of their individual stations.
 	# Captions belong to landmark bounds in the world, not screen-pixel baselines.
 	# Their anchored labels stay centered as the camera or phone aspect changes.
 	var captions := Node2D.new()
 	captions.name = "LandmarkCaptions"
 	captions.z_index = 2
 	zone_root.add_child(captions)
-	if zone_id == 0:
-		SlimerotUITheme.world_label(captions, Rect2(408, 1152, 184, 100), "BACKYARD\n↓", 20)
-	else:
-		var next := SlimerotCampaign.zone(zone_id + 1).name if zone_id < 8 else "FINAL BOSS"
-		SlimerotUITheme.world_label(captions, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(230, 150), Vector2(460, 55)), next.to_upper(), 25)
-		gate_state_label = SlimerotUITheme.landmark_label(captions, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(65, 72), Vector2(130, 130)), "", 20)
-		SlimerotUITheme.world_label(captions, Rect2(SlimerotCampaign.RETURN_GATE - Vector2(100, 30), Vector2(200, 60)), "← RETURN", 22)
+	var next := SlimerotCampaign.zone(zone_id + 1).name if zone_id < 8 else "FINAL BOSS"
+	SlimerotUITheme.world_label(captions, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(230, 150), Vector2(460, 55)), next.to_upper(), 25)
+	gate_state_label = SlimerotUITheme.landmark_label(captions, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(65, 72), Vector2(130, 130)), "", 20)
+	SlimerotUITheme.world_label(captions, Rect2(SlimerotCampaign.RETURN_GATE - Vector2(100, 30), Vector2(200, 60)), "← RETURN", 22)
 	for row in SlimerotEncounters.STRUCTURES:
 		if row[1] != zone_id: continue
 		var id := str(row[0])
@@ -266,26 +281,11 @@ func build_world_captions(zone_id: int) -> void:
 		caption.set_meta("structure_id", id)
 
 func _draw() -> void:
-	if GameState.current_zone == 0:
-		rounded(Rect2(0, 0, 1000, 1400), Color("413e49"), 0)
-		for y in range(40, 1400, 64):
-			draw_line(Vector2(32, y), Vector2(968, y), Color("4d4850"), 2)
-		rounded(Rect2(345, 730, 310, 350), Color("656176"), 20)
-		rounded(Rect2(365, 750, 270, 310), Color("777086"), 18)
-		rounded(Rect2(110, 650, 175, 250), Color("303b4b"))
-		rounded(Rect2(120, 662, 155, 226), Color("91b3b9"))
-		rounded(Rect2(133, 672, 130, 60), Color("dfdfc8"))
-		rounded(Rect2(120, 744, 155, 144), Color("658d95"))
-		rounded(Rect2(720, 680, 175, 100), Color("9e7858"))
-		rounded(Rect2(743, 659, 75, 45), Color("254048"))
-		rounded(Rect2(753, 666, 55, 27), Color("a0d39d"))
-		rounded(Rect2(110, 360, 280, 100), Color("9e7858"))
-		rounded(Rect2(408, 1152, 184, 100), Color("b6ed78"), 15)
-	else:
-		var gate := SlimerotAssets.structure("boss_portal" if WorldManager.progression_gate_role(GameState.current_zone) == "boss" else ("gate_open" if WorldManager.gate_open(GameState.current_zone) or WorldManager.is_boss_zone_defeated(GameState.current_zone) else "gate_closed"))
-		if gate != null: draw_texture_rect(gate, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(65, 72), Vector2(130, 130)), false)
-		var return_gate := SlimerotAssets.structure("gate_open")
-		if return_gate != null: draw_texture_rect(return_gate, Rect2(SlimerotCampaign.RETURN_GATE - Vector2(50, 65), Vector2(100, 100)), false)
+	if GameState.current_zone == 0: return
+	var gate := SlimerotAssets.structure("boss_portal" if WorldManager.progression_gate_role(GameState.current_zone) == "boss" else ("gate_open" if WorldManager.gate_open(GameState.current_zone) or WorldManager.is_boss_zone_defeated(GameState.current_zone) else "gate_closed"))
+	if gate != null: draw_texture_rect(gate, Rect2(SlimerotCampaign.EXIT_GATE - Vector2(65, 72), Vector2(130, 130)), false)
+	var return_gate := SlimerotAssets.structure("gate_open")
+	if return_gate != null: draw_texture_rect(return_gate, Rect2(SlimerotCampaign.RETURN_GATE - Vector2(50, 65), Vector2(100, 100)), false)
 	for row in SlimerotEncounters.STRUCTURES:
 		if row[1] != GameState.current_zone: continue
 		var at: Vector2 = row[4]
