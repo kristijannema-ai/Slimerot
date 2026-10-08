@@ -191,10 +191,11 @@ func wall(rect: Rect2) -> void:
 
 func add_interaction(at: Vector2, prompt: String, action: Callable) -> void:
 	var component := SlimerotInteraction.new()
-	component.position = at
 	component.prompt = prompt
 	component.activated.connect(action)
 	zone_root.add_child(component)
+	# Callers provide World coordinates; a compact room may scale its children.
+	component.global_position = to_global(at)
 	interactions.append(component)
 
 func interact() -> void:

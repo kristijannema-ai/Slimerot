@@ -5,8 +5,14 @@ extends SlimerotZone
 
 signal backyard_requested
 
+## Authored art/physics coordinates remain local; the scene's 0.9 scale makes
+## the complete room 10% smaller without scaling the World-owned player or HUD.
 const ROOM_SIZE := Vector2(1800, 1620)
 const SPAWN_POSITION := Vector2(900, 1100)
+const CAMERA_BOTTOM := 2180.0
+const NAVIGATION_CELL := Vector2(50, 50)
+const NAVIGATION_GRID := Vector2i(36, 33)
+const NAVIGATION_CLEARANCE := 20.0 # Player radius stays 19 world pixels.
 const ANCHOR_PATHS := {
 	"bed": ^"BedArea/InteractionAnchor",
 	"collection": ^"CollectionArea/InteractionAnchor",
@@ -14,11 +20,14 @@ const ANCHOR_PATHS := {
 	"sell_terminal": ^"SellTerminal/InteractionAnchor",
 	"backyard": ^"BackyardExit/InteractionAnchor",
 }
+## Public dimensions, spawn and interaction positions use the parent World's
+## coordinates, matching World.player.position and World.add_interaction().
 var room_size := ROOM_SIZE
 ## The garden extends below the trigger so the follow camera keeps lower signs
 ## above the existing mobile controls while approaching the outdoor threshold.
-var camera_bottom := 2180
+var camera_bottom := CAMERA_BOTTOM
 var spawn_position := SPAWN_POSITION
+## Collision/navigation data use global physics coordinates, including scale.
 var collision_rects: Array[Rect2] = []
 var _bound_player: CharacterBody2D
 var _exit_requested := false
@@ -26,30 +35,51 @@ var _exit_requested := false
 
 func _ready() -> void:
 	zone_id = 0
+	room_size = ROOM_SIZE * scale
+	spawn_position = transform * SPAWN_POSITION
+	camera_bottom = (transform * Vector2(0, CAMERA_BOTTOM)).y
+	collision_rects.clear()
 	_collect_collision_rects(self)
 	obstacles.assign(collision_rects)
-	navigation.region = Rect2i(0, 0, 36, 33)
-	navigation.cell_size = Vector2(50, 50)
-	navigation.offset = Vector2(25, 25)
+	navigation.region = Rect2i(Vector2i.ZERO, NAVIGATION_GRID)
+	navigation.cell_size = NAVIGATION_CELL * global_scale.abs()
+	navigation.offset = to_global(NAVIGATION_CELL * 0.5)
 	navigation.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
 	navigation.update()
-	for x in 36:
-		for y in 33:
-			var point := Vector2(x * 50 + 25, y * 50 + 25)
+	for x in NAVIGATION_GRID.x:
+		for y in NAVIGATION_GRID.y:
+			var point := navigation.get_point_position(Vector2i(x, y))
 			for rect in collision_rects:
-				if rect.grow(20).has_point(point):
+				if rect.grow(NAVIGATION_CLEARANCE).has_point(point):
 					navigation.set_point_solid(Vector2i(x, y))
 					break
 
 func _collect_collision_rects(branch: Node) -> void:
 	for child in branch.get_children():
 		if child is CollisionShape2D and child.get_parent() is StaticBody2D and child.shape is RectangleShape2D:
-			collision_rects.append(Rect2(to_local(child.global_position) - child.shape.size * 0.5, child.shape.size))
+			var shape_rect := Rect2(-child.shape.size * 0.5, child.shape.size)
+			collision_rects.append(child.global_transform * shape_rect)
 		_collect_collision_rects(child)
 
 func interaction_position(id: String) -> Vector2:
 	if not ANCHOR_PATHS.has(id): return spawn_position
-	return to_local((get_node(ANCHOR_PATHS[id]) as Node2D).global_position)
+	var anchor := get_node(ANCHOR_PATHS[id]) as Node2D
+	return (get_parent() as Node2D).to_local(anchor.global_position)
+
+## Convert a global physics point to the scaled grid. The base zone's /50
+## indexing is deliberately not used for this compact room's 45-pixel cells.
+func navigation_cell(global_point: Vector2) -> Vector2i:
+	return Vector2i(((global_point - navigation.offset) / navigation.cell_size + Vector2(0.5, 0.5)).floor())
+
+func direction_to_point(origin: Vector2, target: Vector2) -> Vector2:
+	var ray := PhysicsRayQueryParameters2D.create(origin, target, 1)
+	if get_world_2d().direct_space_state.intersect_ray(ray).is_empty(): return origin.direction_to(target)
+	var from := navigation_cell(origin)
+	var to := navigation_cell(target)
+	if not navigation.is_in_boundsv(from) or not navigation.is_in_boundsv(to): return Vector2.ZERO
+	if navigation.is_point_solid(from) or navigation.is_point_solid(to): return origin.direction_to(target)
+	var path := navigation.get_point_path(from, to)
+	return origin.direction_to(path[1]) if path.size() > 1 else Vector2.ZERO
 
 func bind_player(player: CharacterBody2D) -> void:
 	_bound_player = player
