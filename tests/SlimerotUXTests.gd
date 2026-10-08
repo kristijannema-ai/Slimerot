@@ -149,7 +149,7 @@ func test_pointer_controls() -> void:
 	world.player.position = Vector2(500, 850)
 	world._process(0)
 	check(not hud.interact_button.visible, "INTERACT is hidden away from structures and entrances")
-	world.player.position = Vector2(500, 1190)
+	world.player.position = world.zone_root.interaction_position("backyard") - Vector2(0, 100)
 	world._process(0)
 	check(hud.interact_button.visible, "INTERACT appears at the actual nearby exit")
 	await tap(hud.interact_button)

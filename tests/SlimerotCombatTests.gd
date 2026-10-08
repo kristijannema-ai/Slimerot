@@ -115,7 +115,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	CombatManager._physics_process(1.49)
 	check(GameState.player_dead and GameState.player_hp == 0 and not RollManager.request_roll(), "death fade lasts 1.5s and prevents extra actions")
 	CombatManager._physics_process(0.02)
-	check(not GameState.player_dead and GameState.player_hp == 250 and world.player.position == SlimerotBalance.ENTRANCES[0] and wallet == [GameState.coins,GameState.rolls_balance,GameState.lifetime_rolls] and owned == InventoryManager.inventory, "fade completion respawns full HP with zero progression loss")
+	check(not GameState.player_dead and GameState.player_hp == 250 and world.player.position == world.zone_root.spawn_position and wallet == [GameState.coins,GameState.rolls_balance,GameState.lifetime_rolls] and owned == InventoryManager.inventory, "fade completion respawns full HP with zero progression loss")
 	world.player.position = Vector2(500,700)
 	var enemy := SlimerotEnemy.new()
 	enemy.position = Vector2(650,700)

@@ -58,7 +58,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	for row in SlimerotEncounters.STRUCTURES:
 		if row[1] != 0: continue
 		var before := GameState.coins
-		interact_at(world, row[4])
+		interact_at(world, world.zone_root.interaction_position(row[0]) if GameState.current_zone == 0 else row[4])
 		check(GameState.structure_unlocked_flags.get(row[0], false) and GameState.coins == before - int(row[2]), "%s repairs through its Hub interaction" % row[0])
 	for row in SlimerotRollTree.MAINLINE + SlimerotRollTree.OPTIONAL:
 		var before := [GameState.coins, GameState.rolls_balance, GameState.lifetime_rolls]
@@ -69,7 +69,7 @@ func run(world: Node, owner_suite: Node) -> void:
 			check(is_equal_approx(RollManager.effective_luck(), luck * 20.0), "%s retains its exact x20 jump" % row[0])
 	buy_available_coin_nodes()
 	check(not SkillTreeManager.purchase("C06") and not SkillTreeManager.purchase("C10") and not SkillTreeManager.purchase("C15"), "all three late slots remain boss-gated despite enough Coins and tree progress")
-	interact_at(world, Vector2(500, 1190))
+	interact_at(world, world.zone_root.interaction_position("backyard") - Vector2(0, 100))
 	check(GameState.current_zone == 1, "physical Hub exit starts the same campaign journey")
 	for zone in range(1, 9):
 		freeze_combat(world)
@@ -77,7 +77,7 @@ func run(world: Node, owner_suite: Node) -> void:
 		for row in SlimerotEncounters.STRUCTURES:
 			if row[1] != zone: continue
 			var before := GameState.coins
-			interact_at(world, row[4])
+			interact_at(world, world.zone_root.interaction_position(row[0]) if GameState.current_zone == 0 else row[4])
 			check(GameState.structure_unlocked_flags.get(row[0], false) and GameState.coins == before - int(row[2]), "%s repairs through its physical zone interaction" % row[0])
 		buy_available_coin_nodes()
 		var map: SlimerotZone = world.zone_root
@@ -152,7 +152,7 @@ func run(world: Node, owner_suite: Node) -> void:
 	check(GameState.settings.auto_roll_state and GameState.settings.auto_sell_settings.enabled and GameState.settings.auto_sell_settings.threshold == 1000, "Auto Roll and filter choices survive the completed campaign reload")
 	GameState.settings.auto_roll_state = false
 	for zone in range(0, 9):
-		check(WorldManager.fast_travel(zone) and world.player.position == SlimerotBalance.ENTRANCES[zone], "completed free-roam still reaches entrance %d after reloading" % zone)
+		check(WorldManager.fast_travel(zone) and world.player.position == (world.zone_root.spawn_position if zone == 0 else SlimerotBalance.ENTRANCES[zone]), "completed free-roam still reaches entrance %d after reloading" % zone)
 		freeze_combat(world)
 		await get_tree().process_frame
 		check(get_tree().get_nodes_in_group("slimerot_enemies").size() == (0 if zone == 0 else 11) and get_tree().get_nodes_in_group("slimerot_bosses").is_empty(), "free-roam transition %d releases old enemies and defeated arenas" % zone)

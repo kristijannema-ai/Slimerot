@@ -118,8 +118,9 @@ func test_navigation() -> void:
 	WorldManager.travel(0)
 	await settled()
 	for structure in ["skill_tree_shrine", "sell_terminal"]:
-		var captions := descendants(world.zone_root).filter(func(node): return node is Label and node.get_meta("structure_id", "") == structure)
-		check(captions.size() == 1 and captions[0].horizontal_alignment == HORIZONTAL_ALIGNMENT_CENTER and captions[0].anchor_right == 1.0 and captions[0].mouse_filter == Control.MOUSE_FILTER_IGNORE, structure + " uses a centered anchored passive world label")
+		var title := "Skill Tree Shrine" if structure == "skill_tree_shrine" else "Sell Terminal"
+		var captions := descendants(world.zone_root).filter(func(node): return node is Label and node.text == title)
+		check(captions.size() == 1 and captions[0].mouse_filter == Control.MOUSE_FILTER_IGNORE and captions[0].get_theme_font_size("font_size") >= 20, structure + " uses a readable passive world sign")
 
 func test_tree_gestures() -> void:
 	hud.menus.skill_tab = "Roll"

@@ -25,6 +25,8 @@ func fresh() -> void:
 	GameState.suspended = false
 	GameState.menu_paused = false
 	WorldManager.travel(0)
+	world.player.position = world.zone_root.interaction_position("backyard") - Vector2(0, 100)
+	world.update_context()
 	hud.joystick.reset()
 	hud.refresh()
 	transitions = 0
@@ -78,7 +80,7 @@ func run(owner_world: Node, owner_suite: Node) -> void:
 func test_interactions() -> void:
 	fresh()
 	# No process/movement tick between positioning and requesting interaction.
-	world.player.position = Vector2(500, 1190)
+	world.player.position = world.zone_root.interaction_position("backyard") - Vector2(0, 100)
 	world.current_interaction = null
 	world.request_interaction()
 	check(GameState.current_zone == 1 and transitions == 1, "stationary context request resolves immediately without a movement frame")
