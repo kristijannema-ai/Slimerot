@@ -1,8 +1,9 @@
-[gd_scene load_steps=26 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/SlimerotBedroom.gd" id="1_room"]
 [ext_resource type="Script" path="res://scripts/world/SlimerotBedroomLayer.gd" id="2_layer"]
 [ext_resource type="Script" path="res://scripts/world/SlimerotBedroomSign.gd" id="3_sign"]
+[ext_resource type="Script" path="res://scripts/world/SlimerotBedroomProp.gd" id="4_prop"]
 [ext_resource type="Texture2D" path="res://assets/environment/bedroom/Slimerot_bed.png" id="tex_bed"]
 [ext_resource type="Texture2D" path="res://assets/environment/bedroom/Slimerot_desk.png" id="tex_desk"]
 [ext_resource type="Texture2D" path="res://assets/environment/bedroom/Slimerot_shrine.png" id="tex_shrine"]
@@ -53,6 +54,7 @@ size = Vector2(340, 396)
 size = Vector2(352, 318)
 
 [node name="SlimerotBedroom" type="Node2D"]
+scale = Vector2(0.9, 0.9)
 script = ExtResource("1_room")
 zone_id = 0
 
@@ -141,6 +143,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="WestBookcase" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 87.0
 offset_top = 555.0
@@ -153,6 +156,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="EastBookcase" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 1568.0
 offset_top = 617.0
@@ -165,6 +169,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="WestReadingNook" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 90.0
 offset_top = 810.0
@@ -201,6 +206,7 @@ collision_mask = 0
 shape = SubResource("shape_Lounge")
 
 [node name="PlantByBed" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 86.0
 offset_top = 409.0
@@ -213,6 +219,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="PlantByWindow" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 497.0
 offset_top = 135.0
@@ -225,6 +232,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="PlantByShrine" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 1660.0
 offset_top = 432.0
@@ -237,6 +245,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="PlantByMerchant" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 1620.0
 offset_top = 809.0
@@ -249,6 +258,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="PlantByReadingNook" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 62.0
 offset_top = 1114.0
@@ -261,6 +271,7 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="BookcaseFern" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 1556.0
 offset_top = 593.0
@@ -274,6 +285,7 @@ stretch_mode = 5
 
 
 [node name="StudyWestShelf" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 476.0
 offset_top = 158.0
@@ -294,6 +306,7 @@ collision_mask = 0
 shape = SubResource("shape_Shelf")
 
 [node name="StudyEastShelf" type="TextureRect" parent="Environment/Decorations"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 1110.0
 offset_top = 158.0
@@ -318,6 +331,7 @@ shape = SubResource("shape_Shelf")
 [node name="Visuals" type="Node2D" parent="BedArea"]
 
 [node name="BedAndNightstand" type="TextureRect" parent="BedArea/Visuals"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 110.0
 offset_top = 170.0
@@ -346,11 +360,11 @@ collision_mask = 0
 shape = SubResource("shape_Bedside")
 
 [node name="InteractionAnchor" type="Marker2D" parent="BedArea"]
-position = Vector2(400, 610)
+position = Vector2(325, 610)
 
 [node name="BedSign" type="Node2D" parent="BedArea"]
 z_index = 0
-position = Vector2(281,497)
+position = Vector2(203,497)
 script = ExtResource("3_sign")
 plaque_width = 244.0
 icon_kind = "bed"
@@ -391,6 +405,7 @@ vertical_alignment = 1
 [node name="DeskVisuals" type="Node2D" parent="CollectionArea"]
 
 [node name="DeskBooksAndChair" type="TextureRect" parent="CollectionArea/DeskVisuals"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 590.0
 offset_top = 120.0
@@ -423,7 +438,7 @@ position = Vector2(850, 525)
 
 [node name="CollectionSign" type="Node2D" parent="CollectionArea"]
 z_index = 0
-position = Vector2(730,412)
+position = Vector2(710,412)
 script = ExtResource("3_sign")
 plaque_width = 280.0
 icon_kind = "book"
@@ -464,6 +479,7 @@ vertical_alignment = 1
 [node name="Visuals" type="Node2D" parent="SkillTreeShrine"]
 
 [node name="StoneShrineAndCrystals" type="TextureRect" parent="SkillTreeShrine/Visuals"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 1260.0
 offset_top = 150.0
@@ -484,11 +500,11 @@ collision_mask = 0
 shape = SubResource("shape_Shrine")
 
 [node name="InteractionAnchor" type="Marker2D" parent="SkillTreeShrine"]
-position = Vector2(1400, 640)
+position = Vector2(1470, 640)
 
 [node name="SkillTreeSign" type="Node2D" parent="SkillTreeShrine"]
 z_index = 0
-position = Vector2(1322,525)
+position = Vector2(1295,525)
 script = ExtResource("3_sign")
 plaque_width = 350.0
 icon_kind = "shrine"
@@ -529,6 +545,7 @@ vertical_alignment = 1
 [node name="Visuals" type="Node2D" parent="SellTerminal"]
 
 [node name="MerchantCounterAndCrates" type="TextureRect" parent="SellTerminal/Visuals"]
+script = ExtResource("4_prop")
 z_index = 0
 offset_left = 1320.0
 offset_top = 830.0
@@ -549,11 +566,11 @@ collision_mask = 0
 shape = SubResource("shape_Merchant")
 
 [node name="InteractionAnchor" type="Marker2D" parent="SellTerminal"]
-position = Vector2(1440, 1260)
+position = Vector2(1525, 1260)
 
 [node name="SellSign" type="Node2D" parent="SellTerminal"]
 z_index = 0
-position = Vector2(1330,1140)
+position = Vector2(1350,1140)
 script = ExtResource("3_sign")
 plaque_width = 350.0
 icon_kind = "coins"
