@@ -43,10 +43,6 @@ func _floor() -> void:
 	for inset in 6:
 		draw_rect(Rect2(44 + inset * 5, 164 + inset * 5, 1712 - inset * 10, 1154 - inset * 10), Color(0.25, 0.12, 0.06, 0.025), false, 6)
 
-	# A small bedside mat is floor decoration, with no physical body.
-	draw_style_box(_rounded(Color("69529c"), Color("423664"), 14, 4), Rect2(410, 430, 156, 235))
-	draw_style_box(_rounded(Color("9475c8"), Color("d6b9e2"), 9, 3), Rect2(421, 441, 134, 213))
-
 func _walls() -> void:
 	# Warm plaster above a timber dado; the furniture hides the lower seam.
 	draw_rect(Rect2(24, 22, 1752, 193), Color("53342d"))

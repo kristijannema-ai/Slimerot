@@ -2,11 +2,26 @@
 
 The existing Bedroom Hub is now 10% smaller on each axis (1620 x 1458 world units), with its camera following at the same zoom and the original full-size player. All navigation, collision queries, spawn coordinates and interaction anchors follow the new scale.
 
-Furniture uses the existing illustrations with engine-rendered 2.5D depth: a projected, softened silhouette shadow, soft contact shadow and subtle directional surface shading. These remain separate playable 2D props, not actual 3D meshes. The room and reference composition remain intact.
+Furniture uses the existing illustrations with engine-rendered 2.5D depth. Bed, desk, shelves, reading chair and pots have small contact shadows placed directly beneath their individual feet/bases. The shrine and merchant retain their existing projected and soft base shadows. Subtle surface shading is retained. These remain separate playable 2D props, not actual 3D meshes. The room and reference composition remain intact.
 
 Wooden signs are centered on their stations and their icon/caption groups are centered inside the plaque. They have a visible bottom/right side, bevel lighting, wood grain, brass pins and a stationary cast shadow. Each floats vertically by up to 3 authored pixels (2.7 world pixels) over 3.5 seconds. Animation pauses with gameplay menus and has no cumulative drift. Exact text and icons are retained, including Collection's open book and the low To Backyard sign.
 
-## Changed files
+## Grounding correction (2026-10-09)
+
+The generic shadow baseline followed image height instead of visible supports, leaving detached shadows under composite furniture. Contact patches now use normalized texture coordinates at each support: nightstand feet, bed feet, desk legs, chair casters, bookcase feet, pot bases, lounge table legs and books. No downward offset or projected silhouette is used for those props. The small outlined bedside mat has been removed; the central slime rug remains.
+
+This correction changes only:
+
+- `scenes/zones/SlimerotBedroom.tscn`: explicit per-support contact patches; shrine and merchant explicitly keep the prior projected-shadow mode.
+- `scripts/world/SlimerotBedroomProp.gd`: contact-only rendering and retained projected mode.
+- `scripts/world/SlimerotBedroomLayer.gd`: remove the bedside mat.
+- `docs/Slimerot-Bedroom-Polish.md`: this updated record.
+
+No bitmap assets were added or modified. Sign centering/bobbing, collisions, room size, gameplay and all interaction integrations remain unchanged. Latest correction validation: 84 Bedroom integration checks, zero failures, and clean OpenGL compatibility captures at 720 x 1280. Overview/Bed/Collection views were inspected for contact alignment. The full 2,324-check run below belongs to the preceding scale/depth change.
+
+Manual visual recheck: enter Bedroom, walk to Bed and confirm ordinary wooden floor on its right; inspect bed/nightstand feet, desk legs, shelf feet, pot bases and lounge/table/book bases for shadows touching their supports. Compare shrine and merchant against the preceding build. Then open each existing interaction, walk down to Backyard and return normally.
+
+## Original compact-layout changes
 
 - `scenes/zones/SlimerotBedroom.tscn`: 0.9 room scale, centered sign/interaction anchors, depth presentation attached to furniture and interior plants.
 - `scripts/world/SlimerotBedroom.gd`: scaled spawn/camera/anchor coordinates, world-space collision and navigation with original player clearance.
@@ -17,7 +32,7 @@ Wooden signs are centered on their stations and their icon/caption groups are ce
 
 ## Added assets and code
 
-- `scripts/world/SlimerotBedroomProp.gd` and its `.uid`: reusable cached contact/projected shadows and surface-material setup.
+- `scripts/world/SlimerotBedroomProp.gd` and its `.uid`: reusable cached support-specific contact shadows, optional projected shadows and surface-material setup.
 - `assets/environment/bedroom/furniture_surface.gdshader` and its `.uid`: restrained upper-left surface relief and warm directional shading.
 - `assets/environment/bedroom/furniture_shadow.gdshader` and its `.uid`: softened projected silhouette with distance fade.
 
@@ -40,7 +55,7 @@ No Android handset was available: device frame rate and installed APK behavior a
 ## Exact manual test steps
 
 1. Open `project.godot` from this branch in Godot 4.5.x, allow imports and run the game in a 720 x 1280 window. Enter Bedroom Hub. The camera follows normally, the player retains its size and all room distances are 90% of the prior version.
-2. Walk from the spawn across the purple rug toward each station. Confirm bed upper-left, Collection upper-center, shrine upper-right and Sell lower-right. Furniture is solid; the central floor and rug remain traversable. Inspect cast/contact shadows below the furniture while moving the camera.
+2. Walk from the spawn across the purple rug toward each station. Confirm bed upper-left, Collection upper-center, shrine upper-right and Sell lower-right. Furniture is solid; the central floor and rug remain traversable. Inspect small contact shadows directly at furniture supports while moving the camera; the shrine and merchant keep broader cast shadows.
 3. Stand in front of each station. Its plaque should be centered horizontally on the prop, have visible thickness, and float very slightly. Watch for at least 7 seconds (two cycles); no horizontal drift. Open a menu: the motion pauses. Close it: the motion resumes without a jump back to the original position.
 4. Approach Bed and press INTERACT. Quit and reopen the game; confirm the existing save loads and the return spawn is unobstructed.
 5. Approach Collection and press INTERACT. Confirm the existing Collection screen opens, the sign says exactly Collection / View Your Slimes and shows an open book. Close the screen and move again.
