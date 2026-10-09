@@ -144,6 +144,7 @@ stretch_mode = 5
 
 [node name="WestBookcase" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.5, 0.944, 0.64, 0.035), Vector4(0.215, 0.957, 0.13, 0.018), Vector4(0.778, 0.957, 0.13, 0.018)])
 z_index = 0
 offset_left = 87.0
 offset_top = 555.0
@@ -157,6 +158,7 @@ stretch_mode = 5
 
 [node name="EastBookcase" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.5, 0.944, 0.64, 0.035), Vector4(0.215, 0.957, 0.13, 0.018), Vector4(0.778, 0.957, 0.13, 0.018)])
 z_index = 0
 offset_left = 1568.0
 offset_top = 617.0
@@ -170,6 +172,7 @@ stretch_mode = 5
 
 [node name="WestReadingNook" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.55, 0.807, 0.44, 0.045), Vector4(0.66, 0.837, 0.08, 0.02), Vector4(0.073, 0.835, 0.08, 0.018), Vector4(0.188, 0.92, 0.09, 0.02), Vector4(0.31, 0.842, 0.08, 0.018), Vector4(0.81, 0.958, 0.26, 0.032)])
 z_index = 0
 offset_left = 90.0
 offset_top = 810.0
@@ -207,6 +210,7 @@ shape = SubResource("shape_Lounge")
 
 [node name="PlantByBed" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.51, 0.926, 0.4, 0.028)])
 z_index = 0
 offset_left = 86.0
 offset_top = 409.0
@@ -220,6 +224,7 @@ stretch_mode = 5
 
 [node name="PlantByWindow" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.51, 0.926, 0.4, 0.028)])
 z_index = 0
 offset_left = 497.0
 offset_top = 135.0
@@ -233,6 +238,7 @@ stretch_mode = 5
 
 [node name="PlantByShrine" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.51, 0.926, 0.4, 0.028)])
 z_index = 0
 offset_left = 1660.0
 offset_top = 432.0
@@ -246,6 +252,7 @@ stretch_mode = 5
 
 [node name="PlantByMerchant" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.51, 0.926, 0.4, 0.028)])
 z_index = 0
 offset_left = 1620.0
 offset_top = 809.0
@@ -259,6 +266,7 @@ stretch_mode = 5
 
 [node name="PlantByReadingNook" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.51, 0.926, 0.4, 0.028)])
 z_index = 0
 offset_left = 62.0
 offset_top = 1114.0
@@ -272,6 +280,7 @@ stretch_mode = 5
 
 [node name="BookcaseFern" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.51, 0.926, 0.4, 0.028)])
 z_index = 0
 offset_left = 1556.0
 offset_top = 593.0
@@ -286,6 +295,7 @@ stretch_mode = 5
 
 [node name="StudyWestShelf" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.5, 0.944, 0.64, 0.035), Vector4(0.215, 0.957, 0.13, 0.018), Vector4(0.778, 0.957, 0.13, 0.018)])
 z_index = 0
 offset_left = 476.0
 offset_top = 158.0
@@ -307,6 +317,7 @@ shape = SubResource("shape_Shelf")
 
 [node name="StudyEastShelf" type="TextureRect" parent="Environment/Decorations"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.5, 0.944, 0.64, 0.035), Vector4(0.215, 0.957, 0.13, 0.018), Vector4(0.778, 0.957, 0.13, 0.018)])
 z_index = 0
 offset_left = 1110.0
 offset_top = 158.0
@@ -332,6 +343,7 @@ shape = SubResource("shape_Shelf")
 
 [node name="BedAndNightstand" type="TextureRect" parent="BedArea/Visuals"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.505, 0.917, 0.79, 0.045), Vector4(0.128, 0.937, 0.1, 0.022), Vector4(0.885, 0.939, 0.1, 0.022), Vector4(0.063, 0.602, 0.11, 0.025), Vector4(0.945, 0.601, 0.11, 0.025)])
 z_index = 0
 offset_left = 110.0
 offset_top = 170.0
@@ -406,6 +418,7 @@ vertical_alignment = 1
 
 [node name="DeskBooksAndChair" type="TextureRect" parent="CollectionArea/DeskVisuals"]
 script = ExtResource("4_prop")
+floor_contacts = Array[Vector4]([Vector4(0.18, 0.886, 0.26, 0.036), Vector4(0.82, 0.886, 0.26, 0.036), Vector4(0.076, 0.902, 0.07, 0.02), Vector4(0.272, 0.902, 0.07, 0.02), Vector4(0.728, 0.902, 0.07, 0.02), Vector4(0.924, 0.902, 0.07, 0.02), Vector4(0.415, 0.928, 0.06, 0.02), Vector4(0.483, 0.973, 0.06, 0.02), Vector4(0.595, 0.939, 0.06, 0.02)])
 z_index = 0
 offset_left = 590.0
 offset_top = 120.0
@@ -480,6 +493,7 @@ vertical_alignment = 1
 
 [node name="StoneShrineAndCrystals" type="TextureRect" parent="SkillTreeShrine/Visuals"]
 script = ExtResource("4_prop")
+shadow_style = 1
 z_index = 0
 offset_left = 1260.0
 offset_top = 150.0
@@ -546,6 +560,7 @@ vertical_alignment = 1
 
 [node name="MerchantCounterAndCrates" type="TextureRect" parent="SellTerminal/Visuals"]
 script = ExtResource("4_prop")
+shadow_style = 1
 z_index = 0
 offset_left = 1320.0
 offset_top = 830.0
